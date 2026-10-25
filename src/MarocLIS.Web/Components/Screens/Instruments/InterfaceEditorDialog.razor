@@ -1,0 +1,341 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Instruments
+@using MarocLIS.Domain.Equipment
+@inject WebTexts Texts
+
+@*
+    Configuring one analyser link, the workstation's InstrumentInterfaceDialog: the line on the
+    start side, the message format on the other. The transport decides which half of the line
+    means anything, so the other half is turned off as it changes; a preset fills the format
+    fields, and a field changed by hand moves the preset to whichever one now matches. Auto-
+    acceptance — the one setting that can put an analyser's number in a patient file with nobody
+    looking — is asked again before the save. The choices, presets, checks and request are
+    InterfaceEditorRules'; nothing here opens a port: the configuration is saved, and the
+    workstation that drives the analysers picks it up on its next pass.
+*@
+<Modal Name="interface-editor" Title="@Title" Hint="@Texts["AdminDialog.InstrumentInterfaceDialog"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        @{ var fields = InterfaceEditorRules.Fields(_form.Transport, _form.ListenAsServer); }
+        <div class="editor-columns">
+            <div data-card="line">
+                <div class="form-grid form-grid-3">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Protocol"]</span>
+                        <select class="input" data-field="protocol" @onchange="ProtocolChanged">
+                            @foreach (var protocol in InterfaceEditorRules.Protocols)
+                            {
+                                <option value="@protocol" selected="@(protocol == _form.Protocol)">@Texts[$"InstrumentProtocol.{protocol}"]</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Transport"]</span>
+                        <select class="input" data-field="transport" @onchange="TransportChanged">
+                            @foreach (var transport in InterfaceEditorRules.Transports)
+                            {
+                                <option value="@transport" selected="@(transport == _form.Transport)">@Texts[$"InstrumentTransportKind.{transport}"]</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Direction"]</span>
+                        <select class="input" data-field="direction" @bind="_form.Direction">
+                            @foreach (var direction in Enum.GetValues<InstrumentDirection>())
+                            {
+                                <option value="@direction">@Texts[$"InstrumentDirection.{direction}"]</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <p class="message is-info small" data-state="transport-notice">@Texts[fields.NoticeKey]</p>
+
+                <fieldset class="subcard form-grid form-grid-3" data-card="serial" disabled="@(!fields.Serial)">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.SerialPort"]</span>
+                        <input class="input mono" dir="ltr" data-field="serialport" maxlength="@InterfaceEditorRules.SerialPortMaxLength" @bind="_form.SerialPortName" />
+                        <FieldMessage Refusal="_check" Field="serialport" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.BaudRate"]</span>
+                        <select class="input mono" data-field="baudrate" @bind="_form.BaudRate">
+                            @foreach (var value in InterfaceEditorRules.BaudRates) { <option value="@value">@value</option> }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.DataBits"]</span>
+                        <select class="input mono" data-field="databits" @bind="_form.DataBits">
+                            @foreach (var value in InterfaceEditorRules.DataBitChoices) { <option value="@value">@value</option> }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Parity"]</span>
+                        <select class="input" data-field="parity" @bind="_form.Parity">
+                            @foreach (var value in InterfaceEditorRules.Parities) { <option value="@value">@Texts[InterfaceEditorRules.SerialKey("Parity", value)]</option> }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.StopBits"]</span>
+                        <select class="input" data-field="stopbits" @bind="_form.StopBits">
+                            @foreach (var value in InterfaceEditorRules.StopBitChoices) { <option value="@value">@Texts[InterfaceEditorRules.SerialKey("StopBits", value)]</option> }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Handshake"]</span>
+                        <select class="input" data-field="handshake" @bind="_form.Handshake">
+                            @foreach (var value in InterfaceEditorRules.Handshakes) { <option value="@value">@Texts[InterfaceEditorRules.SerialKey("Handshake", value)]</option> }
+                        </select>
+                    </label>
+                </fieldset>
+
+                <fieldset class="subcard form-grid form-grid-3" data-card="tcp" disabled="@(!fields.TcpPort)">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Host"]</span>
+                        <input class="input mono" dir="ltr" data-field="host" maxlength="@InterfaceEditorRules.HostMaxLength" disabled="@(!fields.Host)" @bind="_form.Host" />
+                        <FieldMessage Refusal="_check" Field="host" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.TcpPort"]</span>
+                        <input class="input mono num" dir="ltr" inputmode="numeric" data-field="tcpport" maxlength="@InterfaceEditorRules.TcpPortMaxLength" @bind="_form.TcpPort" />
+                        <FieldMessage Refusal="_check" Field="tcpport" />
+                    </label>
+                    <label class="field-check small">
+                        <input type="checkbox" data-field="listen" @bind="_form.ListenAsServer" />
+                        <span>@Texts["Interface.ListenAsServer"]</span>
+                    </label>
+                    <p class="field-span-4 small muted">@Texts["Interface.ListenNotice"]</p>
+                </fieldset>
+
+                <fieldset class="subcard form-grid form-grid-3" data-card="file" disabled="@(!fields.File)">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.InboundDirectory"]</span>
+                        <input class="input" dir="ltr" data-field="inbound" maxlength="@InterfaceEditorRules.DirectoryMaxLength" @bind="_form.InboundDirectory" />
+                        <FieldMessage Refusal="_check" Field="inbound" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.FilePattern"]</span>
+                        <input class="input mono" dir="ltr" data-field="pattern" maxlength="@InterfaceEditorRules.FilePatternMaxLength" @bind="_form.FilePattern" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.ProcessedDirectory"]</span>
+                        <input class="input" dir="ltr" data-field="processed" maxlength="@InterfaceEditorRules.DirectoryMaxLength" @bind="_form.ProcessedDirectory" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.OutboundDirectory"]</span>
+                        <input class="input" dir="ltr" data-field="outbound" maxlength="@InterfaceEditorRules.DirectoryMaxLength" @bind="_form.OutboundDirectory" />
+                    </label>
+                    <p class="field-span-2 small muted">@Texts["Interface.ProcessedNotice"]</p>
+                </fieldset>
+
+                <div class="form-grid form-grid-3">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Encoding"]</span>
+                        <select class="input" data-field="encoding" @bind="_form.Encoding">
+                            @foreach (var value in InterfaceEditorRules.Encodings) { <option value="@value">@value</option> }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.AckTimeout"]</span>
+                        <input class="input mono num" type="number" min="0" max="@InterfaceEditorRules.AcknowledgementTimeoutMax" data-field="acktimeout" @bind="AckTimeout" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.MaxRetries"]</span>
+                        <input class="input mono num" type="number" min="0" max="@InterfaceEditorRules.MaxRetriesMax" data-field="maxretries" @bind="MaxRetries" />
+                    </label>
+                    <p class="field-span-4 small muted">@Texts["Interface.EncodingNotice"]</p>
+                </div>
+
+                <div class="check-column">
+                    <label class="field-check"><input type="checkbox" data-field="raiseunmapped" @bind="_form.RaiseIssueOnUnmappedCode" /><span>@Texts["Interface.RaiseOnUnmapped"]</span></label>
+                    <label class="field-check"><input type="checkbox" data-field="routecontrols" @bind="_form.RouteControlResultsToQc" /><span>@Texts["Interface.RouteControls"]</span></label>
+                    <label class="field-check strong"><input type="checkbox" data-field="autoaccept" @bind="_form.AutoAcceptResults" /><span>@Texts["Interface.AutoAccept"]</span></label>
+                    <p class="small abnormal">@Texts["Interface.AutoAcceptNotice"]</p>
+                    <label class="field-check strong"><input type="checkbox" data-field="enabled" @bind="_form.IsEnabled" /><span>@Texts["Interface.Enabled"]</span></label>
+                    <p class="small muted">@Texts["Interface.EnabledNotice"]</p>
+                </div>
+            </div>
+
+            <fieldset class="subcard" data-card="format">
+                <legend class="section-title accent">@Texts["Interface.FormatSection"]</legend>
+                <label class="field">
+                    <span class="field-label">@Texts["Interface.FormatProfile"]</span>
+                    <select class="input" data-field="profile" @onchange="ProfileChanged">
+                        @{ var profile = InterfaceEditorRules.ProfileOf(_form); }
+                        @foreach (var preset in InterfaceEditorRules.FormatProfiles)
+                        {
+                            <option value="@preset.Key" selected="@(preset.Key == profile)">@Texts[preset.Key]</option>
+                        }
+                    </select>
+                </label>
+                @{ var delimited = InterfaceEditorRules.IsDelimited(_form.Protocol); }
+                <div class="form-grid form-grid-2">
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.FormatCodeComponent"]</span>
+                        <select class="input mono" data-field="codecomponent" disabled="@(!delimited)" @onchange="e => _form.TestCodeComponent = ComponentOf(e)">
+                            @foreach (var component in InterfaceEditorRules.Components)
+                            {
+                                <option value="@Component(component)" selected="@(component == _form.TestCodeComponent)">@Component(component)</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.FormatCodeSuffix"]</span>
+                        <input class="input mono" dir="ltr" data-field="codesuffix" maxlength="@InterfaceEditorRules.CodeSuffixMaxLength" @bind="_form.TestCodeSuffix" @bind:event="oninput" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.FormatSpecimenField"]</span>
+                        <select class="input mono" data-field="specimenfield" @onchange="SpecimenFieldChanged">
+                            <option value="" selected="@(_form.SpecimenIdField is null)">@Auto</option>
+                            @foreach (var (value, caption) in InterfaceEditorRules.SpecimenFields(_form.Protocol))
+                            {
+                                <option value="@value" selected="@(string.Equals(value, _form.SpecimenIdField, StringComparison.OrdinalIgnoreCase))">@caption</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.FormatSpecimenComponent"]</span>
+                        <select class="input mono" data-field="specimencomponent" disabled="@(!delimited)" @onchange="e => _form.SpecimenIdComponent = ComponentOf(e)">
+                            @foreach (var component in InterfaceEditorRules.Components)
+                            {
+                                <option value="@Component(component)" selected="@(component == _form.SpecimenIdComponent)">@Component(component)</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+                <label class="field">
+                    <span class="field-label">@Texts["Interface.FormatResultTypes"]</span>
+                    <input class="input mono" dir="ltr" data-field="resulttypes" maxlength="@InterfaceEditorRules.ResultTypesMaxLength" @bind="_form.AcceptedResultTypes" @bind:event="oninput" />
+                </label>
+                <p class="small muted">@Texts["Interface.FormatResultTypesNotice"]</p>
+                <label class="field">
+                    <span class="field-label">@Texts["Interface.FormatUnmappedNonNumeric"]</span>
+                    <select class="input" data-field="unmappednonnumeric" @bind="_form.UnmappedNonNumeric">
+                        @foreach (var handling in Enum.GetValues<UnmappedNonNumericHandling>())
+                        {
+                            <option value="@handling">@Texts[$"UnmappedNonNumericHandling.{handling}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field-check"><input type="checkbox" data-field="keepflags" @bind="_form.KeepInstrumentFlags" /><span>@Texts["Interface.KeepInstrumentFlags"]</span></label>
+                <p class="message is-info small" data-state="format-notice">@Texts[InterfaceEditorRules.FormatNoticeKey(_form.Protocol)]</p>
+                @if (CanTestFrame)
+                {
+                    <ActionButton Key="Interface.TestFrame" OnClick="TestFrameAsync" />
+                }
+                else
+                {
+                    <p class="small muted" data-state="test-after-save">@Texts["Interface.TestFrameAfterSave"]</p>
+                }
+            </fieldset>
+        </div>
+
+        @if (_check is { } refusal)
+        {
+            <p class="message is-warning" role="alert" data-refusal="form">@FieldMessage.Say(Texts, refusal)</p>
+        }
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@if (_confirmAutoAccept)
+{
+    <ConfirmPrompt Title="@Title" Message="@Texts["Interface.ConfirmAutoAccept"]" OnYes="ConfirmedAsync" OnNo="() => _confirmAutoAccept = false" />
+}
+
+@code {
+    /// <summary>The link edited; null for a new one, whose analyser is <see cref="Instrument"/>.</summary>
+    [Parameter] public InterfaceRow? Existing { get; set; }
+
+    /// <summary>For a new link, the analyser chosen beforehand.</summary>
+    [Parameter] public (Guid Id, string Code)? Instrument { get; set; }
+
+    /// <summary>« Tester une trame » on the form as it stands: offered once the link exists, to whoever reads results.</summary>
+    [Parameter] public bool CanTestFrame { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<(InstrumentProtocol Protocol, MessageFormatSettings Format)> OnTestFrame { get; set; }
+    [Parameter] public EventCallback<InterfaceRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private const string Auto = "Auto";
+
+    private InterfaceForm _form = new();
+    private FieldRefusal? _check;
+    private bool _initialised, _confirmAutoAccept;
+
+    private Guid InstrumentId => Existing?.InstrumentId ?? Instrument?.Id ?? Guid.Empty;
+
+    private string Title => $"{Texts[Existing is null ? "Interface.New" : "Interface.Edit"]} — {Existing?.InstrumentCode ?? Instrument?.Code}";
+
+    private int AckTimeout
+    {
+        get => _form.AcknowledgementTimeoutSeconds;
+        set => _form.AcknowledgementTimeoutSeconds = Math.Clamp(value, 0, InterfaceEditorRules.AcknowledgementTimeoutMax);
+    }
+
+    private int MaxRetries
+    {
+        get => _form.MaxRetries;
+        set => _form.MaxRetries = Math.Clamp(value, 0, InterfaceEditorRules.MaxRetriesMax);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = InterfaceEditorRules.FormOf(Existing);
+    }
+
+    private static string Component(int? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? Auto;
+
+    private static int? ComponentOf(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+
+    private void ProtocolChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<InstrumentProtocol>(e.Value?.ToString(), out var protocol)) return;
+        _form.Protocol = protocol;
+        InterfaceEditorRules.ProtocolChanged(_form);
+    }
+
+    private void TransportChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<InstrumentTransportKind>(e.Value?.ToString(), out var transport)) _form.Transport = transport;
+    }
+
+    private void ProfileChanged(ChangeEventArgs e) => InterfaceEditorRules.ApplyProfile(_form, e.Value?.ToString() ?? InterfaceEditorRules.CustomProfile);
+
+    private void SpecimenFieldChanged(ChangeEventArgs e) =>
+        _form.SpecimenIdField = InterfaceEditorRules.OfferedField(_form.Protocol, e.Value?.ToString());
+
+    private Task TestFrameAsync() => OnTestFrame.InvokeAsync((_form.Protocol, InterfaceEditorRules.Format(_form)));
+
+    private Task SaveAsync()
+    {
+        _check = InterfaceEditorRules.Check(_form, InstrumentId);
+        if (_check is not null) return Task.CompletedTask;
+
+        // Said before the save, not after a refusal.
+        if (InterfaceEditorRules.NeedsAutoAcceptConfirmation(_form))
+        {
+            _confirmAutoAccept = true;
+            return Task.CompletedTask;
+        }
+
+        return OnSave.InvokeAsync(InterfaceEditorRules.ToRequest(_form, Existing?.Id, InstrumentId));
+    }
+
+    private Task ConfirmedAsync()
+    {
+        _confirmAutoAccept = false;
+        return OnSave.InvokeAsync(InterfaceEditorRules.ToRequest(_form, Existing?.Id, InstrumentId));
+    }
+}

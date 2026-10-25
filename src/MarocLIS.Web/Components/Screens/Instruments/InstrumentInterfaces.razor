@@ -1,0 +1,755 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Instruments
+@using MarocLIS.Domain.Equipment
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Instruments.Simulator
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject InstrumentHostOptions HostOptions
+@inject ILogger<InstrumentInterfaces> Logger
+
+@*
+    « Interfaces automates », the workstation's InstrumentInterfaceView: is the link up, is it
+    translating correctly, and what came down the wire — the links at the start, the chosen link's
+    configuration, code table and message log in the rest. The analysers are driven by one Windows
+    workstation and never by this server, so the live state of every link reads « non piloté ici »
+    and the bar says why, as on a workstation that does not drive them; the configuration, the
+    codes, the replay of a held transmission, the purge and « Tester une trame » run here through
+    the same InstrumentInterfaceService, which checks the rights and journals each change. What is
+    shown, coloured and offered is InstrumentInterfaceScreenRules' and InterfaceEditorRules'.
+*@
+<div class="screen interfaces" data-screen="interfaces">
+    <div class="screen-body split split-list-wide">
+        <aside class="card list-pane" data-card="links">
+            <div class="list-tools">
+                <div class="search-box">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" placeholder="@Texts["App.SearchPlaceholder"]" aria-label="@Texts["App.SearchPlaceholder"]"
+                           data-field="link-search" autocomplete="off" @bind="_search" @bind:event="oninput" />
+                </div>
+                <span class="list-tools-end">
+                    <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+                </span>
+            </div>
+            <div class="chips" data-state="chips">
+                <button type="button" class="chip @(_onlyToWatch ? null : "is-pressed")" data-chip="all" @onclick="() => _onlyToWatch = false">
+                    @Texts["AdminA.ChipAll"] · @_rows.Count
+                </button>
+                <button type="button" class="chip @(_onlyToWatch ? "is-pressed" : null)" data-chip="to-watch" @onclick="() => _onlyToWatch = true">
+                    @Texts["Web.InterfaceToWatch"] · @_rows.Count(r => InstrumentInterfaceScreenRules.NeedsAttention(r, null))
+                </button>
+            </div>
+            <span class="muted small" data-state="count">@Texts["Nav.Instruments"] — @Shown.Count</span>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="links">
+                    <tbody>
+                        @foreach (var row in Shown)
+                        {
+                            <tr class="@(row.Id == Selected?.Id ? "is-selected" : null) @RowTones.Class(InstrumentInterfaceScreenRules.Tone(row, null))"
+                                data-row="@row.InstrumentCode" @onclick="() => SelectAsync(row)" @ondblclick="EditLinkAsync">
+                                <td>
+                                    <span class="cell-name"><span class="mono">@row.InstrumentCode</span> · @row.InstrumentName.For(Texts.Language)</span>
+                                    <span class="cell-sub">@Texts[$"InstrumentProtocol.{row.Protocol}"] · <span class="mono" dir="ltr">@row.Endpoint</span></span>
+                                    <span class="cell-sub">
+                                        <Pill Text="@Texts[InstrumentInterfaceScreenRules.LiveKey(DrivenHere, row, null)]"
+                                              Tone="@RowTones.Pill(InstrumentInterfaceScreenRules.LiveTone(DrivenHere, row, null))" />
+                                        @Texts["Interface.MessagesToday"] <span class="mono">@InstrumentInterfaceScreenRules.MessagesToday(row)</span>
+                                    </span>
+                                    @if (InstrumentInterfaceScreenRules.Flags(row, Texts.T) is { Count: > 0 } flags)
+                                    {
+                                        <span class="cell-sub strong" data-state="flags">@string.Join(" · ", flags)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (Shown.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.InterfaceNone"]</p>
+                }
+            </div>
+        </aside>
+
+        <div class="detail-stack" data-card="link-detail">
+            @if (Selected is { } link)
+            {
+                <section class="card" data-card="link">
+                    <div class="card-heading">
+                        <h2 class="card-title"><span class="mono">@link.InstrumentCode</span> · @link.InstrumentName.For(Texts.Language)</h2>
+                        <Pill Text="@Texts[InstrumentInterfaceScreenRules.LiveKey(DrivenHere, link, null)]"
+                              Tone="@RowTones.Pill(InstrumentInterfaceScreenRules.LiveTone(DrivenHere, link, null))" />
+                    </div>
+                    <dl class="facts facts-columns" data-state="facts">
+                        <dt>@Texts["Interface.Protocol"]</dt><dd>@Texts[$"InstrumentProtocol.{link.Protocol}"]</dd>
+                        <dt>@Texts["Interface.Transport"]</dt><dd>@Texts[$"InstrumentTransportKind.{link.Transport}"]</dd>
+                        <dt>@Texts["Interface.Endpoint"]</dt><dd class="mono" dir="ltr">@link.Endpoint</dd>
+                        <dt>@Texts["Interface.Direction"]</dt><dd>@Texts[$"InstrumentDirection.{link.Direction}"]</dd>
+                        <dt>@Texts["Interface.Encoding"]</dt><dd class="mono">@link.Encoding</dd>
+                        <dt>@Texts["Interface.AckTimeout"]</dt><dd class="mono">@link.AcknowledgementTimeoutSeconds · @Texts["Interface.MaxRetries"] @link.MaxRetries</dd>
+                        <dt>@Texts["Interface.FormatProfile"]</dt><dd>@Texts[InterfaceEditorRules.ProfileFor(link.Protocol, link.Format)]</dd>
+                        <dt>@Texts["Interface.Mappings"]</dt><dd class="mono">@InstrumentInterfaceScreenRules.MappingCount(link)</dd>
+                        <dt>@Texts["Interface.LastMessage"]</dt><dd class="mono">@InstrumentInterfaceScreenRules.LastMessage(link, Texts.Culture)</dd>
+                        <dt>@Texts["Field.Status"]</dt><dd>@(InstrumentInterfaceScreenRules.Flags(link, Texts.T) is { Count: > 0 } linkFlags ? string.Join(" · ", linkFlags) : "—")</dd>
+                    </dl>
+                    @if (link.LastError is { Length: > 0 } error)
+                    {
+                        <p class="message is-warning small" data-state="last-error">@Texts["Interface.HasError"] : <span class="mono" dir="ltr">@error</span></p>
+                    }
+                    <p class="message is-info small" data-state="host">@Texts["Web.InterfaceHostNotice"]</p>
+                </section>
+
+                <section class="card card-flush card-fill" data-card="link-tabs">
+                    <div class="tabs" role="tablist">
+                        <button type="button" role="tab" class="tab @(_tab == DetailTab.Mappings ? "is-selected" : null)" aria-selected="@(_tab == DetailTab.Mappings ? "true" : "false")"
+                                data-tab="mappings" @onclick="() => _tab = DetailTab.Mappings">@Texts["Interface.Mappings"] · @_mappings.Count</button>
+                        <button type="button" role="tab" class="tab @(_tab == DetailTab.Messages ? "is-selected" : null)" aria-selected="@(_tab == DetailTab.Messages ? "true" : "false")"
+                                data-tab="messages" @onclick="() => _tab = DetailTab.Messages">@Texts["Interface.MessageLog"] · @_messages.Count</button>
+                    </div>
+
+                    @if (_tab == DetailTab.Mappings)
+                    {
+                        <div class="table-scroll">
+                            <table class="grid" data-grid="mappings">
+                                <thead>
+                                    <tr>
+                                        <th>@Texts["Interface.InstrumentCode"]</th>
+                                        <th>@Texts["Catalog.Parameter"]</th>
+                                        <th>@Texts["Field.Name"]</th>
+                                        <th>@Texts["Field.Unit"]</th>
+                                        <th class="num">@Texts["Interface.Conversion"]</th>
+                                        <th>@Texts["Field.Status"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var mapping in _mappings)
+                                    {
+                                        <tr class="@RowTones.Class(InstrumentInterfaceScreenRules.Tone(mapping))" data-row="@mapping.InstrumentTestCode">
+                                            <td class="mono strong" dir="ltr">@mapping.InstrumentTestCode</td>
+                                            <td class="mono">@InstrumentInterfaceScreenRules.Parameter(mapping)</td>
+                                            <td>@mapping.ParameterName.For(Texts.Language)</td>
+                                            <td class="mono" dir="ltr">@InstrumentInterfaceScreenRules.Units(mapping)</td>
+                                            <td class="num mono" dir="ltr">@InstrumentInterfaceScreenRules.Conversion(mapping, Texts.Culture)</td>
+                                            <td class="small strong">@string.Join(" · ", InstrumentInterfaceScreenRules.Flags(mapping, Texts.T))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (_mappings.Count == 0)
+                            {
+                                <p class="muted small card-pad" data-state="no-mappings">@Texts["Interface.NoMappings"]</p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="chips card-pad" data-state="message-chips">
+                            <button type="button" class="chip @(_onlyToDealWith ? null : "is-pressed")" data-chip="all-messages" @onclick="() => _onlyToDealWith = false">
+                                @Texts["AdminA.ChipAll"] · @_messages.Count
+                            </button>
+                            <button type="button" class="chip @(_onlyToDealWith ? "is-pressed" : null)" data-chip="to-deal-with" @onclick="() => _onlyToDealWith = true">
+                                @Texts["Web.InterfaceToDealWith"] · @InstrumentInterfaceScreenRules.ToDealWith(_messages).Count
+                            </button>
+                        </div>
+                        <div class="table-scroll">
+                            <table class="grid grid-select" data-grid="messages">
+                                <thead>
+                                    <tr>
+                                        <th>@Texts["Field.DateTime"]</th>
+                                        <th>@Texts["Interface.MessageDirection"]</th>
+                                        <th>@Texts["Sample.Plural"]</th>
+                                        <th class="num">@Texts["Result.Plural"]</th>
+                                        <th>@Texts["Field.Status"]</th>
+                                        <th>@Texts["Interface.Issues"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var message in ShownMessages)
+                                    {
+                                        <tr class="@(message.Id == SelectedMessage?.Id ? "is-selected" : null) @RowTones.Class(InstrumentInterfaceScreenRules.Tone(message))"
+                                            data-row="@message.Id" @onclick="() => _messageId = message.Id" @ondblclick="ViewRawAsync">
+                                            <td class="mono small">@InstrumentInterfaceScreenRules.When(message, culture: Texts.Culture)</td>
+                                            <td class="small">@Texts[$"MessageDirection.{message.Direction}"]</td>
+                                            <td class="mono small" dir="ltr">@message.SpecimenIds</td>
+                                            <td class="num mono">@InstrumentInterfaceScreenRules.Counts(message)</td>
+                                            <td><Pill Text="@InstrumentInterfaceScreenRules.Status(message, Texts.T)" Tone="@RowTones.Pill(InstrumentInterfaceScreenRules.StatusTone(message))" /></td>
+                                            <td class="small">@InstrumentInterfaceScreenRules.Issues(message.Issues, Texts.T)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (ShownMessages.Count == 0)
+                            {
+                                <p class="muted small card-pad" data-state="no-messages">@Texts["Web.InterfaceNoMessage"]</p>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+            else
+            {
+                <section class="card card-empty" data-state="no-link">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />
+                    <p>@Texts["Web.InterfaceNone"]</p>
+                </section>
+            }
+        </div>
+    </div>
+
+    @{ var actions = Actions; }
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            @if (_tab == DetailTab.Messages)
+            {
+                <ActionButton Key="Interface.ViewRaw" Disabled="@(!actions.ViewRaw || _busy)" OnClick="ViewRawAsync" />
+                <ActionButton Key="Interface.Replay" Disabled="@(!actions.Replay || _busy)" OnClick="AskReplay" />
+                <ActionButton Key="Interface.TestFrame" Disabled="@(!actions.TestFrame || _busy)" OnClick="TestFrameAsync" />
+            }
+            else
+            {
+                <ActionButton Key="Interface.Edit" Disabled="@(!actions.EditLink || _busy)" OnClick="EditLinkAsync" />
+                <ActionButton Key="Interface.EditMappings" Disabled="@(!actions.EditMappings || _busy)" OnClick="EditMappingsAsync" />
+                <ActionButton Key="Interface.TestFrame" Disabled="@(!actions.TestFrame || _busy)" OnClick="TestFrameAsync" />
+            }
+        </Secondary>
+        <More>
+            <ActionButton Key="@actions.ToggleKey" Disabled="@(!actions.Toggle || _busy)" OnClick="AskToggle" />
+            @if (_tab == DetailTab.Messages)
+            {
+                <ActionButton Key="Interface.Edit" Disabled="@(!actions.EditLink || _busy)" OnClick="EditLinkAsync" />
+                <ActionButton Key="Interface.EditMappings" Disabled="@(!actions.EditMappings || _busy)" OnClick="EditMappingsAsync" />
+            }
+            else
+            {
+                <ActionButton Key="Interface.ViewRaw" Disabled="@(!actions.ViewRaw || _busy)" OnClick="ViewRawAsync" />
+                <ActionButton Key="Interface.Replay" Disabled="@(!actions.Replay || _busy)" OnClick="AskReplay" />
+            }
+        </More>
+        <Destructive>
+            <ActionButton Key="Interface.PurgeLog" Danger="true" Disabled="@(!actions.PurgeLog || _busy)" OnClick="AskPurgeAsync" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Interface.New" Primary="true" Disabled="@(!actions.NewLink || _busy)" OnClick="NewLinkAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_dialog)
+{
+    case Dialog.Instrument:
+        <InterfaceInstrumentDialog Instruments="_free" OnPick="PickInstrument" OnCancel="Close" />
+        break;
+
+    case Dialog.Link:
+        <InterfaceEditorDialog Existing="_editing" Instrument="_newInstrument" Refusal="@_refusal"
+                               CanTestFrame="@(_editing is not null && Context.User.Has(Permissions.Results.View))"
+                               OnTestFrame="TestEditedFrameAsync" OnSave="SaveLinkAsync" OnCancel="Close" />
+        break;
+
+    case Dialog.Mappings when Selected is { } mapped:
+        <MappingEditorDialog Link="mapped" Existing="_mappings" Refusal="@_refusal" OnSave="SaveMappingsAsync" OnCancel="Close" />
+        break;
+
+    case Dialog.Raw when _raw is { } raw:
+        <RawMessageDialog Message="raw.Message" Raw="@raw.Frame" OnClose="Close" />
+        break;
+}
+
+@if (_frameTest is { } test)
+{
+    <FrameTestDialog Subtitle="@test.Subtitle" Initial="@test.Initial" Parameters="test.Parameters"
+                     Preview="test.Preview" LoadLast="test.LoadLast" Sample="test.Sample" OnClose="() => _frameTest = null" />
+}
+
+@switch (_prompt)
+{
+    case Prompt.Toggle when Selected is { } toggled:
+        <ReasonPrompt Title="@Texts[toggled.IsEnabled ? "Interface.Disable" : "Interface.Enable"]"
+                      Prompt="@Texts.T(toggled.IsEnabled ? "Interface.DisablePrompt" : "Interface.EnablePrompt", toggled.InstrumentCode)"
+                      MaxLength="InstrumentInterfaceScreenRules.ToggleReasonMaxLength" OnConfirm="ToggleAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Replay:
+        <ConfirmPrompt Title="@Texts["Interface.Replay"]" Message="@Texts["Interface.ReplayConfirm"]" OnYes="ReplayAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.PurgeScope when _census is { } census:
+        <ConfirmPrompt Title="@Texts["Interface.PurgeLog"]" Message="@InstrumentInterfaceScreenRules.PurgeScope(census, Texts.T, Texts.Culture)"
+                       OnYes="() => _prompt = Prompt.PurgeReason" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.PurgeReason:
+        <ReasonPrompt Title="@Texts["Interface.PurgeLog"]" Prompt="@Texts["Interface.PurgeLogPrompt"]"
+                      MaxLength="InstrumentInterfaceScreenRules.PurgeReasonMaxLength" OnConfirm="PurgeAsync" OnCancel="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum DetailTab { Mappings, Messages }
+    private enum Dialog { None, Instrument, Link, Mappings, Raw }
+    private enum Prompt { None, Toggle, Replay, PurgeScope, PurgeReason }
+
+    /// <summary>« Tester une trame » as opened: on the saved settings of a link, or on those its editor holds.</summary>
+    private sealed record FrameTest(string Subtitle, string? Initial, IReadOnlyDictionary<Guid, string> Parameters,
+                                    Func<string, Task<Result<MessagePreview>>> Preview, Func<Task<string?>> LoadLast,
+                                    Func<Task<string>>? Sample);
+
+    private IReadOnlyList<InterfaceRow> _rows = [];
+    private IReadOnlyList<MappingRow> _mappings = [];
+    private IReadOnlyList<MessageLogRow> _messages = [];
+    private IReadOnlyList<InstrumentMasterRow> _free = [];
+
+    private Guid? _linkId, _messageId;
+    private string _search = string.Empty;
+    private bool _onlyToWatch, _onlyToDealWith;
+    private DetailTab _tab = DetailTab.Mappings;
+
+    private Dialog _dialog;
+    private Prompt _prompt;
+    private InterfaceRow? _editing;
+    private (Guid Id, string Code)? _newInstrument;
+    private (MessageLogRow Message, string Frame)? _raw;
+    private FrameTest? _frameTest;
+    private MessageLogCensus? _census;
+    private string? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    /// <summary>
+    /// Whether this process drives the analysers: never the web server. Its links read « non piloté
+    /// ici », as on a workstation whose EnableInstrumentHost is off, rather than « arrêté ».
+    /// </summary>
+    private static bool DrivenHere => false;
+
+    private IReadOnlyList<InterfaceRow> Shown =>
+        [.. _rows.Where(r => InstrumentInterfaceScreenRules.Matches(r, _search, Texts.Language)
+                             && (!_onlyToWatch || InstrumentInterfaceScreenRules.NeedsAttention(r, null)))];
+
+    private IReadOnlyList<MessageLogRow> ShownMessages =>
+        _onlyToDealWith ? InstrumentInterfaceScreenRules.ToDealWith(_messages) : _messages;
+
+    private InterfaceRow? Selected => _rows.FirstOrDefault(r => r.Id == _linkId) ?? Shown.FirstOrDefault();
+
+    private MessageLogRow? SelectedMessage => _messages.FirstOrDefault(m => m.Id == _messageId);
+
+    private InterfaceActions Actions => InstrumentInterfaceScreenRules.Actions(Context.User, Selected, SelectedMessage);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        ShowHostState();
+    }
+
+    /// <summary>The bar says plainly that the analysers are not driven from here, and why the links read so.</summary>
+    private void ShowHostState() => _status = (Texts["Web.InterfaceHostState"], "muted");
+
+    // ---- Loading -----------------------------------------------------------------------------------
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var links = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<InterfaceRow>>>(s => s.GetInterfacesAsync());
+            if (links.IsFailure)
+            {
+                _status = (Texts.Describe(links.Errors), "critical");
+                return;
+            }
+
+            _rows = links.Value;
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the analyser interfaces failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    /// <summary>The chosen link's codes and its last frames, reloaded rather than patched: a replay changes a frame's status and counts.</summary>
+    private async Task LoadDetailAsync()
+    {
+        _mappings = [];
+        _messages = [];
+        if (Selected is not { } link) return;
+
+        var id = link.Id;
+        var mappings = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<MappingRow>>>(s => s.GetMappingsAsync(id));
+        if (mappings.IsFailure)
+        {
+            _status = (Texts.Describe(mappings.Errors), "critical");
+            return;
+        }
+        _mappings = mappings.Value;
+
+        var messages = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<MessageLogRow>>>(
+            s => s.GetMessagesAsync(id, InstrumentInterfaceScreenRules.MessagesShown));
+        if (messages.IsFailure)
+        {
+            _status = (Texts.Describe(messages.Errors), "critical");
+            return;
+        }
+        _messages = messages.Value;
+
+        if (_messageId is { } kept && _messages.All(m => m.Id != kept)) _messageId = null;
+    }
+
+    private async Task SelectAsync(InterfaceRow row)
+    {
+        if (row.Id == Selected?.Id) return;
+        _linkId = row.Id;
+        _messageId = null;
+        await LoadDetailAsync();
+    }
+
+    // ---- The link ----------------------------------------------------------------------------------
+
+    /// <summary>The analyser first, from those without a link: an empty choice is said before a whole configuration is typed.</summary>
+    private async Task NewLinkAsync()
+    {
+        if (!Actions.NewLink || _busy) return;
+
+        var instruments = await Scopes.RunAsync<MasterDataService, Result<IReadOnlyList<InstrumentMasterRow>>>(s => s.GetInstrumentsAsync());
+        if (instruments.IsFailure)
+        {
+            _status = (Texts.Describe(instruments.Errors), "critical");
+            return;
+        }
+
+        _free = InstrumentInterfaceScreenRules.FreeInstruments(instruments.Value);
+        if (_free.Count == 0)
+        {
+            _status = (Texts["Interface_NoInstrumentAvailable"], "warning");
+            return;
+        }
+
+        _refusal = null;
+        _dialog = Dialog.Instrument;
+    }
+
+    private void PickInstrument((Guid Id, string Code) instrument)
+    {
+        _newInstrument = instrument;
+        _editing = null;
+        _refusal = null;
+        _dialog = Dialog.Link;
+    }
+
+    private Task EditLinkAsync()
+    {
+        if (!Actions.EditLink || _busy || Selected is not { } link) return Task.CompletedTask;
+
+        _editing = link;
+        _newInstrument = null;
+        _refusal = null;
+        _dialog = Dialog.Link;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Saved through the service, which journals it; the host picks the change up on its next pass.</summary>
+    private async Task SaveLinkAsync(InterfaceRequest request)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<InstrumentInterfaceService, Result<Guid>>(s => s.SaveInterfaceAsync(request));
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _linkId = saved.Value;
+            Close();
+            await LoadAsync();
+            _status = (Texts.T("Interface.SavedTakesEffect", HostOptions.ConfigurationPollSeconds), "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving an analyser interface failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskToggle()
+    {
+        if (!Actions.Toggle || _busy) return;
+        _prompt = Prompt.Toggle;
+    }
+
+    /// <summary>Against a recorded reason: taking a link off the air stops its results, and the next shift needs to know why.</summary>
+    private async Task ToggleAsync(string reason)
+    {
+        _prompt = Prompt.None;
+        if (Selected is not { } link || _busy) return;
+
+        var enabling = !link.IsEnabled;
+        var id = link.Id;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<InstrumentInterfaceService, Result>(s => s.SetEnabledAsync(id, enabling, reason));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            _status = (Texts.T("Interface.SavedTakesEffect", HostOptions.ConfigurationPollSeconds), enabling ? "normal" : "abnormal");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- The code table ----------------------------------------------------------------------------
+
+    private Task EditMappingsAsync()
+    {
+        if (!Actions.EditMappings || _busy || Selected is null) return Task.CompletedTask;
+
+        _refusal = null;
+        _dialog = Dialog.Mappings;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveMappingsAsync(IReadOnlyList<MappingRequest> mappings)
+    {
+        if (_busy || Selected is not { } link) return;
+
+        var id = link.Id;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<InstrumentInterfaceService, Result>(s => s.SaveMappingsAsync(id, mappings));
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            Close();
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving an analyser's code table failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- The message log ---------------------------------------------------------------------------
+
+    /// <summary>The frame verbatim: when a result is disputed it is the evidence of what the analyser sent.</summary>
+    private async Task ViewRawAsync()
+    {
+        if (!Actions.ViewRaw || _busy || SelectedMessage is not { } message) return;
+
+        var id = message.Id;
+        var raw = await Scopes.RunAsync<InstrumentInterfaceService, Result<string>>(s => s.GetRawMessageAsync(id));
+        if (raw.IsFailure)
+        {
+            _status = (Texts.Describe(raw.Errors), "critical");
+            return;
+        }
+
+        _raw = (message, raw.Value);
+        _dialog = Dialog.Raw;
+    }
+
+    private void AskReplay()
+    {
+        if (_busy || SelectedMessage is not { } message) return;
+
+        if (!message.CanReplay)
+        {
+            _status = (Texts["Interface.ReplayNotPossible"], "warning");
+            return;
+        }
+
+        if (!Actions.Replay) return;
+        _prompt = Prompt.Replay;
+    }
+
+    /// <summary>
+    /// Re-imports the frame, confirmed first: a replay writes the analyser's values into a patient
+    /// file. Zero stored is said as such, not as « done ».
+    /// </summary>
+    private async Task ReplayAsync()
+    {
+        _prompt = Prompt.None;
+        if (_busy || SelectedMessage is not { } message) return;
+
+        var id = message.Id;
+        _busy = true;
+
+        try
+        {
+            var replayed = await Scopes.RunAsync<InstrumentInterfaceService, Result<int>>(s => s.ReplayMessageAsync(id));
+            if (replayed.IsFailure)
+            {
+                _status = (Texts.Describe(replayed.Errors), "critical");
+                return;
+            }
+
+            await LoadDetailAsync();
+            _status = (InstrumentInterfaceScreenRules.ReplayOutcome(replayed.Value, Texts.T), replayed.Value == 0 ? "warning" : "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Replaying an analyser transmission failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// The purge's scope is read and said before it is asked — the cut-off and the frames kept back
+    /// because they are still replayable — then its reason, recorded in the security journal.
+    /// </summary>
+    private async Task AskPurgeAsync()
+    {
+        if (!Actions.PurgeLog || _busy) return;
+
+        var census = await Scopes.RunAsync<InstrumentInterfaceService, Result<MessageLogCensus>>(s => s.GetMessageLogCensusAsync());
+        if (census.IsFailure)
+        {
+            _status = (Texts.Describe(census.Errors), "critical");
+            return;
+        }
+
+        _census = census.Value;
+
+        if (InstrumentInterfaceScreenRules.NothingToPurge(_census))
+        {
+            var nothing = Texts.T("Interface.PurgeLogNothing", HostOptions.MessageLogRetentionDays);
+            _status = InstrumentInterfaceScreenRules.RetainedWarning(_census, Texts.T) is { } kept
+                ? ($"{nothing} {kept}", "warning")
+                : (nothing, "muted");
+            return;
+        }
+
+        _prompt = Prompt.PurgeScope;
+    }
+
+    private async Task PurgeAsync(string reason)
+    {
+        _prompt = Prompt.None;
+        if (_busy || _census is not { } census) return;
+        _busy = true;
+
+        try
+        {
+            var purged = await Scopes.RunAsync<InstrumentInterfaceService, Result<int>>(s => s.PurgeMessageLogAsync(reason));
+            if (purged.IsFailure)
+            {
+                _status = (Texts.Describe(purged.Errors), "critical");
+                return;
+            }
+
+            await LoadDetailAsync();
+            var done = Texts.T("Interface.PurgeLogDone", purged.Value);
+            _status = InstrumentInterfaceScreenRules.RetainedWarning(census, Texts.T) is { } retained
+                ? ($"{done} {retained}", "warning")
+                : (done, "normal");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- « Tester une trame » ------------------------------------------------------------------------
+
+    /// <summary>On the link's saved protocol and format; a selected inbound frame is loaded and read at once.</summary>
+    private Task TestFrameAsync() =>
+        Selected is { } link && Actions.TestFrame
+            ? OpenFrameTestAsync(link, link.Protocol, link.Format, _tab == DetailTab.Messages ? SelectedMessage : null)
+            : Task.CompletedTask;
+
+    /// <summary>From the link editor, on the protocol and format as they stand there, saved or not.</summary>
+    private Task TestEditedFrameAsync((InstrumentProtocol Protocol, MessageFormatSettings Format) edited) =>
+        _editing is { } link ? OpenFrameTestAsync(link, edited.Protocol, edited.Format, null) : Task.CompletedTask;
+
+    private async Task OpenFrameTestAsync(InterfaceRow link, InstrumentProtocol protocol, MessageFormatSettings format,
+                                          MessageLogRow? message)
+    {
+        var id = link.Id;
+        var mappings = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<MappingRow>>>(s => s.GetMappingsAsync(id));
+        if (mappings.IsFailure)
+        {
+            _status = (Texts.Describe(mappings.Errors), "critical");
+            return;
+        }
+
+        string? initial = null;
+        if (InstrumentInterfaceScreenRules.OpensOn(message))
+        {
+            var messageId = message!.Id;
+            var raw = await Scopes.RunAsync<InstrumentInterfaceService, Result<string>>(s => s.GetRawMessageAsync(messageId));
+            if (raw.IsSuccess) initial = raw.Value;
+        }
+
+        async Task<IReadOnlyList<MessageLogRow>> RecentAsync()
+        {
+            var recent = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<MessageLogRow>>>(
+                s => s.GetMessagesAsync(id, InstrumentInterfaceScreenRules.RecentMessages));
+            return recent.IsSuccess ? recent.Value : [];
+        }
+
+        async Task<string?> LoadLastAsync()
+        {
+            if (InstrumentInterfaceScreenRules.LastInboundWithResults(await RecentAsync()) is not { } inbound) return null;
+            var inboundId = inbound.Id;
+            var raw = await Scopes.RunAsync<InstrumentInterfaceService, Result<string>>(s => s.GetRawMessageAsync(inboundId));
+            return raw.IsSuccess ? raw.Value : null;
+        }
+
+        // The INTEGRA speaks a protocol nobody has a frame of before the analyser is cabled: the
+        // workstation's simulator writes one for the tube of the last transmission and the link's tests.
+        async Task<string> SampleAsync() =>
+            IntegraInstrumentEmulator.SampleTranscript(InstrumentInterfaceScreenRules.SampleTube(await RecentAsync()),
+                                                       InstrumentInterfaceScreenRules.SampleTests(mappings.Value));
+
+        _frameTest = new FrameTest(
+            InstrumentInterfaceScreenRules.FrameTestSubtitle(link, protocol, Texts.T),
+            initial,
+            InstrumentInterfaceScreenRules.ParameterLabels(mappings.Value),
+            frame => Scopes.RunAsync<InstrumentInterfaceService, Result<MessagePreview>>(s => s.PreviewMessageAsync(id, protocol, format, frame)),
+            LoadLastAsync,
+            InstrumentInterfaceScreenRules.HasSample(protocol) ? SampleAsync : null);
+    }
+
+    // ---- Dialogs -----------------------------------------------------------------------------------
+
+    private void Close()
+    {
+        _dialog = Dialog.None;
+        _editing = null;
+        _newInstrument = null;
+        _raw = null;
+        _refusal = null;
+    }
+
+    private void ClosePrompt() => _prompt = Prompt.None;
+}

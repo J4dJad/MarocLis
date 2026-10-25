@@ -1,0 +1,226 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Instruments
+@inject WebTexts Texts
+@inject UserScopes Scopes
+
+@*
+    The code translation table, the workstation's InstrumentMappingDialog: the analyser sends « K »
+    and this table decides whether that becomes potassium or nothing at all. Each line is typed in
+    place; the unit the analyser reports sits beside the catalogue's, and a mismatch with no factor
+    is filled in the alarm's colours — the one mapping fault that gives a plausible wrong number.
+    New codes come in through « Ajouter des paramètres », which ties each to a catalogue parameter
+    (the workstation's MappableParameterPicker); a line taken out is switched off on save, kept so
+    old messages can still be read. The lines, the summary and the checks are InterfaceEditorRules'.
+*@
+<Modal Name="mapping-editor" Title="@($"{Texts["Interface.EditMappings"]} — {Link.InstrumentCode}")" Hint="@Texts["AdminDialog.InstrumentMappingDialog"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <p class="message is-info small">@Texts["Interface.MappingNotice"]</p>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid" data-grid="mapping-lines">
+                <thead>
+                    <tr>
+                        <th>@Texts["Interface.InstrumentCode"]</th>
+                        <th>@Texts["Catalog.Parameter"]</th>
+                        <th>@Texts["Interface.InstrumentUnit"]</th>
+                        <th>@Texts["Interface.CatalogueUnit"]</th>
+                        <th class="num">@Texts["Interface.ConversionFactor"]</th>
+                        <th class="num">@Texts["Interface.ConversionOffset"]</th>
+                        <th>@Texts["Interface.CodedValueMap"]</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _lines.Count; i++)
+                    {
+                        var line = _lines[i];
+                        var index = i;
+                        <tr class="@(line.IsNew ? "mapping-new" : null) @(InterfaceEditorRules.IsUnitMismatch(line) ? "row-alarm is-tone-critical" : null)" data-row="@line.Original.ParameterCode">
+                            <td class="cell-input cell-code">
+                                <input class="input mono" dir="ltr" data-field="code" maxlength="@InterfaceEditorRules.MappingCodeMaxLength" @bind="line.Code" @bind:event="oninput" />
+                                @if (_refusalLine == index) { <FieldMessage Refusal="_check" Field="code" /> }
+                            </td>
+                            <td class="small">@InterfaceEditorRules.ParameterLabel(line.Original, Texts.Language)</td>
+                            <td class="cell-input"><input class="input mono" dir="ltr" data-field="instrumentunit" maxlength="@InterfaceEditorRules.MappingUnitMaxLength" @bind="line.InstrumentUnit" @bind:event="oninput" /></td>
+                            <td class="mono" dir="ltr">@line.Original.CatalogueUnit</td>
+                            <td class="cell-input">
+                                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="factor" @bind="line.Factor" @bind:event="oninput" />
+                                @if (_refusalLine == index) { <FieldMessage Refusal="_check" Field="factor" /> }
+                            </td>
+                            <td class="cell-input"><input class="input mono num" dir="ltr" inputmode="decimal" data-field="offset" @bind="line.Offset" @bind:event="oninput" /></td>
+                            <td class="cell-input"><input class="input mono" dir="ltr" data-field="codemap" maxlength="@InterfaceEditorRules.CodedValueMapMaxLength" @bind="line.CodedValueMap" /></td>
+                            <td><ActionButton Key="Interface.RemoveMapping" Text="" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Trash2" Title="@Texts["Interface.RemoveMapping"]" OnClick="() => Remove(index)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted" data-state="summary">@InterfaceEditorRules.Summary(_lines.Count, _retired, Texts.T)</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Interface.AddParameters" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" OnClick="OpenPickerAsync" />
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@if (_picking)
+{
+    <Modal Name="parameter-picker" Title="@Texts["Interface.AddParameters"]" Hint="@Texts["AdminDialog.MappableParameterPicker"]" Wide="true" OnCancel="() => _picking = false">
+        <ChildContent>
+            <p class="small muted">@Texts["Interface.AddParametersPrompt"]</p>
+            <div class="list-tools">
+                <div class="search-box search-box-wide">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                    <input class="input" type="search" data-field="parameter-search" placeholder="@Texts["Interface.AddParametersSearch"]" autocomplete="off"
+                           @bind="_query" @bind:event="oninput" @bind:after="SearchSoonAsync" />
+                </div>
+                <ActionButton Key="Interface.TickAll" OnClick="TickAll" />
+            </div>
+            <div class="table-scroll table-scroll-short">
+                <table class="grid" data-grid="parameters">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>@Texts["Catalog.Analysis"]</th>
+                            <th>@Texts["Field.Code"]</th>
+                            <th>@Texts["Catalog.Parameter"]</th>
+                            <th>@Texts["Interface.CatalogueUnit"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var parameter in _found)
+                        {
+                            var mapped = _mapped.Contains(parameter.TestParameterId);
+                            <tr class="@(mapped ? "is-tone-muted" : null)" data-row="@parameter.ParameterCode">
+                                <td><input type="checkbox" data-field="pick" disabled="@mapped" checked="@_ticked.Contains(parameter.TestParameterId)" @onchange="e => Tick(parameter, e)" /></td>
+                                <td class="mono strong">@parameter.AnalysisCode</td>
+                                <td class="mono">@parameter.ParameterCode</td>
+                                <td>@parameter.ParameterName.For(Texts.Language)@(mapped ? $"  ({Texts["Interface.AlreadyMapped"]})" : null)</td>
+                                <td class="mono" dir="ltr">@parameter.UnitSymbol</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_pickerRefusal is { Length: > 0 } pickerRefused)
+            {
+                <p class="message is-critical" role="alert">@pickerRefused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="() => _picking = false" />
+            <ActionButton Key="Interface.AddParametersConfirm" Primary="true" Disabled="@(_ticked.Count == 0)"
+                          Text="@(_ticked.Count > 0 ? $"{Texts["Interface.AddParametersConfirm"]} ({_ticked.Count})" : Texts["Interface.AddParametersConfirm"])"
+                          OnClick="AddPicked" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    [Parameter, EditorRequired] public InterfaceRow Link { get; set; } = default!;
+
+    /// <summary>The link's codes as saved, those switched off included.</summary>
+    [Parameter] public IReadOnlyList<MappingRow> Existing { get; set; } = [];
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<MappingRequest>> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private List<MappingLine> _lines = [];
+    private int _retired;
+    private FieldRefusal? _check;
+    private int _refusalLine = -1;
+    private bool _initialised;
+
+    private bool _picking;
+    private string _query = string.Empty;
+    private IReadOnlyList<MappableParameter> _found = [];
+    private HashSet<Guid> _mapped = [];
+    private readonly HashSet<Guid> _ticked = [];
+    private CancellationTokenSource? _searchDelay;
+    private string? _pickerRefusal;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _lines = InterfaceEditorRules.Lines(Existing, Texts.Culture);
+        _retired = InterfaceEditorRules.Retired(Existing);
+    }
+
+    private void Remove(int index)
+    {
+        if (index < 0 || index >= _lines.Count) return;
+        _lines.RemoveAt(index);
+        _check = null;
+        _refusalLine = -1;
+    }
+
+    private Task SaveAsync()
+    {
+        var (mappings, refusal, line) = InterfaceEditorRules.Check(_lines);
+        _check = refusal;
+        _refusalLine = line;
+        return refusal is null ? OnSave.InvokeAsync(mappings) : Task.CompletedTask;
+    }
+
+    // ---- « Ajouter des paramètres » ----------------------------------------------------------------
+
+    private async Task OpenPickerAsync()
+    {
+        _mapped = InterfaceEditorRules.Mapped(_lines);
+        _ticked.Clear();
+        _query = string.Empty;
+        _picking = true;
+        await SearchAsync();
+    }
+
+    /// <summary>Searched as typed, a moment after the last key: the catalogue holds several hundred parameters.</summary>
+    private async Task SearchSoonAsync()
+    {
+        _searchDelay?.Cancel();
+        var delay = _searchDelay = new CancellationTokenSource();
+        try { await Task.Delay(300, delay.Token); }
+        catch (TaskCanceledException) { return; }
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        var search = string.IsNullOrWhiteSpace(_query) ? null : _query.Trim();
+        var found = await Scopes.RunAsync<InstrumentInterfaceService, Result<IReadOnlyList<MappableParameter>>>(s => s.GetMappableParametersAsync(search));
+        if (found.IsFailure)
+        {
+            _pickerRefusal = Texts.Describe(found.Errors);
+            return;
+        }
+
+        _pickerRefusal = null;
+        _found = found.Value;
+    }
+
+    private void Tick(MappableParameter parameter, ChangeEventArgs e)
+    {
+        if (e.Value is true) _ticked.Add(parameter.TestParameterId);
+        else _ticked.Remove(parameter.TestParameterId);
+    }
+
+    /// <summary>The usual case is the whole analysis: every parameter of the blood count at once.</summary>
+    private void TickAll()
+    {
+        foreach (var parameter in _found.Where(p => !_mapped.Contains(p.TestParameterId))) _ticked.Add(parameter.TestParameterId);
+    }
+
+    private void AddPicked()
+    {
+        foreach (var parameter in _found.Where(p => _ticked.Contains(p.TestParameterId)))
+            _lines.Add(InterfaceEditorRules.NewLine(parameter, Link.Id));
+
+        _picking = false;
+        _ticked.Clear();
+    }
+}

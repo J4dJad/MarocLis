@@ -1,0 +1,44 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+
+@*
+    The analyser a new link is for, the workstation's InterfaceInstrumentDialog: asked before the
+    link is described, since a link belongs to an analyser and cannot exist on its own. Only the
+    analysers without a link are offered (InstrumentInterfaceScreenRules.FreeInstruments).
+*@
+<Modal Name="interface-instrument" Title="@Texts["Interface.New"]" Hint="@Texts["AdminDialog.InterfaceInstrumentDialog"]" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Instrument.Title"]</span>
+            <select class="input" data-field="instrument" @bind="_instrumentId">
+                @foreach (var instrument in Instruments)
+                {
+                    <option value="@instrument.InstrumentId">@instrument.Code — @instrument.Name.For(Texts.Language)</option>
+                }
+            </select>
+        </label>
+        <p class="small muted">@Texts["Interface.PickInstrumentNotice"]</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Ok" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Primary="true" OnClick="PickAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public IReadOnlyList<InstrumentMasterRow> Instruments { get; set; } = [];
+    [Parameter] public EventCallback<(Guid Id, string Code)> OnPick { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid _instrumentId;
+
+    protected override void OnParametersSet()
+    {
+        if (_instrumentId == Guid.Empty && Instruments.Count > 0) _instrumentId = Instruments[0].InstrumentId;
+    }
+
+    private Task PickAsync() =>
+        Instruments.FirstOrDefault(i => i.InstrumentId == _instrumentId) is { } chosen
+            ? OnPick.InvokeAsync((chosen.InstrumentId, chosen.Code))
+            : Task.CompletedTask;
+}

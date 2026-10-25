@@ -1,0 +1,29 @@
+@using MarocLIS.Application.Instruments
+@inject WebTexts Texts
+
+@*
+    One frame exactly as it went over the wire, the workstation's InstrumentRawMessageDialog:
+    verbatim, monospaced and left to right whatever the language, the ASTM and MLLP control
+    characters named rather than stripped (InstrumentInterfaceScreenRules.MakeControlCharactersVisible).
+    When a clinician disputes a result this is the evidence of what the analyser transmitted.
+*@
+<Modal Name="raw-message" Title="@($"{Texts["Interface.ViewRaw"]} — {InstrumentInterfaceScreenRules.When(Message, "dd/MM/yyyy HH:mm:ss", Texts.Culture)}")"
+       Hint="@Texts["AdminDialog.InstrumentRawMessageDialog"]" Wide="true" OnCancel="OnClose">
+    <ChildContent>
+        <p class="small strong accent" data-state="raw-header">@InstrumentInterfaceScreenRules.RawHeader(Message, Texts.T)</p>
+        @if (InstrumentInterfaceScreenRules.Issues(Message.Issues, Texts.T) is { Length: > 0 } issues)
+        {
+            <p class="message is-warning small" data-state="raw-issues">@issues</p>
+        }
+        <pre class="raw-frame" dir="ltr" data-state="raw-frame">@InstrumentInterfaceScreenRules.MakeControlCharactersVisible(Raw, "\n")</pre>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Close" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public MessageLogRow Message { get; set; } = default!;
+    [Parameter, EditorRequired] public string Raw { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+}

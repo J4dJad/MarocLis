@@ -5,7 +5,7 @@
     operator out of until it is answered. Escape and the close cross cancel it.
 *@
 <div class="modal-backdrop" data-modal="@Name">
-    <div class="modal @(Wide ? "modal-wide" : null)" role="dialog" aria-modal="true" aria-labelledby="@($"modal-{Name}")"
+    <div class="modal @(Large ? "modal-large" : Wide ? "modal-wide" : null)" role="dialog" aria-modal="true" aria-labelledby="@($"modal-{Name}")"
          @onkeydown="KeyAsync">
         <header class="modal-header">
             <h2 id="@($"modal-{Name}")" class="modal-title">@Title</h2>
@@ -30,6 +30,9 @@
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
     [Parameter] public string? Hint { get; set; }
     [Parameter] public bool Wide { get; set; }
+
+    /// <summary>Wider still, for the workstation's largest windows: a link's configuration, a frame tested.</summary>
+    [Parameter] public bool Large { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }

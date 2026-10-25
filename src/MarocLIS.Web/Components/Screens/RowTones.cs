@@ -1,5 +1,6 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Catalog;
+using MarocLIS.Application.Instruments;
 
 namespace MarocLIS.Web.Components.Screens;
 
@@ -28,6 +29,16 @@ public static class RowTones
         _ => null
     };
 
+    /// <summary>« Interfaces automates »: grey when off, the warning's colour, the alarm's, or the normal green.</summary>
+    public static string? Class(InterfaceTone tone) => tone switch
+    {
+        InterfaceTone.Muted => "is-tone-muted",
+        InterfaceTone.Warning => "is-tone-warning",
+        InterfaceTone.Critical => "is-tone-critical",
+        InterfaceTone.Ok => "is-tone-ok",
+        _ => null
+    };
+
     /// <summary>The pill of a state in the tone of its row.</summary>
     public static string Pill(CatalogTone tone) => tone switch
     {
@@ -43,5 +54,15 @@ public static class RowTones
         MasterDataTone.Warning or MasterDataTone.Abnormal => "Warning",
         MasterDataTone.Critical => "Critical",
         _ => "Ok"
+    };
+
+    /// <summary>The workstation's pill colours of « Interfaces automates » (AdminLayout.Ok, Warn, Crit, Run, Wait).</summary>
+    public static string Pill(InterfaceTone tone) => tone switch
+    {
+        InterfaceTone.Ok => "Ok",
+        InterfaceTone.Warning => "Warning",
+        InterfaceTone.Critical => "Critical",
+        InterfaceTone.Info => "Info",
+        _ => "Waiting"
     };
 }
