@@ -44,7 +44,7 @@
                             <th>@Texts["Documents.NextReview"]</th>
                             <th>@Texts["Documents.LatestVersion"]</th>
                             <th>@Texts["Documents.Owner"]</th>
-                            <th class="num">@Texts["Documents.Read"]</th>
+                            <th class="doc-read">@Texts["Documents.Read"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -66,7 +66,7 @@
                                 <td class="mono small nowrap @QualityTones.Ink(QualityDocumentScreenRules.Ink(row, "review"))" dir="ltr">@QualityDocumentScreenRules.NextReview(row)</td>
                                 <td class="small cell-wrap">@QualityDocumentScreenRules.Latest(row, Texts.T)</td>
                                 <td class="small cell-wrap">@row.OwnerName</td>
-                                <td class="num strong @(read == "!" ? "abnormal" : read.Length > 0 ? "ink-normal" : null)"
+                                <td class="doc-read strong @(read == "!" ? "abnormal" : read.Length > 0 ? "ink-normal" : null)"
                                     title="@(read == "!" ? Texts["Documents.ToRead"] : null)">@read</td>
                             </tr>
                         }

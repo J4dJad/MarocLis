@@ -1077,3 +1077,12 @@ fieldset.subcard:disabled { opacity: .7; }
 .eqa-check-list { max-block-size: 200px; }
 .file-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-inline-size: 0; }
 .file-pick > .btn { position: relative; overflow: hidden; }
+/* The last column of a quality register keeps clear of the card's edge, menu open or folded. */
+.quality-main .grid th:last-child, .quality-main .grid td:last-child,
+.quality-stack .grid th:last-child, .quality-stack .grid td:last-child,
+.eqa .grid th:last-child, .eqa .grid td:last-child { padding-inline-end: 22px; }
+/* A cell written left to right (a reference, a date) in an Arabic page: its end is still the page's left. */
+html[dir=rtl] .quality-main .grid td:last-child[dir=ltr], html[dir=rtl] .quality-stack .grid td:last-child[dir=ltr],
+html[dir=rtl] .eqa .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+html[dir=rtl] .nc [data-state=completed-on] { text-align: right; }
+.grid .doc-read { text-align: center; min-inline-size: 48px; }

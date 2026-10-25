@@ -104,7 +104,6 @@
                                 <th>@Texts["Field.Description"]</th>
                                 <th>@Texts["NonConformity.AssignedTo"]</th>
                                 <th>@Texts["Field.Status"]</th>
-                                <th>@Texts["Field.Date"]</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -120,8 +119,13 @@
                                         <span class="nc-person">@action.ResponsibleName</span>
                                         <span class="cell-sub mono @ink" dir="ltr" title="@Texts["NonConformity.DueDate"]">@NonConformityScreenRules.ShortDate(action.TargetDate)</span>
                                     </td>
-                                    <td><Pill Text="@Texts[$"ActionStatus.{action.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.ActionTone(action))" /></td>
-                                    <td class="mono small nowrap" dir="ltr">@NonConformityScreenRules.ShortDate(action.CompletedOn)</td>
+                                    <td>
+                                        <Pill Text="@Texts[$"ActionStatus.{action.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.ActionTone(action))" />
+                                        @if (action.CompletedOn is not null)
+                                        {
+                                            <span class="cell-sub mono" dir="ltr" data-state="completed-on" title="@Texts["Field.Date"]">@NonConformityScreenRules.ShortDate(action.CompletedOn)</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
