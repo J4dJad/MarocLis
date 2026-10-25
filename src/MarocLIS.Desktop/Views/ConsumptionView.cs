@@ -54,9 +54,9 @@ public sealed class ConsumptionView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
-        var today = DateTime.Today;
-        _from.Value = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
-        _to.Value = new DateTime(today.Year, today.Month, 1).AddDays(-1);
+        var (from, to) = ConsumptionScreenRules.DefaultPeriod(DateOnly.FromDateTime(DateTime.Today));
+        _from.Value = from.ToDateTime(TimeOnly.MinValue);
+        _to.Value = to.ToDateTime(TimeOnly.MinValue);
 
         _moreButton = StockMenu.More(_more, localizer);
         BuildLayout();
@@ -114,12 +114,13 @@ public sealed class ConsumptionView : LocalizedView
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not ConsumptionRow row) return;
-            if (row.Reconciliation.IsFlagged)
+            var ink = ConsumptionScreenRules.Ink(row);
+            if (ink == StockInk.Critical)
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
             }
-            else if (!row.Reconciliation.Computable)
+            else if (ink == StockInk.Muted)
             {
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
             }
@@ -144,13 +145,7 @@ public sealed class ConsumptionView : LocalizedView
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
-    private IReadOnlyList<string> Headers() =>
-    [
-        T("Field.Code"), T("Inventory.Item"), T("Field.Unit"), T("Consumption.Opening"), T("Consumption.Receipts"),
-        T("Consumption.Tests"), T("Consumption.Theoretical"), T("Consumption.Real"),
-        T("Consumption.TheoreticalClosing"), T("Consumption.RealClosing"), T("Consumption.Variance"),
-        T("Consumption.VariancePercent"), T("Consumption.Count")
-    ];
+    private IReadOnlyList<string> Headers() => ConsumptionScreenRules.Headers(T);
 
     protected override void ApplyTexts()
     {
@@ -205,28 +200,28 @@ public sealed class ConsumptionView : LocalizedView
             if (row.StockItemId == keep) _grid.MakeCurrent(_grid.Rows[index]);
         }
 
-        var flagged = _rows.Count(r => r.Reconciliation.IsFlagged);
         StockGrid.Filter(_grid, _search.Query);
-        _count.Text = T("StocksUi.Items", _rows.Count);
-        _notice.Text = flagged > 0 ? T("Consumption.Flagged", flagged) : T("Consumption.Notice");
-        _notice.ForeColor = flagged > 0 ? UiTheme.Critical : UiTheme.TextSecondary;
+        _count.Text = ConsumptionScreenRules.Count(_rows, T);
+        var (notice, critical) = ConsumptionScreenRules.Notice(_rows, T);
+        _notice.Text = notice;
+        _notice.ForeColor = critical ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
-    private string Period() =>
-        $"{_from.Value:dd/MM/yyyy} – {_to.Value:dd/MM/yyyy}";
+    private DateOnly From => DateOnly.FromDateTime(_from.Value);
+    private DateOnly To => DateOnly.FromDateTime(_to.Value);
 
     private void ShowDetail()
     {
         if (Current is not { } row) return;
-        using var dialog = new ConsumptionDetailDialog(Localizer, row, Period());
+        using var dialog = new ConsumptionDetailDialog(Localizer, row, From, To);
         dialog.ShowDialog(FindForm());
     }
 
     private async Task PrintAsync()
     {
         var document = new ListDocument(
-            T("Consumption.ReportTitle", Period()),
-            $"{T("Consumption.Notice")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
+            ConsumptionScreenRules.ReportTitle(From, To, T),
+            ConsumptionScreenRules.ReportCaption(DateTimeOffset.Now, T),
             Headers(),
             [.. _rows.Select(r => StockCsv.ConsumptionCells(r, Localizer.CurrentLanguage))],
             Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic);
@@ -259,9 +254,9 @@ public sealed class ConsumptionView : LocalizedView
 /// <summary>Where an item's theoretical consumption comes from: patients, QC, calibrations, reruns, dead volume.</summary>
 internal sealed class ConsumptionDetailDialog : Form
 {
-    internal ConsumptionDetailDialog(ILocalizer localizer, ConsumptionRow row, string period)
+    internal ConsumptionDetailDialog(ILocalizer localizer, ConsumptionRow row, DateOnly from, DateOnly to)
     {
-        Text = localizer.Format("Consumption.DetailTitle", row.Code, period);
+        Text = ConsumptionScreenRules.DetailTitle(row, from, to, localizer.Format);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         ShowInTaskbar = false;
@@ -271,11 +266,6 @@ internal sealed class ConsumptionDetailDialog : Form
         ClientSize = new Size(820, Math.Min(680, screen.Height - 80));
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
-
-        static string N(decimal v) => v.ToString("0.###", CultureInfo.CurrentCulture);
-
-        var b = row.Breakdown;
-        var r = row.Reconciliation;
 
         var summary = UiTheme.Grid();
         summary.Dock = DockStyle.Top;
@@ -292,18 +282,8 @@ internal sealed class ConsumptionDetailDialog : Form
             DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight }
         });
 
-        string Units(decimal tests) => N(Math.Round(tests / b.TestsPerUnit, 3));
-
-        summary.Rows.Add(localizer["Consumption.Patients"], N(b.PatientTests), Units(b.PatientTests));
-        summary.Rows.Add(localizer["Consumption.Qc"], N(b.QcTests), Units(b.QcTests));
-        summary.Rows.Add(localizer["Consumption.Calibrations"], N(b.CalibrationTests), Units(b.CalibrationTests));
-        summary.Rows.Add(localizer["Consumption.Reruns"], N(b.RerunTests), Units(b.RerunTests));
-        summary.Rows.Add(localizer.Format("Consumption.DeadVolume", N(b.Openings)), N(b.DeadVolumeTests),
-                         Units(b.DeadVolumeTests));
-        summary.Rows.Add(localizer["Consumption.Theoretical"], N(b.TotalTests), N(r.TheoreticalConsumption));
-        summary.Rows.Add(localizer["Consumption.Real"], "—", N(r.RealConsumption));
-        summary.Rows.Add(localizer["Consumption.Variance"], "—",
-                         r.VariancePercent is { } p ? $"{N(r.Variance)} ({p:0.#} %)" : N(r.Variance));
+        foreach (var line in ConsumptionScreenRules.DetailLines(row, localizer.Format))
+            summary.Rows.Add(line.Label, line.Tests, line.Units);
         // Every line shown, without a scroll bar of its own: measured once the window is styled,
         // when the header and the rows have their final heights.
         summary.ScrollBars = ScrollBars.None;
@@ -321,8 +301,7 @@ internal sealed class ConsumptionDetailDialog : Form
 
         var notice = new Label
         {
-            Text = row.Reconciliation.Computable ? localizer["Consumption.DetailNotice"]
-                                                 : localizer["Consumption.NotComputable"],
+            Text = localizer[ConsumptionScreenRules.DetailNoticeKey(row)],
             Dock = DockStyle.Bottom,
             Height = 40,
             Font = UiTheme.Small,
@@ -352,10 +331,10 @@ internal sealed class StockSettingsDialog : MasterDataEditor
         _current = current;
 
         // 290 pixels a box: the expiry captions, in Arabic, ran past 240 into their neighbour.
-        _threshold = Number("Stock.VarianceThreshold", 20, 14, 290, current.VarianceThresholdPercent, 100m, 1);
-        _window = Number("Stock.ConsumptionWindow", 330, 14, 290, current.ConsumptionWindowDays, 730m);
-        _warning = Number("Stock.ExpiryWarningDays", 20, 70, 290, current.ExpiryWarningDays, 365m);
-        _critical = Number("Stock.ExpiryCriticalDays", 330, 70, 290, current.ExpiryCriticalDays, 365m);
+        _threshold = Number("Stock.VarianceThreshold", 20, 14, 290, current.VarianceThresholdPercent, ConsumptionScreenRules.ThresholdMax, 1);
+        _window = Number("Stock.ConsumptionWindow", 330, 14, 290, current.ConsumptionWindowDays, ConsumptionScreenRules.WindowMax);
+        _warning = Number("Stock.ExpiryWarningDays", 20, 70, 290, current.ExpiryWarningDays, ConsumptionScreenRules.ExpiryMax);
+        _critical = Number("Stock.ExpiryCriticalDays", 330, 70, 290, current.ExpiryCriticalDays, ConsumptionScreenRules.ExpiryMax);
 
         Buttons(160, 640);
 
@@ -364,7 +343,7 @@ internal sealed class StockSettingsDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var settings = _current with
+        var form = new StockSettingsForm
         {
             VarianceThresholdPercent = _threshold.Value,
             ConsumptionWindowDays = (int)_window.Value,
@@ -372,13 +351,20 @@ internal sealed class StockSettingsDialog : MasterDataEditor
             ExpiryCriticalDays = (int)_critical.Value
         };
 
-        if (settings.Validate().IsFailure)
+        if (ConsumptionScreenRules.Check(form) is { } refused)
         {
-            Dialogs.Warn(Localizer["Stock_SettingOutOfRange"], Text);
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            (refused.Field switch
+            {
+                ConsumptionScreenRules.WindowField => _window,
+                ConsumptionScreenRules.WarningField => _warning,
+                ConsumptionScreenRules.CriticalField => _critical,
+                _ => _threshold
+            }).Focus();
             return;
         }
 
-        Settings = settings;
+        Settings = ConsumptionScreenRules.ToSettings(_current, form);
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -431,7 +417,7 @@ internal sealed class StockAlertsDialog : Form
             var index = lots.Rows.Add(l.ItemCode, l.ItemName.For(language), l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", culture),
                                       $"{N(l.QuantityRemaining)} {l.UnitOfMeasure}",
                                       localizer[$"ExpiryAlertLevel.{l.Level}"]);
-            var urgent = l.Level is ExpiryAlertLevel.Critical or ExpiryAlertLevel.Expired;
+            var urgent = InventoryScreenRules.ExpiryTone(l.Level) == StockTone.Critical;
             lots.Rows[index].DefaultCellStyle.ForeColor = urgent ? UiTheme.Critical : UiTheme.Abnormal;
             lots.Rows[index].DefaultCellStyle.BackColor = urgent ? UiTheme.CriticalBackground : UiTheme.AbnormalBackground;
         }
@@ -444,8 +430,7 @@ internal sealed class StockAlertsDialog : Form
 
         var notice = new Label
         {
-            Text = localizer.Format("Stock.AlertsNotice", alerts.Settings.ExpiryWarningDays,
-                                    alerts.Settings.ExpiryCriticalDays, alerts.Settings.ConsumptionWindowDays),
+            Text = InventoryScreenRules.AlertsNotice(alerts, localizer.Format),
             Dock = DockStyle.Bottom,
             Height = 40,
             Font = UiTheme.Small,

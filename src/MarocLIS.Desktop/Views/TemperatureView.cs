@@ -89,15 +89,17 @@ public sealed class TemperatureView : LocalizedView
     /// Readings go only to a unit in service: an inactive one is listed to be reactivated or to
     /// print its past sheets, and the service refuses a reading on it.
     /// </summary>
-    private bool CanRecord =>
-        CurrentUnit is { IsActive: true } && PermissionGate.Allows(Permissions.Inventory.RecordTemperatures);
+    private bool CanRecord => Actions.Record;
+
+    private TemperatureScreenActions Actions => TemperatureScreenRules.Actions(p => PermissionGate.Allows(p), CurrentUnit);
 
     private void RefreshButtons()
     {
-        _record.Enabled = CanRecord;
+        var actions = Actions;
+        _record.Enabled = actions.Record;
         // The month's sheet is that of the unit selected: with none, the buttons did nothing.
-        _pdf.Enabled = _csv.Enabled = CurrentUnit is not null;
-        _editUnit.Enabled = CurrentUnit is not null && PermissionGate.Allows(Permissions.Inventory.ManageStorageUnits);
+        _pdf.Enabled = _csv.Enabled = actions.Sheet;
+        _editUnit.Enabled = actions.EditUnit;
     }
 
     private void BuildLayout()
@@ -131,32 +133,26 @@ public sealed class TemperatureView : LocalizedView
         _units.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _units.Rows[e.RowIndex].Tag is not StorageUnitRow row) return;
-            if (!row.IsActive)
+            var ink = TemperatureScreenRules.RowInk(row);
+            if (ink == StockInk.Muted)
             {
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
             }
-            else if (row.LastOutOfRange)
+            else if (ink == StockInk.Critical)
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
             }
-            else if (row.MissingToday || row.IsActive && row.ReadingsToday < row.ReadingsPerDay)
+            else if (TemperatureScreenRules.TodayInk(row) == StockInk.AbnormalBold && _units.Columns[e.ColumnIndex].Name is "today")
             {
                 // Not urgent: the readings of the day and the pill carry it, not the whole row.
-                if (_units.Columns[e.ColumnIndex].Name is "today")
-                {
-                    e.CellStyle!.ForeColor = UiTheme.Abnormal;
-                    e.CellStyle.Font = UiTheme.MonospaceBold;
-                }
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                e.CellStyle.Font = UiTheme.MonospaceBold;
             }
         };
-        StockGrid.Pills(_units, "state", tag => tag is StorageUnitRow row ? row switch
-        {
-            { IsActive: false } => StockPill.Waiting,
-            { LastOutOfRange: true } => StockPill.Critical,
-            { MissingToday: true } => StockPill.Warning,
-            _ => StockPill.Done
-        } : null);
+        StockGrid.Pills(_units, "state", tag => tag is StorageUnitRow row
+                            ? StockPill.Of(TemperatureScreenRules.StateTone(row))
+                            : null);
         _search.Changed += (_, _) => StockGrid.Filter(_units, _search.Query);
 
         // The month shown, and its sheet printed or exported for the file.
@@ -195,7 +191,7 @@ public sealed class TemperatureView : LocalizedView
         };
 
         StockGrid.Pills(_readings, "state", tag => tag is TemperatureReadingRow row
-                            ? row.IsOutOfRange ? StockPill.Critical : StockPill.Done
+                            ? StockPill.Of(TemperatureScreenRules.ReadingTone(row))
                             : null);
 
         Controls.Add(StockPage.Stack(new StockCard(_units, heading: false, footer: _status), _readingsCard, 240));
@@ -217,11 +213,7 @@ public sealed class TemperatureView : LocalizedView
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
-    private IReadOnlyList<string> ReadingHeaders() =>
-    [
-        T("Field.Date"), T("Temperatures.Value"), T("Temperatures.PeriodMin"), T("Temperatures.PeriodMax"),
-        T("Field.Status"), T("Temperatures.By"), T("Field.Comment"), T("Temperatures.NonConformity")
-    ];
+    private IReadOnlyList<string> ReadingHeaders() => TemperatureScreenRules.ReadingHeaders(T);
 
     protected override void ApplyTexts()
     {
@@ -270,33 +262,25 @@ public sealed class TemperatureView : LocalizedView
         }
     }
 
-    private static string C(decimal? value) =>
-        value is { } v ? v.ToString("0.0", CultureInfo.CurrentCulture) + " °C" : string.Empty;
+    private static string C(decimal? value) => TemperatureScreenRules.Celsius(value);
 
     private void RenderUnits(Guid? select = null)
     {
         _units.Rows.Clear();
         foreach (var u in _unitRows)
         {
-            var state = !u.IsActive ? T("Temperatures.Inactive")
-                      : u.LastOutOfRange ? T("Temperatures.OutOfRange")
-                      : u.MissingToday ? T("Temperatures.MissingToday")
-                      : T("Temperatures.InRange");
-
             var index = _units.Rows.Add(u.Name, T($"StorageUnitKind.{u.Kind}"), u.Location ?? string.Empty,
-                                        $"{C(u.MinimumCelsius)} – {C(u.MaximumCelsius)}",
-                                        $"{u.ReadingsToday} / {u.ReadingsPerDay}", C(u.LastCelsius),
-                                        u.LastReadAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.CurrentCulture) ?? string.Empty,
-                                        state);
+                                        TemperatureScreenRules.Range(u), TemperatureScreenRules.Today(u), C(u.LastCelsius),
+                                        TemperatureScreenRules.LastAt(u), T(TemperatureScreenRules.StateKey(u)));
             _units.Rows[index].Tag = u;
             if (u.StorageUnitId == select) _units.CurrentCell = _units.Rows[index].Cells[0];
         }
 
         StockGrid.Filter(_units, _search.Query);
-        _count.Text = T("StocksUi.Units", _unitRows.Count);
-        var missing = _unitRows.Count(u => u.MissingToday);
-        _status.Text = missing > 0 ? T("Temperatures.MissingCount", missing) : string.Empty;
-        _status.ForeColor = missing > 0 ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        _count.Text = TemperatureScreenRules.Count(_unitRows, T);
+        var missing = TemperatureScreenRules.MissingNotice(_unitRows, T);
+        _status.Text = missing ?? string.Empty;
+        _status.ForeColor = missing is not null ? UiTheme.Abnormal : UiTheme.TextSecondary;
         RefreshButtons();
     }
 
@@ -311,13 +295,7 @@ public sealed class TemperatureView : LocalizedView
         RenderReadings();
     }
 
-    private IReadOnlyList<string> Cells(TemperatureReadingRow r) =>
-    [
-        r.ReadAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture), C(r.Celsius),
-        C(r.PeriodMinimumCelsius), C(r.PeriodMaximumCelsius),
-        r.IsOutOfRange ? T("Temperatures.OutOfRange") : T("Temperatures.InRange"),
-        r.ByUserName, r.Comment ?? string.Empty, r.NonConformityReference ?? string.Empty
-    ];
+    private IReadOnlyList<string> Cells(TemperatureReadingRow r) => TemperatureScreenRules.ReadingCells(r, T);
 
     private void RenderReadings()
     {
@@ -328,7 +306,7 @@ public sealed class TemperatureView : LocalizedView
             _readings.Rows[index].Tag = r;
         }
 
-        _readingsCard.Note.Text = CurrentUnit is { } unit ? $"{unit.Name} · {_readingRows.Count}" : string.Empty;
+        _readingsCard.Note.Text = TemperatureScreenRules.ReadingsNote(CurrentUnit, _readingRows.Count);
         RefreshButtons();
     }
 
@@ -342,8 +320,8 @@ public sealed class TemperatureView : LocalizedView
         var recorded = await _temperatures.RecordReadingAsync(dialog.Request);
         if (recorded.IsFailure) { _dialogs.ShowFailure(recorded, _record.Text); return; }
 
-        if (recorded.Value.OutOfRange)
-            _dialogs.Warn(T("Temperatures.ExcursionRecorded", unit.Name, recorded.Value.NonConformityReference), _record.Text);
+        if (TemperatureScreenRules.Excursion(recorded.Value, unit, T) is { } excursion)
+            _dialogs.Warn(excursion, _record.Text);
 
         await ActivateAsync();
     }
@@ -364,18 +342,12 @@ public sealed class TemperatureView : LocalizedView
     {
         if (CurrentUnit is not { } unit) return;
 
-        var month = _month.Value.ToString("MM/yyyy", CultureInfo.InvariantCulture);
         var rows = _readingRows.Select(Cells).ToList();
-        var excursions = _readingRows.Count(r => r.IsOutOfRange);
 
         byte[] content = pdf
             ? _lists.Render(new ListDocument(
-                T("Temperatures.SheetTitle", unit.Name, month),
-                T("Temperatures.SheetCaption", T($"StorageUnitKind.{unit.Kind}"),
-                  $"{C(unit.MinimumCelsius)} – {C(unit.MaximumCelsius)}", unit.Location ?? "—",
-                  _readingRows.Count, excursions,
-                  _readingRows.Count > 0 ? C(_readingRows.Min(r => r.PeriodMinimumCelsius ?? r.Celsius)) : "—",
-                  _readingRows.Count > 0 ? C(_readingRows.Max(r => r.PeriodMaximumCelsius ?? r.Celsius)) : "—"),
+                TemperatureScreenRules.SheetTitle(unit, _month.Value.Year, _month.Value.Month, T),
+                TemperatureScreenRules.SheetCaption(unit, _readingRows, T),
                 ReadingHeaders(), rows, Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic))
             : StockCsv.Table(ReadingHeaders(), rows);
 
@@ -401,15 +373,13 @@ internal sealed class TemperatureReadingDialog : MasterDataEditor
         _min = TextField("Temperatures.PeriodMin", 190, 14, 140, null, latin: true, mono: true, right: true);
         _max = TextField("Temperatures.PeriodMax", 350, 14, 140, null, latin: true, mono: true, right: true);
         _comment = TextField("Field.Comment", 20, 70, 470);
-        _comment.MaxLength = 500;   // the column; beyond, the save failed with « Erreur inattendue »
+        _comment.MaxLength = TemperatureScreenRules.CommentMaxLength;   // the column; beyond, the save failed with « Erreur inattendue »
         // A period minimum typed « -25 C » was dropped without a word: the excursion it showed was
         // neither asked about nor recorded.
         Numeric(8, _value, _min, _max);
 
         var notice = Notice(20, 124, 470, 60, "Temperatures.ReadingNotice");
-        notice.Text = localizer.Format("Temperatures.ReadingNotice",
-                                       unit.MinimumCelsius.ToString("0.0", CultureInfo.CurrentCulture),
-                                       unit.MaximumCelsius.ToString("0.0", CultureInfo.CurrentCulture));
+        notice.Text = TemperatureScreenRules.ReadingNotice(unit, localizer.Format);
 
         Buttons(200, 520);
 
@@ -418,34 +388,26 @@ internal sealed class TemperatureReadingDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_value) is not { } value)
+        var form = new TemperatureReadingForm
         {
-            Dialogs.Warn(Localizer["Temperature_ValueRequired"], Text);
-            _value.Focus();
-            return;
-        }
-
-        var min = DecimalOrNull(_min);
-        var max = DecimalOrNull(_max);
-
-        var outOfRange = value < _unit.MinimumCelsius || value > _unit.MaximumCelsius
-                         || min < _unit.MinimumCelsius || max > _unit.MaximumCelsius;
-
-        if (outOfRange && string.IsNullOrWhiteSpace(_comment.Text))
-        {
-            Dialogs.Warn(Localizer["Temperature_CommentRequired"], Text);
-            _comment.Focus();
-            return;
-        }
-
-        Request = new TemperatureReadingRequest
-        {
-            StorageUnitId = _unit.StorageUnitId,
-            Celsius = value,
-            PeriodMinimumCelsius = min,
-            PeriodMaximumCelsius = max,
-            Comment = Blank(_comment)
+            Value = _value.Text, Minimum = _min.Text, Maximum = _max.Text, Comment = _comment.Text
         };
+
+        var (refused, request) = TemperatureScreenRules.Check(form, _unit);
+        if (refused is not null)
+        {
+            Dialogs.Warn(Localizer.Format(refused.Key, refused.Typed ?? string.Empty), Text);
+            (refused.Field switch
+            {
+                TemperatureScreenRules.MinimumField => _min,
+                TemperatureScreenRules.MaximumField => _max,
+                TemperatureScreenRules.CommentField => _comment,
+                _ => _value
+            }).Focus();
+            return;
+        }
+
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -475,23 +437,24 @@ internal sealed class StorageUnitDialog : MasterDataEditor
         var (defaultMin, defaultMax) = StorageUnit.DefaultRange(row?.Kind ?? StorageUnitKind.Refrigerator);
         _min = TextField("Temperatures.Minimum", 20, 70, 120, N(row?.MinimumCelsius ?? defaultMin), latin: true, right: true);
         _max = TextField("Temperatures.Maximum", 160, 70, 120, N(row?.MaximumCelsius ?? defaultMax), latin: true, right: true);
-        _perDay = Number("Temperatures.ReadingsPerDay", 300, 70, 120, row?.ReadingsPerDay ?? 2, 24m);
+        _perDay = Number("Temperatures.ReadingsPerDay", 300, 70, 120, row?.ReadingsPerDay ?? 2, TemperatureScreenRules.ReadingsPerDayMax);
 
         _location = TextField("Temperatures.Location", 20, 126, 250, row?.Location);
         _serial = TextField("Temperatures.SerialNumber", 290, 126, 250, row?.SerialNumber, latin: true);
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _name.MaxLength = _location.MaxLength = 100;
-        _serial.MaxLength = 60;
+        _name.MaxLength = TemperatureScreenRules.NameMaxLength;
+        _location.MaxLength = TemperatureScreenRules.LocationMaxLength;
+        _serial.MaxLength = TemperatureScreenRules.SerialMaxLength;
         Numeric(8, _min, _max);
         _active = Check("Field.Active", 20, 186, row?.IsActive ?? true);
 
         // A new unit takes the usual range of its kind; an existing one keeps what was set.
         _kind.SelectedIndexChanged += (_, _) =>
         {
-            if (_id is not null) return;
-            var (min, max) = StorageUnit.DefaultRange(Selected<StorageUnitKind>(_kind));
-            _min.Text = N(min);
-            _max.Text = N(max);
+            var form = new StorageUnitForm { Kind = Selected<StorageUnitKind>(_kind), Minimum = _min.Text, Maximum = _max.Text };
+            TemperatureScreenRules.KindChanged(form, isNew: _id is null);
+            _min.Text = form.Minimum;
+            _max.Text = form.Maximum;
         };
 
         Buttons(240, 560);
@@ -501,32 +464,27 @@ internal sealed class StorageUnitDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_name.Text))
+        var form = new StorageUnitForm
         {
-            Dialogs.Warn(Localizer["StorageUnit_NameRequired"], Text);
-            _name.Focus();
-            return;
-        }
-
-        if (DecimalOrNull(_min) is not { } min || DecimalOrNull(_max) is not { } max || min >= max)
-        {
-            Dialogs.Warn(Localizer["StorageUnit_RangeInvalid"], Text);
-            _min.Focus();
-            return;
-        }
-
-        Request = new StorageUnitRequest
-        {
-            StorageUnitId = _id,
-            Name = _name.Text.Trim(),
+            Name = _name.Text,
             Kind = Selected<StorageUnitKind>(_kind),
-            Location = Blank(_location),
-            SerialNumber = Blank(_serial),
-            MinimumCelsius = min,
-            MaximumCelsius = max,
-            ReadingsPerDay = Math.Max(1, (int)_perDay.Value),
+            Minimum = _min.Text,
+            Maximum = _max.Text,
+            ReadingsPerDay = (int)_perDay.Value,
+            Location = _location.Text,
+            SerialNumber = _serial.Text,
             IsActive = _active.Checked
         };
+
+        var (refused, request) = TemperatureScreenRules.Check(form, _id);
+        if (refused is not null)
+        {
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            (refused.Field == TemperatureScreenRules.NameField ? _name : _min).Focus();
+            return;
+        }
+
+        Request = request;
 
         DialogResult = DialogResult.OK;
         Close();

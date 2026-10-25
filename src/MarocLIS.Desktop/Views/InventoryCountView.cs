@@ -140,12 +140,9 @@ public sealed class InventoryCountView : LocalizedView
         }
 
         _list.Dock = DockStyle.Fill;
-        StockGrid.Pills(_list, "status", tag => tag is InventoryCountRow row ? row.Status switch
-        {
-            InventoryCountStatus.Counting => StockPill.Running,
-            InventoryCountStatus.Closed => StockPill.Done,
-            _ => StockPill.Waiting
-        } : null);
+        StockGrid.Pills(_list, "status", tag => tag is InventoryCountRow row
+                            ? StockPill.Of(InventoryCountScreenRules.StatusTone(row.Status))
+                            : null);
         _search.Changed += (_, _) => StockGrid.Filter(_list, _search.Query);
 
         // The sheet's tools, the time a paper sheet was filled in, and the closing as the primary.
@@ -167,7 +164,7 @@ public sealed class InventoryCountView : LocalizedView
             {
                 Name = name, FillWeight = weight, ReadOnly = !editable,
                 // The comment column holds 500 characters; a longer one failed the save with « Erreur inattendue ».
-                MaxInputLength = name == "comment" ? 500 : 32767,
+                MaxInputLength = name == "comment" ? InventoryCountScreenRules.CommentMaxLength : 32767,
                 SortMode = DataGridViewColumnSortMode.NotSortable,
                 DefaultCellStyle = new DataGridViewCellStyle
                 {
@@ -189,7 +186,7 @@ public sealed class InventoryCountView : LocalizedView
         _lines.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _lines.Rows[e.RowIndex].Tag is not InventoryCountLineRow row) return;
-            if (row.Variance is { } v && v != 0m)
+            if (InventoryCountScreenRules.LineInk(row) == StockInk.Critical)
             {
                 e.CellStyle!.ForeColor = UiTheme.Critical;
             }
@@ -216,18 +213,9 @@ public sealed class InventoryCountView : LocalizedView
 
     // The variance is counted less the stock when the shelf was counted: that is the column next
     // to it. The quantity frozen at the start stays for information, labelled as such.
-    private IReadOnlyList<string> SheetHeaders(bool withExpected) =>
-    [
-        "#", T("Sample.Storage"), T("Field.Code"), T("Inventory.Item"), T("Inventory.LotNumber"), T("Inventory.Expiry"),
-        .. withExpected ? new[] { T("InventoryCount.ExpectedAtStart"), T("InventoryCount.StockAtCount") } : [],
-        T("InventoryCount.Counted"),
-        T("InventoryCount.CountedAt"),
-        .. withExpected ? new[] { T("InventoryCount.Variance") } : [],
-        T("Field.Comment")
-    ];
+    private IReadOnlyList<string> SheetHeaders(bool withExpected) => InventoryCountScreenRules.SheetHeaders(withExpected, T);
 
-    private static string When(DateTimeOffset? at) =>
-        at?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture) ?? string.Empty;
+    private static string When(DateTimeOffset? at) => InventoryCountScreenRules.When(at);
 
     protected override void ApplyTexts()
     {
@@ -291,28 +279,22 @@ public sealed class InventoryCountView : LocalizedView
         }
     }
 
-    private string ScopeText(InventoryCountRow r) => r.Scope switch
-    {
-        InventoryCountScope.StorageLocation => $"{T("InventoryCountScope.StorageLocation")} : {r.StorageLocation}",
-        InventoryCountScope.Category => $"{T("InventoryCountScope.Category")} : {T($"StockItemKind.{r.Category}")}",
-        _ => T("InventoryCountScope.All")
-    };
+    private string ScopeText(InventoryCountRow r) => InventoryCountScreenRules.Scope(r, T);
 
     private void RenderList(Guid? select = null)
     {
         _list.Rows.Clear();
         foreach (var r in _rows)
         {
-            var index = _list.Rows.Add(r.Number, r.CountDate.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture),
+            var index = _list.Rows.Add(r.Number, InventoryCountScreenRules.Date(r.CountDate),
                                        ScopeText(r), T($"InventoryCountStatus.{r.Status}"), r.Lines, r.Counted,
-                                       r.WithVariance,
-                                       r.ClosedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture) ?? string.Empty);
+                                       r.WithVariance, When(r.ClosedAt));
             _list.Rows[index].Tag = r;
             if (r.InventoryCountId == select) _list.CurrentCell = _list.Rows[index].Cells[0];
         }
 
         StockGrid.Filter(_list, _search.Query);
-        _count.Text = T("StocksUi.Counts", _rows.Count);
+        _count.Text = InventoryCountScreenRules.CountLabel(_rows, T);
 
         UpdateButtons();
     }
@@ -343,24 +325,23 @@ public sealed class InventoryCountView : LocalizedView
             _lines.Rows.Clear();
             if (_detail is null) { _linesCard.Note.Text = string.Empty; UpdateButtons(); return; }
 
-            var counting = _detail.Count.Status == InventoryCountStatus.Counting;
-            static string N(decimal? v) => v?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
+            var mayCount = InventoryCountScreenRules.MayCount(p => PermissionGate.Allows(p), _detail);
+            static string N(decimal? v) => InventoryCountScreenRules.Quantity(v);
 
             foreach (var l in _detail.Lines)
             {
                 var index = _lines.Rows.Add(l.LineNumber, l.StorageLocation ?? string.Empty, l.ItemCode, l.ItemName,
-                                            l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture),
+                                            l.LotNumber, InventoryCountScreenRules.Date(l.ExpiryDate),
                                             N(l.ExpectedQuantity), N(l.StockAtCount), N(l.CountedQuantity),
                                             When(l.CountedAt), N(l.Variance), l.Comment ?? string.Empty);
                 _lines.Rows[index].Tag = l;
-                _lines.Rows[index].ReadOnly = !counting || !PermissionGate.Allows(Permissions.Inventory.Receive)
-                                                           && !PermissionGate.Allows(Permissions.Inventory.CloseCounts);
+                _lines.Rows[index].ReadOnly = !mayCount;
             }
 
-            _linesCard.Note.Text = $"{_detail.Count.Number} · {_detail.Count.Counted}/{_detail.Count.Lines}";
+            _linesCard.Note.Text = InventoryCountScreenRules.Note(_detail.Count);
             // Short enough for one or two lines at 1366×768: three lines pushed the sheet off the
             // screen. The full paper-sheet explanation is on the « Feuille comptée le » tooltip.
-            _status.Text = counting ? $"{T("InventoryCount.CountingNotice")} {T("InventoryCount.SheetTimeShort")}" : string.Empty;
+            _status.Text = InventoryCountScreenRules.CountingNotice(_detail, T) ?? string.Empty;
 
             if (row >= 0 && row < _lines.Rows.Count && column >= 0 && column < _lines.Columns.Count)
                 _lines.CurrentCell = _lines.Rows[row].Cells[column];
@@ -375,13 +356,12 @@ public sealed class InventoryCountView : LocalizedView
 
     private void UpdateButtons()
     {
-        var status = Current?.Status;
-        _start.Enabled = status == InventoryCountStatus.Draft && PermissionGate.Allows(Permissions.Inventory.CloseCounts);
-        _close.Enabled = status == InventoryCountStatus.Counting && PermissionGate.Allows(Permissions.Inventory.CloseCounts);
-        _cancel.Enabled = status is InventoryCountStatus.Draft or InventoryCountStatus.Counting
-                          && PermissionGate.Allows(Permissions.Inventory.CloseCounts);
-        _sheet.Enabled = _sheetCsv.Enabled = _detail is { Lines.Count: > 0 };
-        _variances.Enabled = _detail is { Lines.Count: > 0 };
+        var actions = InventoryCountScreenRules.Actions(p => PermissionGate.Allows(p), Current, _detail);
+        _start.Enabled = actions.Start;
+        _close.Enabled = actions.Close;
+        _cancel.Enabled = actions.Cancel;
+        _sheet.Enabled = _sheetCsv.Enabled = actions.Sheet;
+        _variances.Enabled = actions.Variances;
     }
 
     private async Task CreateAsync()
@@ -423,22 +403,17 @@ public sealed class InventoryCountView : LocalizedView
         var countedText = Convert.ToString(_lines.Rows[rowIndex].Cells["counted"].Value, CultureInfo.CurrentCulture)?.Trim();
         var comment = Convert.ToString(_lines.Rows[rowIndex].Cells["comment"].Value, CultureInfo.CurrentCulture);
 
-        if (string.IsNullOrEmpty(countedText)) return;
-
-        if (EditorValues.ParseDecimal(countedText) is not { } counted)
+        var (read, refused) = InventoryCountScreenRules.ReadCount(line.LineId, countedText);
+        if (refused is not null)
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", countedText), T("InventoryCount.Counted"));
+            _dialogs.Warn(Localizer.Format(refused.Key, refused.Typed ?? countedText), T("InventoryCount.Counted"));
             return;
         }
 
-        if (counted == line.CountedQuantity && (comment ?? string.Empty) == (line.Comment ?? string.Empty)) return;
+        if (read is not { } counted || !InventoryCountScreenRules.Changed(line, counted, comment)) return;
 
-        // The sheet's time goes with the first figure of a line. A comment, or a figure corrected on a
-        // line already counted (perhaps from an earlier sheet), stays on the time of that count: the
-        // picker stays ticked for the whole sheet and must not re-base lines keyed before it.
-        DateTimeOffset? shelf = _sheetTime.Checked && line.CountedQuantity is null
-            ? new DateTimeOffset(_sheetTime.Value)
-            : null;
+        // The sheet's time goes with the first figure of a line only (InventoryCountScreenRules.ShelfTime).
+        var shelf = InventoryCountScreenRules.ShelfTime(line, _sheetTime.Checked ? new DateTimeOffset(_sheetTime.Value) : null);
         _pending.Enqueue(new PendingCount(_detail.Count.InventoryCountId, line.LineId, counted, comment, shelf));
         if (_saving) return;
 
@@ -480,7 +455,7 @@ public sealed class InventoryCountView : LocalizedView
     private void RefreshLine(Guid lineId)
     {
         if (_detail?.Lines.FirstOrDefault(l => l.LineId == lineId) is not { } fresh) return;
-        static string N(decimal? v) => v?.ToString("0.###", CultureInfo.CurrentCulture) ?? string.Empty;
+        static string N(decimal? v) => InventoryCountScreenRules.Quantity(v);
 
         foreach (DataGridViewRow row in _lines.Rows)
         {
@@ -515,7 +490,7 @@ public sealed class InventoryCountView : LocalizedView
         if (_detail is null) return;
         var count = _detail.Count;
 
-        _linesCard.Note.Text = $"{count.Number} · {count.Counted}/{count.Lines}";
+        _linesCard.Note.Text = InventoryCountScreenRules.Note(count);
         _rows = [.. _rows.Select(r => r.InventoryCountId == count.InventoryCountId ? count : r)];
 
         foreach (DataGridViewRow row in _list.Rows)
@@ -557,20 +532,13 @@ public sealed class InventoryCountView : LocalizedView
     {
         if (_detail is null) return;
 
-        var rows = _detail.Lines.Select(l => (IReadOnlyList<string>)
-        [
-            l.LineNumber.ToString(CultureInfo.InvariantCulture), l.StorageLocation ?? string.Empty, l.ItemCode,
-            l.ItemName, l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            string.Empty, string.Empty, string.Empty
-        ]).ToList();
-
+        var rows = InventoryCountScreenRules.SheetRows(_detail);
         var headers = SheetHeaders(withExpected: false);
 
         byte[] content = pdf
             ? _lists.Render(new ListDocument(
-                T("InventoryCount.SheetTitle", _detail.Count.Number,
-                  _detail.Count.CountDate.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture)),
-                $"{ScopeText(_detail.Count)} — {T("InventoryCount.SheetCaption")}",
+                InventoryCountScreenRules.SheetTitle(_detail.Count, T),
+                InventoryCountScreenRules.SheetCaption(_detail.Count, T),
                 headers, rows, Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic))
             : StockCsv.Table(headers, rows);
 
@@ -583,21 +551,11 @@ public sealed class InventoryCountView : LocalizedView
     {
         if (_detail is null) return;
 
-        static string N(decimal? v) => v?.ToString("0.###", CultureInfo.GetCultureInfo("fr-FR")) ?? string.Empty;
-
-        var rows = _detail.Lines.Where(l => l.Variance is not null and not 0m).Select(l => (IReadOnlyList<string>)
-        [
-            l.LineNumber.ToString(CultureInfo.InvariantCulture), l.StorageLocation ?? string.Empty, l.ItemCode,
-            l.ItemName, l.LotNumber, l.ExpiryDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            N(l.ExpectedQuantity), N(l.StockAtCount), N(l.CountedQuantity), When(l.CountedAt), N(l.Variance),
-            l.Comment ?? string.Empty
-        ]).ToList();
+        var rows = InventoryCountScreenRules.VarianceRows(_detail);
 
         var document = new ListDocument(
-            T("InventoryCount.VarianceTitle", _detail.Count.Number,
-              _detail.Count.CountDate.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture)),
-            $"{ScopeText(_detail.Count)} — {T($"InventoryCountStatus.{_detail.Count.Status}")} — "
-            + T("InventoryCount.VarianceCaption", rows.Count, _detail.Lines.Count),
+            InventoryCountScreenRules.VarianceTitle(_detail.Count, T),
+            InventoryCountScreenRules.VarianceCaption(_detail, rows.Count, T),
             SheetHeaders(withExpected: true), rows, Localizer.CurrentLanguage == Domain.Common.AppLanguage.Arabic);
 
         var opened = await _output.OpenAsync(_lists.Render(document), "pdf");
@@ -638,7 +596,7 @@ internal sealed class InventoryCountDialog : MasterDataEditor
             FlatStyle = FlatStyle.Flat,
             Bounds = new Rectangle(20, 88, 240, UiTheme.InputHeight),
             // The column; a longer place typed in failed the save with « Erreur inattendue ».
-            MaxLength = 100
+            MaxLength = InventoryCountScreenRules.LocationMaxLength
         };
         _location.Items.AddRange([.. locations]);
         Controls.Add(_location);
@@ -646,14 +604,12 @@ internal sealed class InventoryCountDialog : MasterDataEditor
         _category = Choice("InventoryCountScope.Category", 290, 70, 240, StockItemKind.Reagent, "StockItemKind");
 
         _notes = TextField("Field.Comment", 20, 126, 510);
-        _notes.MaxLength = 1000;   // the column; beyond, the save failed with « Erreur inattendue »
+        _notes.MaxLength = InventoryCountScreenRules.NotesMaxLength;   // the column; beyond, the save failed with « Erreur inattendue »
         Notice(20, 180, 510, 40, "InventoryCount.ScopeNotice");
 
         void Sync()
         {
-            var scope = Selected<InventoryCountScope>(_scope);
-            _location.Enabled = scope == InventoryCountScope.StorageLocation;
-            _category.Enabled = scope == InventoryCountScope.Category;
+            (_location.Enabled, _category.Enabled) = InventoryCountScreenRules.ScopeBoxes(Selected<InventoryCountScope>(_scope));
         }
 
         _scope.SelectedIndexChanged += (_, _) => Sync();
@@ -666,23 +622,23 @@ internal sealed class InventoryCountDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var scope = Selected<InventoryCountScope>(_scope);
-
-        if (scope == InventoryCountScope.StorageLocation && string.IsNullOrWhiteSpace(_location.Text))
+        var form = new InventoryCountForm
         {
-            Dialogs.Warn(Localizer["InventoryCount_LocationRequired"], Text);
-            _location.Focus();
+            CountDate = DateOnly.FromDateTime(_date.Value),
+            Scope = Selected<InventoryCountScope>(_scope),
+            StorageLocation = _location.Text,
+            Category = Selected<StockItemKind>(_category),
+            Notes = _notes.Text
+        };
+
+        if (InventoryCountScreenRules.Check(form, DateOnly.FromDateTime(DateTime.Today)) is { } refused)
+        {
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            (refused.Field == InventoryCountScreenRules.LocationField ? (Control)_location : _date).Focus();
             return;
         }
 
-        Request = new CreateInventoryCountRequest
-        {
-            CountDate = DateOnly.FromDateTime(_date.Value),
-            Scope = scope,
-            StorageLocation = scope == InventoryCountScope.StorageLocation ? _location.Text.Trim() : null,
-            Category = scope == InventoryCountScope.Category ? Selected<StockItemKind>(_category) : null,
-            Notes = Blank(_notes)
-        };
+        Request = InventoryCountScreenRules.ToRequest(form);
 
         DialogResult = DialogResult.OK;
         Close();

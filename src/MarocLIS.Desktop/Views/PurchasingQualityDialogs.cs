@@ -105,10 +105,9 @@ internal sealed class ReceptionChecksPanel : Panel
     public void SetCondition(StorageCondition condition)
     {
         _condition = condition;
-        _range.Text = ColdChain.RequiresTemperature(condition)
-            ? _localizer.Format("Reception.RangeRequired", ColdChain.RangeText(condition))
-            : _localizer.Format("Reception.RangeAdvisory", ColdChain.RangeText(condition));
-        _range.ForeColor = ColdChain.RequiresTemperature(condition) ? UiTheme.Abnormal : UiTheme.TextSecondary;
+        var range = InventoryScreenRules.Range(condition);
+        _range.Text = _localizer.Format(range.Key, range.Range);
+        _range.ForeColor = range.Required ? UiTheme.Abnormal : UiTheme.TextSecondary;
     }
 
     /// <summary>
@@ -117,6 +116,19 @@ internal sealed class ReceptionChecksPanel : Panel
     /// </summary>
     public decimal? Temperature => EditorValues.ParseDecimal(_temperature.Text);
 
+    /// <summary>The temperature and the checklist as typed, into the reception form the rules check.</summary>
+    public void Fill(ReceiveLotForm form)
+    {
+        form.ArrivalTemperature = _temperature.Text;
+        form.MatchesOrder = _matchesOrder.Checked;
+        form.PackagingIntact = _packaging.Checked;
+        form.FrenchLabelling = _french.Checked;
+        form.CertificateReceived = _certificate.Checked;
+    }
+
+    /// <summary>Puts the cursor back in the temperature box after its refusal.</summary>
+    public void FocusTemperature() => _temperature.Focus();
+
     /// <summary>
     /// The checks as entered, or null with a message when the temperature is unreadable or missing
     /// for a cold-chain article. An out-of-range temperature is asked about, not refused: the
@@ -124,39 +136,32 @@ internal sealed class ReceptionChecksPanel : Panel
     /// </summary>
     public ReceptionCheck? Build(IUserDialogs dialogs, string title)
     {
-        if (!string.IsNullOrWhiteSpace(_temperature.Text) && Temperature is null)
+        var form = new ReceiveLotForm();
+        Fill(form);
+        return Confirm(InventoryScreenRules.CheckArrival(form, _condition), dialogs, title);
+    }
+
+    /// <summary>
+    /// What the checks said, said to the storeman: a refusal on the temperature, the ambient
+    /// warning, and the non-conformity to confirm. Null when the reception does not go ahead.
+    /// </summary>
+    public ReceptionCheck? Confirm(ArrivalVerdict verdict, IUserDialogs dialogs, string title)
+    {
+        if (verdict.Refusal is { } refusal)
         {
-            dialogs.Warn(_localizer.Format("Result_NotANumber", _temperature.Text), title);
+            dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), title);
             _temperature.Focus();
             return null;
         }
 
-        var check = new ReceptionCheck
-        {
-            ArrivalTemperatureCelsius = Temperature,
-            MatchesOrder = _matchesOrder.Checked,
-            PackagingIntact = _packaging.Checked,
-            FrenchLabelling = _french.Checked,
-            CertificateOfAnalysisReceived = _certificate.Checked
-        };
-
-        var assessment = ReceptionAssessment.Assess(_condition, check);
-
-        if (assessment.IsFailure)
-        {
-            dialogs.Warn(_localizer.Describe(assessment.Errors), title);
-            _temperature.Focus();
-            return null;
-        }
-
-        if (assessment.Value.Temperature == TemperatureVerdict.Warning)
+        if (verdict.AmbientWarning)
             dialogs.Info(_localizer.Format("Reception.AmbientWarning", ColdChain.RangeText(_condition)), title);
 
-        if (assessment.Value.NeedsNonConformity
+        if (verdict.NeedsNonConformity
             && !dialogs.Confirm(_localizer["Reception.NonConformityQuestion"], title))
             return null;
 
-        return check;
+        return verdict.Check;
     }
 
     private void ReadScan()
@@ -220,8 +225,8 @@ internal sealed class RecallListDialog : Form
         foreach (var r in rows)
         {
             grid.Rows.Add(r.PatientName, r.MedicalRecordNumber, r.AccessionNumber, r.AnalysisCode,
-                          r.ParameterCode, r.ResultDate?.ToString("dd/MM/yyyy HH:mm") ?? string.Empty,
-                          r.IsValidated ? localizer["Recall.Yes"] : localizer["Recall.No"]);
+                          r.ParameterCode, InventoryScreenRules.ResultDate(r),
+                          InventoryScreenRules.Validated(r, localizer.Format));
         }
 
         var bar = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = UiTheme.SurfaceRaised };
@@ -243,13 +248,11 @@ internal sealed class RecallListDialog : Form
         StockDialog.Frame(this, localizer, "StocksUi.Dialog.RecallList");
     }
 
+    private static readonly string[] ColumnNames = ["patient", "mrn", "order", "analysis", "parameter", "date", "validated"];
+    private static readonly int[] ColumnWeights = [22, 12, 12, 10, 10, 14, 8];
+
     private static IEnumerable<(string Name, string Header, int Weight)> Columns(ILocalizer l) =>
-    [
-        ("patient", l["Recall.Patient"], 22), ("mrn", l["Recall.MedicalRecord"], 12),
-        ("order", l["Recall.Order"], 12), ("analysis", l["Recall.Analysis"], 10),
-        ("parameter", l["Recall.Parameter"], 10), ("date", l["Recall.ResultDate"], 14),
-        ("validated", l["Recall.Validated"], 8)
-    ];
+        ColumnNames.Zip(InventoryScreenRules.RecallHeaders(l.Format), ColumnWeights).Select(c => (c.First, c.Second, c.Third));
 
     private async Task ExportAsync()
     {
@@ -266,8 +269,7 @@ internal sealed class LotComparisonDialog : Form
 {
     internal LotComparisonDialog(ILocalizer localizer, LotComparisonView comparison)
     {
-        Text = localizer.Format("LotComparison.Title", comparison.ItemCode, comparison.NewLotNumber,
-                                comparison.PreviousLotNumber ?? "—");
+        Text = InventoryScreenRules.ComparisonTitle(comparison, localizer.Format);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         ShowInTaskbar = false;
@@ -293,19 +295,17 @@ internal sealed class LotComparisonDialog : Form
         Add("LotComparison.OldSd", 9);
         Add("LotComparison.Difference", 10);
 
-        static string N(decimal? v) => v?.ToString("0.###", CultureInfo.CurrentCulture) ?? "—";
+        static string N(decimal? v) => InventoryScreenRules.Statistic(v);
 
         foreach (var r in comparison.Rows)
         {
             grid.Rows.Add(r.Label, r.NewCount, N(r.NewMean), N(r.NewSd), r.OldCount, N(r.OldMean),
-                          N(r.OldSd), r.DifferencePercent is { } d ? $"{d:+0.##;-0.##;0} %" : "—");
+                          N(r.OldSd), InventoryScreenRules.Difference(r.DifferencePercent));
         }
 
         var notice = new Label
         {
-            Text = comparison.Rows.Count == 0
-                ? localizer["LotComparison.NoData"]
-                : localizer["LotComparison.Notice"],
+            Text = localizer[InventoryScreenRules.ComparisonNoticeKey(comparison)],
             Dock = DockStyle.Bottom,
             Height = 40,
             Font = UiTheme.Small,
@@ -399,10 +399,9 @@ internal sealed class LotCertificatesDialog : Form
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > LotCertificateFile.MaximumBytes)
+            if (InventoryScreenRules.CheckCertificate(info.Name, info.Length) is { } refused)
             {
-                _dialogs.Warn(_localizer.Format("Credential_FileTooLarge", LotCertificateFile.MaximumBytes / (1024 * 1024)),
-                              _attach.Text);
+                _dialogs.Warn(_localizer.Format(refused.Key, refused.Typed ?? string.Empty), _attach.Text);
                 return;
             }
             content = await File.ReadAllBytesAsync(info.FullName);
@@ -432,6 +431,6 @@ internal sealed class LotCertificatesDialog : Form
 
     private sealed record Entry(LotCertificateRow Row)
     {
-        public override string ToString() => $"{Row.FileName}  ·  {Row.AddedAt:dd/MM/yyyy}";
+        public override string ToString() => InventoryScreenRules.CertificateLine(Row);
     }
 }

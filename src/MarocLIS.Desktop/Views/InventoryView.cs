@@ -322,30 +322,28 @@ public sealed class InventoryView : LocalizedView
         dialog.ShowDialog(this);
     }
 
-    // The cells that carry a warning, coloured on their own: a whole row in colour is kept for the
-    // critical cases, as the design system has it.
-    private static readonly HashSet<string> StockWarningCells = ["onhand", "lots", "expiry", "alert"];
-
     private void OnStockFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _stock.Rows.Count) return;
         if (_stock.Rows[e.RowIndex].Tag is not StockRow row) return;
 
         // A critical item below its safety stock is the one that stops an analysis being offered
-        // at all — which has to be declared to prescribers, so it leads the colouring.
-        if (row.IsCritical && row.BelowMinimum)
+        // at all — which has to be declared to prescribers, so it leads the colouring. The cells
+        // that carry a warning are coloured on their own: a whole row in colour is kept for the
+        // critical cases, as the design system has it.
+        var tone = InventoryScreenRules.Tone(row);
+        if (tone == StockRowTone.CriticalBold)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
             e.CellStyle.Font = new Font(e.CellStyle.Font ?? UiTheme.Body, FontStyle.Bold);
         }
-        else if (row.BelowMinimum || row.DaysToEarliestExpiry is < 0)
+        else if (tone == StockRowTone.Critical)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if ((row.NeedsReorder || row.DaysToEarliestExpiry is <= 30 || row.QuarantinedLotCount > 0)
-                 && StockWarningCells.Contains(_stock.Columns[e.ColumnIndex].Name))
+        else if (tone == StockRowTone.Warning && InventoryScreenRules.IsWarningCell(_stock.Columns[e.ColumnIndex].Name))
         {
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             e.CellStyle.ForeColor = UiTheme.Abnormal;
@@ -357,13 +355,13 @@ public sealed class InventoryView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _lots.Rows.Count) return;
         if (_lots.Rows[e.RowIndex].Tag is not LotRow row) return;
 
-        if (row.IsRejected || row.IsRecalled || row.IsExpired)
+        var ink = InventoryScreenRules.LotInk(row, _lots.Columns[e.ColumnIndex].Name);
+        if (ink == StockInk.Critical)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if ((row.IsQuarantined || row.IsBeyondOpenStability || row.DaysToExpiry <= 30)
-                 && _lots.Columns[e.ColumnIndex].Name is "expiry" or "days")
+        else if (ink == StockInk.AbnormalBold)
         {
             e.CellStyle!.ForeColor = UiTheme.Abnormal;
             e.CellStyle.Font = UiTheme.MonospaceBold;
@@ -375,10 +373,7 @@ public sealed class InventoryView : LocalizedView
     }
 
     /// <summary>The lot's state as a pill: usable, waiting for a decision, or out of use.</summary>
-    private static StockPill LotPill(LotRow row) =>
-        row.IsRejected || row.IsRecalled || row.IsExpired ? StockPill.Critical
-        : row.IsBeyondOpenStability || row.IsQuarantined ? StockPill.Warning
-        : StockPill.Done;
+    private static StockPill LotPill(LotRow row) => StockPill.Of(InventoryScreenRules.LotTone(row));
 
     protected override void ApplyTexts()
     {
@@ -443,10 +438,7 @@ public sealed class InventoryView : LocalizedView
     // Says which priority purchase order the items that reached their reorder point went on.
     private void ShowReorder(ReorderOutcome outcome, bool append)
     {
-        if (!outcome.Any) return;
-
-        var message = T("Inventory.ReorderDrafted", string.Join(", ", outcome.PurchaseOrders),
-                        string.Join(", ", outcome.DraftedItems));
+        if (InventoryScreenRules.ReorderMessage(outcome, T) is not { } message) return;
 
         _status.ForeColor = UiTheme.Critical;
         _status.Text = append && !string.IsNullOrEmpty(_status.Text) ? $"{_status.Text}  ·  {message}" : message;
@@ -498,38 +490,23 @@ public sealed class InventoryView : LocalizedView
         {
             // Glyphs rather than colour alone: the alert column says what is wrong in one or two
             // characters that survive a monochrome print.
-            var alerts = new List<string>();
-            if (row.BelowMinimum) alerts.Add("!!");
-            else if (row.NeedsReorder) alerts.Add("!");
-            if (row.QuarantinedLotCount > 0) alerts.Add("Q");
-            if (row.DaysToEarliestExpiry is <= 30) alerts.Add("⏳");
-            if (row.IsCritical) alerts.Add("★");
-
             var index = _stock.Rows.Add(
                 row.Code,
                 row.Name.For(Localizer.CurrentLanguage),
                 T($"StockItemKind.{row.Kind}"),
-                $"{row.QuantityOnHand:N2} {row.UnitOfMeasure}",
-                row.ReorderPoint.ToString("N2"),
-                row.QuarantinedLotCount > 0
-                    ? $"{row.LotCount} ({row.QuarantinedLotCount}Q)"
-                    : row.LotCount.ToString(),
-                row.EarliestExpiry is { } expiry
-                    ? $"{expiry:dd/MM/yy}" +
-                      (row.DaysToEarliestExpiry is { } days ? $" ({days}j)" : string.Empty)
-                    : string.Empty,
+                InventoryScreenRules.OnHand(row),
+                InventoryScreenRules.ReorderPoint(row),
+                InventoryScreenRules.Lots(row),
+                InventoryScreenRules.Expiry(row),
                 row.SupplierName ?? string.Empty,
-                string.Join(" ", alerts));
+                InventoryScreenRules.AlertGlyphs(row));
 
             _stock.Rows[index].Tag = row;
         }
 
         _stock.ResumeLayout(performLayout: true);
 
-        var alertCount = _stockRows.Count(r => r.BelowMinimum || r.NeedsReorder);
-
-        _count.Text = $"{T("StocksUi.Items", _stockRows.Count)}" +
-                      (alertCount > 0 ? $" · {alertCount} {T("Inventory.BelowMinimum").ToLowerInvariant()}" : string.Empty);
+        _count.Text = InventoryScreenRules.Count(_stockRows, T);
 
         var kept = _stock.Rows.Cast<DataGridViewRow>()
                          .FirstOrDefault(r => keep is not null && r.Tag is StockRow row && row.StockItemId == keep);
@@ -570,12 +547,7 @@ public sealed class InventoryView : LocalizedView
 
         foreach (var row in _lotRows)
         {
-            var state = row.IsRejected ? T("Lot_Rejected")
-                : row.IsRecalled ? T("Inventory.Recalled")
-                : row.IsExpired ? T("Inventory.Expired")
-                : row.IsBeyondOpenStability ? T("Inventory.BeyondOpenStability")
-                : row.IsQuarantined ? T("Inventory.Quarantined")
-                : T("Inventory.Usable");
+            var state = T(InventoryScreenRules.LotStateKey(row));
 
             var index = _lots.Rows.Add(
                 row.ItemCode,
@@ -598,11 +570,8 @@ public sealed class InventoryView : LocalizedView
                           .FirstOrDefault(r => keep is not null && r.Tag is LotRow lot && lot.ReagentLotId == keep);
         if (keptLot is not null) _lots.MakeCurrent(keptLot);
 
-        var quarantined = _lotRows.Count(r => r.IsQuarantined && !r.IsRejected);
-
-        var item = _onlyQuarantined.Checked ? null : (_stock.CurrentRow?.Tag as StockRow)?.Code;
-        _lotCard.Note.Text = (item is null ? string.Empty : $"{item} · ") + $"{_lotRows.Count}" +
-                             (quarantined > 0 ? $" · {quarantined} {T("Inventory.Quarantined").ToLowerInvariant()}" : string.Empty);
+        _lotCard.Note.Text = InventoryScreenRules.LotNote(_stock.CurrentRow?.Tag as StockRow, _lotRows,
+                                                          _onlyQuarantined.Checked, T);
 
         RefreshLotActions();
         _lots.SelectionChanged -= OnLotSelectionChanged;
@@ -614,19 +583,17 @@ public sealed class InventoryView : LocalizedView
     /// <summary>Only offers the operations that make sense for the selected lot's state.</summary>
     private void RefreshLotActions()
     {
-        var row = _lots.CurrentRow?.Tag as LotRow;
-
-        _release.Enabled = row is { IsQuarantined: true, IsRejected: false, IsRecalled: false };
         // A lot still in quarantine may be refused at reception; a released one only by whoever
-        // may release lots.
-        _rejectLot.Enabled = row is { IsRejected: false }
-                             && (row.IsQuarantined || PermissionGate.Allows(Permissions.Quality.ReviewQc));
+        // may release lots. A rejection is withdrawn only from a rejected lot, never a recalled one:
+        // a manufacturer recall is not a clerical error that can be withdrawn.
+        var actions = InventoryScreenRules.Actions(p => PermissionGate.Allows(p), _stock.CurrentRow?.Tag as StockRow,
+                                                   _lots.CurrentRow?.Tag as LotRow);
 
-        // Only offered for a lot that is actually rejected, and never for a recalled one: a
-        // manufacturer recall is not a clerical error that can be withdrawn.
-        _clearRejection.Enabled = row is { IsRejected: true, IsRecalled: false };
-        _recall.Enabled = row is { IsRecalled: false };
-        _writeOff.Enabled = row is { QuantityRemaining: > 0m };
+        _release.Enabled = actions.Release;
+        _rejectLot.Enabled = actions.Reject;
+        _clearRejection.Enabled = actions.ClearRejection;
+        _recall.Enabled = actions.Recall;
+        _writeOff.Enabled = actions.WriteOff;
 
         _release.ForeColor = _release.Enabled ? UiTheme.TextOnAccent : UiTheme.TextMuted;
     }
@@ -687,16 +654,14 @@ public sealed class InventoryView : LocalizedView
             return;
         }
 
-        var answer = _dialogs.PromptForText(
-            T("Inventory.IssueQuantityPrompt", item.Code, item.UnitOfMeasure,
-              item.QuantityOnHand.ToString("N2")),
-            T("Inventory.Issue"));
+        var answer = _dialogs.PromptForText(InventoryScreenRules.IssuePrompt(item, T), T("Inventory.Issue"));
 
         if (answer is null) return;
 
-        if (EditorValues.ParseDecimal(answer) is not { } quantity || quantity <= 0m)
+        var (issued, refused) = InventoryScreenRules.ReadIssue(answer);
+        if (issued is not { } quantity)
         {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
+            _dialogs.Warn(Localizer.Format(refused!.Key, refused.Typed ?? answer));
             return;
         }
 
@@ -711,7 +676,7 @@ public sealed class InventoryView : LocalizedView
         // Names the lots drawn from: FEFO means the operator did not choose them, and lot
         // traceability means they need to know which went to the bench.
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{T("Inventory.Issue")} — {T("Inventory.Lot").ToLowerInvariant()} {result.Value}";
+        _status.Text = InventoryScreenRules.Issued(result.Value, T);
 
         await ReloadAfterStockOutAsync();
     }
@@ -722,7 +687,8 @@ public sealed class InventoryView : LocalizedView
 
         var evidence = _dialogs.PromptForReason(
             T("Inventory.ReleaseEvidencePrompt", lot.LotNumber),
-            T("Action.Release"), minimumLength: 10, maxLength: 1000);
+            T("Action.Release"), minimumLength: InventoryScreenRules.ReleaseEvidenceMinLength,
+            maxLength: InventoryScreenRules.ReleaseEvidenceMaxLength);
 
         if (evidence is null) return;
 
@@ -730,16 +696,12 @@ public sealed class InventoryView : LocalizedView
 
         // Refused for want of conforming QC on the lot: a biologist may release it by derogation,
         // with a justification that stays on the lot and in the audit trail.
-        var refusedForQc = result.IsFailure
-                           && result.FirstError.ResourceKey is "Lot_ReleaseNoQcRun" or "Lot_ReleaseQcRejected"
-                                                               or "Lot_ReleaseQcLevelsMissing";
-
-        if (refusedForQc && PermissionGate.Allows(Permissions.Results.BiologicalValidate))
+        if (result.IsFailure && InventoryScreenRules.OffersQcOverride(result.FirstError, p => PermissionGate.Allows(p)))
         {
             var justification = _dialogs.PromptForReason(
-                $"{Describe(result)}\n\n" +
-                T("Lot.QcOverrideJustificationPrompt", lot.LotNumber, ReagentLot.QcOverrideJustificationMinLength),
-                T("Lot.QcOverrideTitle"), minimumLength: ReagentLot.QcOverrideJustificationMinLength, maxLength: 1000);
+                InventoryScreenRules.OverridePrompt(Describe(result), lot, T),
+                T("Lot.QcOverrideTitle"), minimumLength: ReagentLot.QcOverrideJustificationMinLength,
+                maxLength: InventoryScreenRules.OverrideMaxLength);
 
             if (justification is null) return;
 
@@ -753,7 +715,7 @@ public sealed class InventoryView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{lot.LotNumber} — {T("Inventory.Usable")}";
+        _status.Text = InventoryScreenRules.StateAfter(lot, "Inventory.Usable", T);
 
         await ActivateAsync();
     }
@@ -763,7 +725,7 @@ public sealed class InventoryView : LocalizedView
         if (_lots.CurrentRow?.Tag is not LotRow lot) return;
 
         var reason = _dialogs.PromptForReason(
-            T("Inventory.RejectLotPrompt", lot.LotNumber), T("Action.Reject"), maxLength: 500);
+            T("Inventory.RejectLotPrompt", lot.LotNumber), T("Action.Reject"), maxLength: InventoryScreenRules.RejectMaxLength);
 
         if (reason is null) return;
 
@@ -792,7 +754,7 @@ public sealed class InventoryView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Inventory.ClearRejectionPrompt", lot.LotNumber),
-            T("Inventory.ClearRejection"), minimumLength: 10);
+            T("Inventory.ClearRejection"), minimumLength: InventoryScreenRules.ClearRejectionMinLength);
 
         if (reason is null) return;
 
@@ -807,7 +769,7 @@ public sealed class InventoryView : LocalizedView
         // Stated, because the lot is not usable yet and a storeman who thinks it is will wonder
         // why the bench still cannot draw from it.
         _status.ForeColor = UiTheme.Abnormal;
-        _status.Text = $"{lot.LotNumber} — {T("Inventory.Quarantined")}";
+        _status.Text = InventoryScreenRules.StateAfter(lot, "Inventory.Quarantined", T);
 
         await ActivateAsync();
     }
@@ -817,7 +779,8 @@ public sealed class InventoryView : LocalizedView
         if (_lots.CurrentRow?.Tag is not LotRow lot) return;
 
         var reference = _dialogs.PromptForText(
-            T("Inventory.RecallReferencePrompt", lot.LotNumber), T("Inventory.Recall"), maxLength: 100);
+            T("Inventory.RecallReferencePrompt", lot.LotNumber), T("Inventory.Recall"),
+            maxLength: InventoryScreenRules.RecallReferenceMaxLength);
 
         if (string.IsNullOrWhiteSpace(reference)) return;
 
@@ -851,13 +814,11 @@ public sealed class InventoryView : LocalizedView
     {
         if (_lots.CurrentRow?.Tag is not LotRow lot) return;
 
-        var kind = lot.IsExpired
-            ? StockMovementKind.ExpiryWriteOff
-            : StockMovementKind.DamageWriteOff;
+        var kind = InventoryScreenRules.WriteOffKind(lot);
 
         var reason = _dialogs.PromptForReason(
-            T("Inventory.WriteOffPrompt", lot.LotNumber, lot.QuantityRemaining.ToString("N2")),
-            T("Inventory.WriteOff"), maxLength: 500);
+            InventoryScreenRules.WriteOffPrompt(lot, T),
+            T("Inventory.WriteOff"), maxLength: InventoryScreenRules.WriteOffMaxLength);
 
         if (reason is null) return;
 
@@ -916,10 +877,11 @@ internal sealed class ReceiveLotDialog : Form
         _checks = new ReceptionChecksPanel(localizer, item.StorageCondition);
 
         // Bounded to the columns: beyond, the save failed with « Erreur inattendue ».
-        _lotNumber.MaxLength = _deliveryNote.MaxLength = 60;
-        _storage.MaxLength = 100;
-        _quantity.MaxLength = EditorValues.MeasureMaxLength;
-        _unitPrice.MaxLength = EditorValues.AmountMaxLength;
+        _lotNumber.MaxLength = InventoryScreenRules.LotNumberMaxLength;
+        _deliveryNote.MaxLength = InventoryScreenRules.DeliveryNoteMaxLength;
+        _storage.MaxLength = InventoryScreenRules.StorageMaxLength;
+        _quantity.MaxLength = InventoryScreenRules.QuantityMaxLength;
+        _unitPrice.MaxLength = InventoryScreenRules.PriceMaxLength;
 
         Text = $"{localizer["Inventory.ReceiveLot"]} — {item.Code}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -991,7 +953,7 @@ internal sealed class ReceiveLotDialog : Form
 
         Field("Inventory.OpenStabilityDays", y, 240);
         _openStability.Bounds = new Rectangle(240, y + 18, 100, UiTheme.InputHeight);
-        _openStability.Maximum = 3650;
+        _openStability.Maximum = InventoryScreenRules.OpenStabilityMax;
 
         y += 66;
 
@@ -1034,47 +996,51 @@ internal sealed class ReceiveLotDialog : Form
         StockDialog.Frame(this, localizer, "StocksUi.Dialog.ReceiveLot", refuse);
     }
 
+    /// <summary>The delivery as typed, for the rules that check it.</summary>
+    private ReceiveLotForm Form()
+    {
+        var form = new ReceiveLotForm
+        {
+            LotNumber = _lotNumber.Text,
+            ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
+            Quantity = _quantity.Text,
+            SupplierId = (_supplier.SelectedItem as SupplierChoice)?.Id,
+            DeliveryNote = _deliveryNote.Text,
+            UnitPrice = _unitPrice.Text,
+            StorageLocation = _storage.Text,
+            OpenStabilityDays = (int)_openStability.Value
+        };
+        _checks.Fill(form);
+        return form;
+    }
+
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_lotNumber.Text))
+        // InventoryScreenRules.CheckReception: the lot number, a quantity above zero, a price that
+        // reads as one (typed with its currency it was saved as no price, and the lot valued at
+        // nothing), then the checks at the door.
+        var verdict = InventoryScreenRules.CheckReception(Form(), _current.StockItemId, _current.StorageCondition,
+                                                          DateOnly.FromDateTime(DateTime.Today));
+
+        if (verdict.Refusal is { } refusal && refusal.Field != InventoryScreenRules.TemperatureField)
         {
-            _dialogs.Warn(_localizer["Lot_NumberRequired"]);
-            _lotNumber.Focus();
+            _dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty));
+            Control box = refusal.Field switch
+            {
+                InventoryScreenRules.LotNumberField => _lotNumber,
+                InventoryScreenRules.QuantityField => _quantity,
+                InventoryScreenRules.PriceField => _unitPrice,
+                _ => _expiry
+            };
+            box.Focus();
             return;
         }
 
-        if (!TryParse(_quantity.Text, out var quantity) || quantity <= 0m)
-        {
-            _dialogs.Warn(_localizer["Lot_QuantityMustBePositive"]);
-            _quantity.Focus();
-            return;
-        }
+        var check = _checks.Confirm(new ArrivalVerdict(verdict.Refusal, verdict.Request?.Reception, verdict.AmbientWarning,
+                                                       verdict.NeedsNonConformity), _dialogs, Text);
+        if (check is null || verdict.Request is null) return;
 
-        // A price typed with its currency was saved as no price, and the lot valued at nothing.
-        if (EditorValues.IsUnreadable(_unitPrice.Text))
-        {
-            _dialogs.Warn(_localizer.Format("Result_NotANumber", _unitPrice.Text.Trim()));
-            _unitPrice.Focus();
-            return;
-        }
-
-        var check = _checks.Build(_dialogs, Text);
-        if (check is null) return;
-
-        Request = new ReceiveLotRequest
-        {
-            Reception = check,
-            StockItemId = _current.StockItemId,
-            LotNumber = _lotNumber.Text.Trim(),
-            ExpiryDate = DateOnly.FromDateTime(_expiry.Value.Date),
-            Quantity = quantity,
-            SupplierId = (_supplier.SelectedItem as SupplierChoice)?.Id,
-            DeliveryNoteReference = string.IsNullOrWhiteSpace(_deliveryNote.Text)
-                ? null : _deliveryNote.Text.Trim(),
-            UnitPriceMad = TryParse(_unitPrice.Text, out var price) ? price : null,
-            StorageLocation = string.IsNullOrWhiteSpace(_storage.Text) ? null : _storage.Text.Trim(),
-            StabilityAfterOpeningDays = _openStability.Value > 0 ? (int)_openStability.Value : null
-        };
+        Request = verdict.Request;
 
         DialogResult = DialogResult.OK;
         Close();
@@ -1086,16 +1052,13 @@ internal sealed class ReceiveLotDialog : Form
     /// </summary>
     private async Task OnScannedAsync(Gs1Data data)
     {
-        if (data.LotNumber is { } lot) _lotNumber.Text = lot;
-
-        if (data.ExpiryDate is { } expiry)
-        {
-            var date = expiry.ToDateTime(TimeOnly.MinValue);
-            if (date < _expiry.MinDate)
-                _dialogs.Warn(_localizer.Format("Lot_AlreadyExpired", expiry), Text);
-            else
-                _expiry.Value = date;
-        }
+        var form = Form();
+        var refused = InventoryScreenRules.ApplyScan(form, data, DateOnly.FromDateTime(DateTime.Today));
+        _lotNumber.Text = form.LotNumber;
+        if (refused is not null)
+            _dialogs.Warn(_localizer.Format(refused.Key, refused.Typed ?? string.Empty), Text);
+        else
+            _expiry.Value = form.ExpiryDate.ToDateTime(TimeOnly.MinValue);
 
         if (data.Gtin is not { } gtin || _findByGtin is null) return;
 
@@ -1127,31 +1090,15 @@ internal sealed class ReceiveLotDialog : Form
 
     private void Refuse()
     {
-        var reason = _dialogs.PromptForReason(_localizer["Reception.RefusePrompt"],
-                                              _localizer["Reception.Refuse"], minimumLength: 10, maxLength: 1000);
+        var reason = _dialogs.PromptForReason(_localizer["Reception.RefusePrompt"], _localizer["Reception.Refuse"],
+                                              minimumLength: InventoryScreenRules.RefusalMinLength,
+                                              maxLength: InventoryScreenRules.RefusalMaxLength);
         if (reason is null) return;
 
-        Refusal = new RefuseDeliveryRequest
-        {
-            SupplierId = (_supplier.SelectedItem as SupplierChoice)?.Id,
-            StockItemId = _current.StockItemId,
-            Reason = reason,
-            ArrivalTemperatureCelsius = _checks.Temperature,
-            DeliveryNoteReference = string.IsNullOrWhiteSpace(_deliveryNote.Text) ? null : _deliveryNote.Text.Trim(),
-            LotNumber = string.IsNullOrWhiteSpace(_lotNumber.Text) ? null : _lotNumber.Text.Trim()
-        };
+        Refusal = InventoryScreenRules.Refusal(Form(), _current.StockItemId, reason);
 
         DialogResult = DialogResult.Abort;
         Close();
-    }
-
-    // Read as the editors read numbers: « 1e20 » was taken, and the save then failed with
-    // « Erreur inattendue »; « 1 000 », as the French culture writes it, was refused.
-    private static bool TryParse(string text, out decimal value)
-    {
-        var parsed = EditorValues.ParseDecimal(text);
-        value = parsed ?? 0m;
-        return parsed is not null;
     }
 
     private sealed record SupplierChoice(Guid? Id, string Display)

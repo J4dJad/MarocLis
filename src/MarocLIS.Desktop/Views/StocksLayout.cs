@@ -20,6 +20,16 @@ internal readonly record struct StockPill((Color Back, Color Fore) Tone, string 
     public static readonly StockPill Done = new((UiTheme.NormalBackground, UiTheme.Normal), "✓");
     public static readonly StockPill Warning = new((UiTheme.AbnormalBackground, UiTheme.Abnormal), "!");
     public static readonly StockPill Critical = new((UiTheme.CriticalBackground, UiTheme.CriticalInk), "✕");
+
+    /// <summary>The pill of a stock screen's tone (StockTone, shared with the web).</summary>
+    public static StockPill Of(Application.Inventory.StockTone tone) => tone switch
+    {
+        Application.Inventory.StockTone.Running => Running,
+        Application.Inventory.StockTone.Done => Done,
+        Application.Inventory.StockTone.Warning => Warning,
+        Application.Inventory.StockTone.Critical => Critical,
+        _ => Waiting
+    };
 }
 
 internal static class StockGrid
