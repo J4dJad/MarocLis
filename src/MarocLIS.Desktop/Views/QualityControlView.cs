@@ -41,6 +41,7 @@ public sealed class QualityControlView : LocalizedView
 
     private readonly DataGridView _entry = UiTheme.Grid();
     private readonly LeveyJenningsChart _chart = new();
+
     private readonly DataGridView _review = UiTheme.Grid();
 
     private readonly Label _entryHeading = new();
@@ -101,6 +102,8 @@ public sealed class QualityControlView : LocalizedView
         _qc = qc;
         _dialogs = dialogs;
         _logger = logger;
+
+        _chart.Texts = T;
 
         BuildLayout();
         WireBehaviour();
@@ -299,15 +302,9 @@ public sealed class QualityControlView : LocalizedView
 
         _chart.PointSelected += (_, point) =>
         {
-            _status.ForeColor = point.Outcome == QcOutcome.Rejected
-                ? UiTheme.Critical
-                : UiTheme.TextSecondary;
-
-            _status.Text = $"{point.MeasuredAt:dd/MM/yyyy HH:mm} · {point.Value:N3} · " +
-                           $"Z {point.ZScore:N2}" +
-                           (point.ViolatedRules == WestgardRule.None
-                               ? string.Empty
-                               : $" · {WestgardRuleNames.Describe(point.ViolatedRules)}");
+            var (text, tone) = LeveyJenningsLayout.PointLine(point);
+            _status.ForeColor = ColourOf(tone);
+            _status.Text = text;
         };
     }
 
@@ -316,31 +313,31 @@ public sealed class QualityControlView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _entry.Rows.Count) return;
         if (_entry.Rows[e.RowIndex].Tag is not QcEntryRow row) return;
 
-        // An unusable control lot is flagged on the row, not hidden in a tooltip: running an
-        // expired control produces a verdict nobody can rely on.
-        if (!row.MaterialUsable)
+        // An unusable control lot is flagged on the row, not hidden in a tooltip; the target is
+        // in the warning's colour while it is the manufacturer's; the last value in its verdict's.
+        if (QualityControlScreenRules.Tone(row) == QcTone.CriticalFill)
         {
             e.CellStyle!.BackColor = UiTheme.CriticalBackground;
             e.CellStyle.ForeColor = UiTheme.Critical;
         }
-        else if (row.UsingAssignedStatistics)
+        else if (_entry.Columns[e.ColumnIndex].Name == ColTarget
+                 && QualityControlScreenRules.TargetTone(row) == QcTone.Abnormal)
         {
-            // Manufacturer's limits rather than the laboratory's own — worth seeing, because
-            // ISO 15189 expects the laboratory to establish its own.
-            if (_entry.Columns[e.ColumnIndex].Name == ColTarget)
-                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            e.CellStyle!.ForeColor = UiTheme.Abnormal;
         }
 
-        if (_entry.Columns[e.ColumnIndex].Name == ColLast && row.LastOutcome is { } outcome)
-        {
-            e.CellStyle!.ForeColor = outcome switch
-            {
-                QcOutcome.Rejected => UiTheme.Critical,
-                QcOutcome.Warning => UiTheme.Abnormal,
-                _ => UiTheme.TextSecondary
-            };
-        }
+        if (_entry.Columns[e.ColumnIndex].Name == ColLast && QualityControlScreenRules.LastTone(row) is not QcTone.Plain and var tone)
+            e.CellStyle!.ForeColor = ColourOf(tone);
     }
+
+    /// <summary>The workstation's colour of a tone of the shared rules.</summary>
+    private static Color ColourOf(QcTone tone) => tone switch
+    {
+        QcTone.Critical or QcTone.CriticalFill => UiTheme.Critical,
+        QcTone.Abnormal => UiTheme.Abnormal,
+        QcTone.Normal => UiTheme.Normal,
+        _ => UiTheme.TextSecondary
+    };
 
     private void OnReviewFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -432,8 +429,7 @@ public sealed class QualityControlView : LocalizedView
             {
                 foreach (var lot in lots.Value)
                 {
-                    var index = _reagentLot.Items.Add(LotLabel(new LotChoice(lot.ReagentLotId, string.Empty,
-                                                                             $"{lot.ItemCode} · {lot.LotNumber}", lot.IsQuarantined)));
+                    var index = _reagentLot.Items.Add(LotLabel(new LotChoice(lot.ReagentLotId, string.Empty, lot)));
                     if (lot.ReagentLotId == keep) _reagentLot.SelectedIndex = index;
                 }
             }
@@ -444,11 +440,10 @@ public sealed class QualityControlView : LocalizedView
 
     private LotChoice LotLabel(LotChoice choice) => choice with
     {
-        Display = choice.Id is null ? T("Qc.ReagentLotInUse")
-                : choice.Lot + (choice.Quarantined ? $" ({T("Inventory.Quarantined").ToLowerInvariant()})" : string.Empty)
+        Display = QualityControlScreenRules.LotLabel(choice.Option, T)
     };
 
-    private sealed record LotChoice(Guid? Id, string Display, string Lot = "", bool Quarantined = false)
+    private sealed record LotChoice(Guid? Id, string Display, MarocLIS.Application.Inventory.ReagentLotOption? Option = null)
     {
         public override string ToString() => Display;
     }
@@ -465,19 +460,16 @@ public sealed class QualityControlView : LocalizedView
     /// <summary>The analysers of the sheet, for the named lot; one alone is chosen already.</summary>
     private void LoadLotAnalysers()
     {
-        var keep = LotAnalyserId;
-        var analysers = _rows.GroupBy(r => r.InstrumentId)
-                             .Select(g => new AnalyserChoice(g.Key, g.First().InstrumentCode))
-                             .OrderBy(a => a.Display, StringComparer.CurrentCulture)
-                             .ToList();
+        var analysers = QualityControlScreenRules.LotAnalysers(_rows);
+        var pick = QualityControlScreenRules.PickAnalyser(analysers, LotAnalyserId);
 
         _lotAnalyser.Items.Clear();
         _lotAnalyser.Items.Add(new AnalyserChoice(null, T("Qc.LotAnalyser")));
 
         foreach (var analyser in analysers)
         {
-            var index = _lotAnalyser.Items.Add(analyser);
-            if (analyser.Id == keep || analysers.Count == 1) _lotAnalyser.SelectedIndex = index;
+            var index = _lotAnalyser.Items.Add(new AnalyserChoice(analyser.Id, analyser.Code));
+            if (analyser.Id == pick) _lotAnalyser.SelectedIndex = index;
         }
 
         if (_lotAnalyser.SelectedIndex < 0) _lotAnalyser.SelectedIndex = 0;
@@ -486,13 +478,16 @@ public sealed class QualityControlView : LocalizedView
 
     private void UpdateLotControls()
     {
-        var named = NamedLotId is not null;
-        _lotAnalyser.Enabled = named;
-
-        var canEvaluate = named && LotAnalyserId is not null && PermissionGate.Allows(Permissions.Quality.EnterQc);
-        _startEvaluation.Enabled = canEvaluate;
-        _stopEvaluation.Enabled = named && PermissionGate.Allows(Permissions.Quality.EnterQc);
+        var actions = Actions;
+        _lotAnalyser.Enabled = actions.ChooseLotAnalyser;
+        _startEvaluation.Enabled = actions.StartEvaluation;
+        _stopEvaluation.Enabled = actions.StopEvaluation;
     }
+
+    /// <summary>What the screen offers, by right and by what it shows (QualityControlScreenRules).</summary>
+    private QcScreenActions Actions =>
+        QualityControlScreenRules.Actions(p => PermissionGate.Allows(p), _chartTargetId is not null,
+                                          _pendingReview.Count, NamedLotId, LotAnalyserId);
 
     public override async Task ActivateAsync(CancellationToken ct = default)
     {
@@ -577,20 +572,16 @@ public sealed class QualityControlView : LocalizedView
 
         foreach (var row in _rows)
         {
-            var target = row.TargetMean is { } mean && row.TargetSd is { } sd
-                ? $"{mean.ToString("N" + row.Decimals)} ± {sd.ToString("N" + row.Decimals)}"
-                : T("Qc_NoTargetEstablished");
-
             var index = _entry.Rows.Add(
                 row.ParameterName.For(Localizer.CurrentLanguage),
                 T($"QcLevel.{row.Level}"),
                 row.MaterialLotNumber,
                 row.InstrumentCode,
                 string.Empty,
-                target,
-                row.LastValue?.ToString("N" + row.Decimals) ?? string.Empty,
+                QualityControlScreenRules.Target(row, T),
+                QualityControlScreenRules.Last(row),
                 // Abbreviated rule set: the full flags string would not fit and is on hover.
-                row.ActiveRules == WestgardRule.None ? "—" : $"{CountRules(row.ActiveRules)}");
+                QualityControlScreenRules.RulesCell(row));
 
             var gridRow = _entry.Rows[index];
             gridRow.Tag = row;
@@ -598,20 +589,8 @@ public sealed class QualityControlView : LocalizedView
             if (keep is not null && keep.TryGet(row.QcTargetId, out var pending))
                 gridRow.Cells[ColValue].Value = pending;
 
-            var tooltip = new List<string> { WestgardRuleNames.Describe(row.ActiveRules, " · ") };
-
-            if (row.CvPercent is { } cv)
-            {
-                tooltip.Add($"CV {cv:N2} %" +
-                            (row.MaxAcceptableCvPercent is { } max ? $" / {max:N2} %" : string.Empty));
-            }
-
-            tooltip.Add($"{row.PointCount} {T("Quality.PointCount").ToLowerInvariant()}");
-
-            if (!row.MaterialUsable)
-                tooltip.Add(Localizer.Format("Qc_MaterialExpired", row.MaterialLotNumber));
-
-            gridRow.Cells[ColRules].ToolTipText = string.Join(Environment.NewLine, tooltip);
+            gridRow.Cells[ColRules].ToolTipText =
+                string.Join(Environment.NewLine, QualityControlScreenRules.RulesTip(row, T));
         }
 
         _entry.ResumeLayout(performLayout: true);
@@ -621,26 +600,15 @@ public sealed class QualityControlView : LocalizedView
     }
 
     private void RenderCount() =>
-        _count.Text = Localizer.Format("QualityHr.Qc.Count", _rows.Count, _pendingReview.Count);
+        _count.Text = QualityControlScreenRules.Count(_rows.Count, _pendingReview.Count, T);
 
     /// <summary>The rules in force for the control shown, under its chart, by their short names.</summary>
     private void ShowControlFacts(Guid qcTargetId)
     {
-        var row = _rows.FirstOrDefault(r => r.QcTargetId == qcTargetId);
-
-        if (row is null)
-        {
-            _rulesLine.Text = string.Empty;
-            return;
-        }
-
-        var active = WestgardRuleNames.Of(row.ActiveRules);
-        _rulesLine.ForeColor = active.Count == 0 ? UiTheme.Critical : UiTheme.TextSecondary;
-        _rulesLine.Text = Localizer.Format("QualityHr.Qc.ActiveRules", active.Count == 0 ? "—" : string.Join(" · ", active));
+        var (text, tone) = QualityControlScreenRules.ActiveRules(_rows.FirstOrDefault(r => r.QcTargetId == qcTargetId), T);
+        _rulesLine.ForeColor = ColourOf(tone);
+        _rulesLine.Text = text;
     }
-
-    private static int CountRules(WestgardRule rules) =>
-        Enum.GetValues<WestgardRule>().Count(r => r != WestgardRule.None && rules.HasFlag(r));
 
     private void RenderReview()
     {
@@ -650,15 +618,15 @@ public sealed class QualityControlView : LocalizedView
         foreach (var row in _pendingReview)
         {
             var index = _review.Rows.Add(
-                row.MeasuredAt.ToString("dd/MM HH:mm"),
+                QualityControlScreenRules.Measured(row),
                 row.ParameterName.For(Localizer.CurrentLanguage),
                 row.InstrumentCode,
                 row.MaterialLotNumber,
                 T($"QcLevel.{row.Level}"),
-                row.Value.ToString("N3"),
-                row.ZScore?.ToString("N2") ?? string.Empty,
+                QualityControlScreenRules.Value(row),
+                QualityControlScreenRules.ZScore(row.ZScore),
                 WestgardRuleNames.Describe(row.ViolatedRules),
-                row.AffectedResultCount > 0 ? row.AffectedResultCount.ToString() : string.Empty);
+                QualityControlScreenRules.Affected(row));
 
             _review.Rows[index].Tag = row;
         }
@@ -667,11 +635,10 @@ public sealed class QualityControlView : LocalizedView
 
         _reviewHeading.Text = $"{T("Quality.PendingReview")} — {_pendingReview.Count}";
 
-        _reviewAction.Enabled = _pendingReview.Count > 0;
+        _reviewAction.Enabled = Actions.Review;
 
         // The patient results these rejections hold back, said where the reviewer looks first.
-        var blocked = _pendingReview.Sum(r => r.AffectedResultCount);
-        if (blocked > 0) _blocked.Show(Localizer.Format("QualityHr.Qc.Blocked", blocked), QhTone.Crit);
+        if (QualityControlScreenRules.Blocked(_pendingReview, T) is { } blocked) _blocked.Show(blocked, QhTone.Crit);
         else _blocked.Visible = false;
 
         RenderCount();
@@ -696,7 +663,7 @@ public sealed class QualityControlView : LocalizedView
             _chartTargetId = qcTargetId;
             ShowControlFacts(qcTargetId);
 
-            var chart = await _qc.GetChartAsync(qcTargetId);
+            var chart = await _qc.GetChartAsync(qcTargetId, QualityControlScreenRules.ChartDays);
 
             _chart.SetSeries(chart.IsSuccess ? chart.Value : null);
 
@@ -706,7 +673,8 @@ public sealed class QualityControlView : LocalizedView
                 // heading keeps to its name so « Plus d'actions » stays in the card.
                 _chartHeading.Text = T("Quality.LeveyJennings");
 
-                _establishLimits.Enabled = true;
+                _establishLimits.Enabled = Actions.EstablishLimits;
+                _editRules.Enabled = Actions.EditRules;
             }
         }
         // Left before the load finished: the screen is gone, there is nothing to report on it.
@@ -754,40 +722,35 @@ public sealed class QualityControlView : LocalizedView
     {
         _entry.EndEdit();
 
-        var entries = new List<QcEntry>();
-
         // A named lot is the lot of one analyser's rows; the other analysers' rows are routine QC.
-        var namedLot = NamedLotId;
-        if (namedLot is not null && LotAnalyserId is null)
+        var typed = CaptureTyped();
+        var reading = QualityControlScreenRules.ReadRun(
+            _rows, id => typed.TryGet(id, out var value) ? value : null, NamedLotId, LotAnalyserId);
+
+        if (reading.Refusal is { } refusal)
         {
-            _dialogs.Warn(T("Qc.ChooseLotAnalyser"));
-            _lotAnalyser.Focus();
+            _dialogs.Warn(refusal.Typed is { } text ? Localizer.Format(refusal.Key, text) : T(refusal.Key));
+
+            if (refusal.Field == QualityControlScreenRules.LotAnalyserField)
+            {
+                _lotAnalyser.Focus();
+            }
+            else
+            {
+                foreach (DataGridViewRow gridRow in _entry.Rows)
+                {
+                    if (gridRow.Tag is QcEntryRow refused
+                        && QualityControlScreenRules.ValueField(refused.QcTargetId) == refusal.Field)
+                        _entry.CurrentCell = gridRow.Cells[ColValue];
+                }
+            }
+
             return;
         }
 
-        foreach (DataGridViewRow gridRow in _entry.Rows)
-        {
-            if (gridRow.Tag is not QcEntryRow row) continue;
+        var entries = reading.Entries;
 
-            var typed = gridRow.Cells[ColValue].Value?.ToString()?.Trim();
-
-            if (string.IsNullOrWhiteSpace(typed)) continue;
-
-            if (!decimal.TryParse(typed.Replace(',', '.'),
-                                  System.Globalization.NumberStyles.Float,
-                                  System.Globalization.CultureInfo.InvariantCulture,
-                                  out var value))
-            {
-                _dialogs.Warn(Localizer.Format("Result_NotANumber", typed));
-                _entry.CurrentCell = gridRow.Cells[ColValue];
-                return;
-            }
-
-            entries.Add(new QcEntry(row.QcTargetId, value,
-                                    row.InstrumentId == LotAnalyserId ? namedLot : null));
-        }
-
-        if (entries.Count == 0)
+        if (reading.IsEmpty)
         {
             _status.ForeColor = UiTheme.TextSecondary;
             _status.Text = T("Message.NothingSelected");
@@ -807,34 +770,18 @@ public sealed class QualityControlView : LocalizedView
                 return;
             }
 
-            var outcome = result.Value;
-
             // A rejection is announced as a modal: patient results covered by the run are now
             // blocked, and that has to be acted on rather than noticed later.
-            if (outcome.AnyRejected)
-            {
-                var lines = outcome.Results
-                    .Where(r => r.Outcome == QcOutcome.Rejected)
-                    .Select(r => $"• {r.ParameterCode} : {r.Value:N3} (Z {r.ZScore:N2}) — " +
-                                 Localizer.Describe(
-                                     r.ViolationKeys.Select(k => Error.Regulatory(k)).ToList()));
+            var summary = QualityControlScreenRules.Summarise(result.Value, T, errors => Localizer.Describe(errors));
 
-                _dialogs.Warn(
-                    $"{T("QcOutcome.Rejected")}\n\n{string.Join('\n', lines)}\n\n" +
-                    T("Qc_RejectionRequiresCorrectiveAction"),
-                    T("Nav.QualityControl"));
-            }
-
-            if (outcome.Warnings.Count > 0)
-                _dialogs.Info(Localizer.Describe(outcome.Warnings), T("Nav.QualityControl"));
-
-            var accepted = outcome.Results.Count(r => r.Outcome == QcOutcome.Accepted);
+            if (summary.Rejection is { } rejection) _dialogs.Warn(rejection, T("Nav.QualityControl"));
+            if (summary.Warnings is { } warnings) _dialogs.Info(warnings, T("Nav.QualityControl"));
 
             // Submitted: the reload below must not carry these values over as still pending.
             foreach (DataGridViewRow gridRow in _entry.Rows) gridRow.Cells[ColValue].Value = string.Empty;
 
-            _status.ForeColor = outcome.AnyRejected ? UiTheme.Critical : UiTheme.Normal;
-            _status.Text = $"{accepted}/{outcome.Results.Count} {T("QcOutcome.Accepted").ToLowerInvariant()}";
+            _status.ForeColor = ColourOf(summary.StatusTone);
+            _status.Text = summary.Status;
 
             await ActivateAsync();
         }
@@ -859,13 +806,13 @@ public sealed class QualityControlView : LocalizedView
         }
 
         var action = _dialogs.PromptForReason(
-            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {WestgardRuleNames.Describe(row.ViolatedRules)}\n\n" +
-            T("Quality.CorrectiveActionPrompt"),
-            T("Quality.CorrectiveAction"), minimumLength: 15, maxLength: 2000);
+            QualityControlScreenRules.ReviewPrompt(row, Localizer.CurrentLanguage, T),
+            T("Quality.CorrectiveAction"), minimumLength: QualityControlScreenRules.CorrectiveActionMinimumLength,
+            maxLength: QualityControlScreenRules.CorrectiveActionMaxLength);
 
         if (action is null) return;
 
-        var openNonConformity = row.AffectedResultCount > 0
+        var openNonConformity = QualityControlScreenRules.OpensNonConformityWithoutAsking(row)
             || _dialogs.Confirm(T("Quality.OpenNonConformityQuestion"), T("NonConformity.Title"));
 
         var result = await _qc.ReviewAsync(row.QcResultId, action, openNonConformity);
@@ -949,27 +896,21 @@ public sealed class QualityControlView : LocalizedView
 
         // Named in the question: the limits are the charted control's, whichever list it was picked in.
         var answer = _dialogs.PromptForText(
-            $"{row.ParameterName.For(Localizer.CurrentLanguage)} · {T($"QcLevel.{row.Level}")} · {row.MaterialLotNumber} · {row.InstrumentCode}\n\n" +
-            T("Quality.EstablishLimitsPrompt", QcTarget.MinimumPointsForLaboratoryStatistics),
-            T("Quality.EstablishLimits"), "60");
+            QualityControlScreenRules.LimitsPrompt(row, Localizer.CurrentLanguage, T),
+            T("Quality.EstablishLimits"),
+            QualityControlScreenRules.DefaultLimitDays.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         if (answer is null) return;
 
-        if (!int.TryParse(answer.Trim(), out var days) || days < 1)
-        {
-            _dialogs.Warn(Localizer.Format("Result_NotANumber", answer));
-            return;
-        }
-
         // A period beyond the calendar made the date arithmetic throw (« Erreur inattendue »).
-        if (days > 3650)
+        var (days, refused) = QualityControlScreenRules.ReadLimitDays(answer);
+        if (refused is not null || days is null)
         {
-            _dialogs.Warn(Localizer["QcTarget_PeriodOutOfRange"]);
+            _dialogs.Warn(refused?.Typed is { } typed ? Localizer.Format(refused.Key, typed) : T(refused!.Key));
             return;
         }
 
-        var to = DateOnly.FromDateTime(DateTime.Today);
-        var from = to.AddDays(-days);
+        var (from, to) = QualityControlScreenRules.LimitsWindow(days.Value, DateOnly.FromDateTime(DateTime.Today));
 
         var result = await _qc.RecomputeStatisticsAsync(row.QcTargetId, from, to);
 
@@ -981,11 +922,7 @@ public sealed class QualityControlView : LocalizedView
 
         var (mean, sd, points) = result.Value;
 
-        _dialogs.Info(
-            $"{T("Quality.LaboratoryMean")} : {mean:N4}\n" +
-            $"{T("Quality.LaboratorySd")} : {sd:N4}\n" +
-            $"{T("Quality.PointCount")} : {points}",
-            T("Quality.EstablishLimits"));
+        _dialogs.Info(QualityControlScreenRules.LimitsSummary(mean, sd, points, T), T("Quality.EstablishLimits"));
 
         await ActivateAsync();
     }

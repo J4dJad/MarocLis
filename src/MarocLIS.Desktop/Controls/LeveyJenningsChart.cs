@@ -1,3 +1,4 @@
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Quality;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Quality;
@@ -32,9 +33,6 @@ public sealed class LeveyJenningsChart : Control
     private const int MarginTop = 14;
     private const int MarginBottom = 34;
 
-    /// <summary>The chart is drawn from −4 to +4 SD; anything beyond is clamped to the edge.</summary>
-    private const decimal ZRange = 4m;
-
     public LeveyJenningsChart()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint
@@ -45,6 +43,11 @@ public sealed class LeveyJenningsChart : Control
         BackColor = UiTheme.SurfaceRaised;
         MinimumSize = new Size(320, 200);
     }
+
+    /// <summary>The screen's texts (the view's T): what the chart says in place of points, its header, its tooltips.</summary>
+    [System.ComponentModel.Browsable(false)]
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public ScreenText Texts { get; set; } = (key, _) => key;
 
     public void SetSeries(LeveyJenningsSeries? series)
     {
@@ -70,17 +73,11 @@ public sealed class LeveyJenningsChart : Control
 
         if (plot.Width <= 0 || plot.Height <= 0) return;
 
-        if (_series is null)
+        // Nothing charted, or no established target: the points cannot be placed on a Z axis at
+        // all. Saying so is better than drawing a chart that implies limits which do not exist.
+        if (_series is null || !LeveyJenningsLayout.CanPlot(_series))
         {
-            DrawCentredText(g, "—", plot);
-            return;
-        }
-
-        if (_series.Mean is null || _series.Sd is null or 0m)
-        {
-            // No established target: the points cannot be placed on a Z axis at all. Saying so is
-            // better than drawing a chart that implies limits which do not exist.
-            DrawCentredText(g, "Cible non établie", plot);
+            DrawCentredText(g, LeveyJenningsLayout.EmptyText(_series, Texts) ?? "—", plot);
             return;
         }
 
@@ -132,26 +129,23 @@ public sealed class LeveyJenningsChart : Control
         using var bandBrush = new SolidBrush(Color.FromArgb(18, UiTheme.Normal));
         g.FillRectangle(bandBrush, plot.X, bandTop, plot.Width, bandBottom - bandTop);
 
-        foreach (var z in (decimal[])[3m, 2m, 1m, 0m, -1m, -2m, -3m])
+        foreach (var z in LeveyJenningsLayout.Limits)
         {
             var y = YFor(z, plot);
 
-            var pen = z == 0m ? meanPen
-                : Math.Abs(z) == 3m ? threeSdPen
-                : Math.Abs(z) == 2m ? twoSdPen
-                : oneSdPen;
+            var pen = LeveyJenningsLayout.KindOf(z) switch
+            {
+                QcLimitKind.Mean => meanPen,
+                QcLimitKind.Rejection => threeSdPen,
+                QcLimitKind.Warning => twoSdPen,
+                _ => oneSdPen
+            };
 
             g.DrawLine(pen, plot.X, y, plot.Right, y);
 
             // Label with both the SD multiple and the actual value: the technician compares against
             // the analyser reading, which is in measurement units.
-            var value = _series!.Mean!.Value + z * _series.Sd!.Value;
-
-            var label = z == 0m
-                ? $"x̄  {value.ToString("N" + _series.Decimals)}"
-                : $"{(z > 0 ? "+" : string.Empty)}{z:0}s  {value.ToString("N" + _series.Decimals)}";
-
-            g.DrawString(label, UiTheme.Small, labelBrush, 2, y - 7);
+            g.DrawString(LeveyJenningsLayout.LimitLabel(_series!, z), UiTheme.Small, labelBrush, 2, y - 7);
         }
 
         using var framePen = new Pen(UiTheme.BorderStrong);
@@ -164,7 +158,7 @@ public sealed class LeveyJenningsChart : Control
 
         if (points.Count == 0)
         {
-            DrawCentredText(g, "—", plot);
+            DrawCentredText(g, LeveyJenningsLayout.EmptyText(_series, Texts) ?? "—", plot);
             return;
         }
 
@@ -186,11 +180,11 @@ public sealed class LeveyJenningsChart : Control
             var position = positions[i];
             var hovered = i == _hoverIndex;
 
-            var colour = point.Outcome switch
+            var colour = LeveyJenningsLayout.Tone(point.Outcome) switch
             {
-                QcOutcome.Rejected => UiTheme.Critical,
-                QcOutcome.Warning => UiTheme.Abnormal,
-                QcOutcome.Accepted => UiTheme.Normal,
+                QcTone.Critical => UiTheme.Critical,
+                QcTone.Abnormal => UiTheme.Abnormal,
+                QcTone.Normal => UiTheme.Normal,
                 _ => UiTheme.TextMuted
             };
 
@@ -202,14 +196,14 @@ public sealed class LeveyJenningsChart : Control
 
             // Shape carries the outcome as well as colour: a square for a rejection, a triangle
             // for a warning, a circle for an accepted point. These charts get printed in mono.
-            switch (point.Outcome)
+            switch (LeveyJenningsLayout.Shape(point.Outcome))
             {
-                case QcOutcome.Rejected:
+                case QcPointShape.Square:
                     g.FillRectangle(fill, box);
                     g.DrawRectangle(outline, box.X, box.Y, box.Width, box.Height);
                     break;
 
-                case QcOutcome.Warning:
+                case QcPointShape.Triangle:
                     var triangle = new PointF[]
                     {
                         new(position.X, box.Y),
@@ -248,12 +242,10 @@ public sealed class LeveyJenningsChart : Control
 
         // At most six labels: more than that and they collide, and the precise date of each point
         // is available on hover anyway.
-        var step = Math.Max(1, points.Count / 6);
-
-        for (var i = 0; i < points.Count; i += step)
+        foreach (var i in LeveyJenningsLayout.DateTicks(points.Count))
         {
             var x = XFor(i, points.Count, plot);
-            var label = points[i].MeasuredAt.ToString("dd/MM");
+            var label = LeveyJenningsLayout.DateLabel(points[i]);
 
             var width = g.MeasureString(label, UiTheme.Small).Width;
             g.DrawString(label, UiTheme.Small, brush, x - width / 2, plot.Bottom + 6);
@@ -264,36 +256,20 @@ public sealed class LeveyJenningsChart : Control
     {
         using var brush = new SolidBrush(UiTheme.TextSecondary);
 
-        var cv = _series!.CvPercent is { } value ? $"CV {value:N2} %" : string.Empty;
-
         // States whose limits these are. A chart drawn on the manufacturer's insert rather than
         // the laboratory's own data means something different, and ISO 15189 §5.6 cares which.
-        var basis = _series.UsingAssignedStatistics
-            ? "limites fournisseur"
-            : "limites du laboratoire";
-
-        var header = string.Join("   ·   ",
-            new[] { _series.ParameterCode, _series.MaterialLotNumber,
-                    _series.InstrumentCode, cv, basis }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
+        var header = LeveyJenningsLayout.Header(_series!, Texts);
 
         g.DrawString(header, UiTheme.Small, brush, MarginLeft, 1);
     }
 
     private static float XFor(int index, int count, Rectangle plot) =>
-        count <= 1
-            ? plot.X + plot.Width / 2f
-            : plot.X + 12 + (plot.Width - 24) * index / (float)(count - 1);
+        (float)LeveyJenningsLayout.X(index, count, plot.X, plot.Width);
 
-    private static float YFor(decimal z, Rectangle plot)
-    {
-        // Clamped rather than allowed off-canvas: a 6 SD outlier still has to be visible, and
-        // rescaling the whole axis to fit it would flatten every other point into the mean line.
-        var clamped = Math.Clamp(z, -ZRange, ZRange);
-
-        return plot.Y + plot.Height / 2f
-               - (float)clamped / (float)ZRange * (plot.Height / 2f - 8);
-    }
+    // Clamped rather than allowed off-canvas: a 6 SD outlier still has to be visible, and
+    // rescaling the whole axis to fit it would flatten every other point into the mean line.
+    private static float YFor(decimal z, Rectangle plot) =>
+        (float)LeveyJenningsLayout.Y(z, plot.Y, plot.Height);
 
     // ---- Interaction --------------------------------------------------------------------------------
 
@@ -311,16 +287,7 @@ public sealed class LeveyJenningsChart : Control
         {
             var point = _series.Points[index];
 
-            var lines = new List<string>
-            {
-                $"{point.Value.ToString("N" + _series.Decimals)} {_series.UnitSymbol}".Trim(),
-                $"Z = {point.ZScore:N2}",
-                point.MeasuredAt.ToString("dd/MM/yyyy HH:mm")
-            };
-
-            if (point.ViolatedRules != WestgardRule.None) lines.Add(WestgardRuleNames.Describe(point.ViolatedRules));
-            if (point.WasOverridden) lines.Add("dérogation");
-            if (!string.IsNullOrWhiteSpace(point.Comment)) lines.Add(point.Comment);
+            var lines = LeveyJenningsLayout.PointTip(point, _series, Texts);
 
             _tooltip.SetToolTip(this, string.Join(Environment.NewLine, lines));
         }
@@ -352,7 +319,7 @@ public sealed class LeveyJenningsChart : Control
     private int HitTest(Point location)
     {
         if (_series is null || _series.Points.Count == 0) return -1;
-        if (_series.Mean is null || _series.Sd is null or 0m) return -1;
+        if (!LeveyJenningsLayout.CanPlot(_series)) return -1;
 
         var plot = PlotArea;
         var best = -1;

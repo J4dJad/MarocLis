@@ -5446,6 +5446,8 @@
   },
 
   "Qc": {
+    "ChartNoTarget": "Cible non établie",
+    "Overridden": "dérogation",
     "EvaluationStopped": "Évaluation du lot {0} arrêtée : les contrôles transmis reviennent au lot en cours.",
     "EvaluationStarted": "Évaluation du lot {0} démarrée sur {1} : le prochain contrôle de chaque niveau transmis aujourd'hui par l'automate sera attribué à ce lot.",
     "StopEvaluation": "Arrêter l'évaluation",

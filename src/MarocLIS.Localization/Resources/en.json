@@ -5445,6 +5445,8 @@
   },
 
   "Qc": {
+    "ChartNoTarget": "No target established",
+    "Overridden": "override",
     "EvaluationStopped": "Evaluation of lot {0} stopped: transmitted controls go back to the lot in use.",
     "EvaluationStarted": "Evaluation of lot {0} started on {1}: the next control of each level the analyser transmits today will be credited to this lot.",
     "StopEvaluation": "Stop evaluation",
