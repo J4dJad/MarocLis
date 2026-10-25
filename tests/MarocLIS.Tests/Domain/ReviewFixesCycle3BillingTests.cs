@@ -31,6 +31,27 @@ public sealed class ReviewFixesCycle3BillingTests
 
     // ---- B1: the patient pays only their share of a claimed invoice ---------------------------------
 
+    [Theory]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.French, "300,00 DH")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.English, "MAD")]
+    [InlineData(MarocLIS.Domain.Common.AppLanguage.Arabic, "د.م.")]
+    public async Task WhatThePatientStillOwes_IsWrittenInTheScreensCurrencyNotation(MarocLIS.Domain.Common.AppLanguage language, string expected)
+    {
+        var cnss = Payer("CNSS");
+        var order = CoveredOrder(cnss, directBilling: true, price: 1_000m, payerShare: 700m);
+        var harness = new Harness(orders: [order], payers: [cnss], patients: [PatientOf(order)]);
+        (await harness.Service.IssueInvoiceAsync([order.Id])).IsSuccess.Should().BeTrue();
+        var invoice = harness.Invoices.Single();
+
+        var error = (await harness.Service.RecordPaymentAsync(
+            new RecordPaymentRequest(invoice.Id, 1_000m, PaymentMethod.Card, "AUT-1", null, null, null))).FirstError;
+
+        var localizer = new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions { MarkMissingKeys = true });
+        var text = localizer.Format(language, error.ResourceKey, error.Args);
+        text.Should().Contain(expected).And.NotContain("[");
+        if (language != MarocLIS.Domain.Common.AppLanguage.English) text.Should().NotContain("MAD");
+    }
+
     [Fact]
     public async Task OnADirectBilledInvoice_ThePatientPaysOnlyTheirShare_AndThePayerStillCan()
     {
@@ -47,7 +68,7 @@ public sealed class ReviewFixesCycle3BillingTests
             new RecordPaymentRequest(invoice.Id, 1_000m, PaymentMethod.Card, "AUT-1", null, null, null));
 
         excess.FirstError.ResourceKey.Should().Be("Payment_ExceedsPatientShare");
-        excess.FirstError.Args.Single().Should().Be(300m);
+        excess.FirstError.Args.Single().Should().Be(MarocLIS.Domain.Common.Money.Of(300m));
 
         (await harness.Service.RecordPaymentAsync(
             new RecordPaymentRequest(invoice.Id, 300m, PaymentMethod.Card, "AUT-2", null, null, null)))

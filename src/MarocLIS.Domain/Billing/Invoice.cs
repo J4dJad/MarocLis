@@ -397,7 +397,7 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         // share; anything else is paid by the patient, who owes only their part.
         if (payment.Method is not (PaymentMethod.ThirdPartyPayer or PaymentMethod.WriteOff)
             && payment.Amount > PatientPayableAmount)
-            return Result.Failure(Error.Validation("Payment_ExceedsPatientShare", PatientPayableAmount));
+            return Result.Failure(Error.Validation("Payment_ExceedsPatientShare", Money.Of(PatientPayableAmount)));
 
         payment.AttachTo(Id);
         _payments.Add(payment);
