@@ -1,0 +1,111 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    A control material, the workstation's QcMaterialEditorDialog: one lot at one level, with its
+    expiry and how long it keeps once opened. Lot and level are its natural key and are set once.
+    An expiry already past is shown as stored — opening the record must not edit it — and a new one
+    cannot be set before today. The fields, the checks and the request are MasterDataEditorRules'.
+*@
+<Modal Name="qc-material-editor" Title="@Title" Hint="@Texts["AdminDialog.QcMaterialEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Quality.QcLot"]</span>
+                <input class="input mono" dir="ltr" data-field="lot" disabled="@(!KeyEditable)" maxlength="@MasterDataEditorRules.LotMaxLength"
+                       @bind="_form.LotNumber" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="lot" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Quality.QcLevel"]</span>
+                <select class="input" data-field="level" disabled="@(!KeyEditable)" @bind="_form.Level">
+                    @foreach (var level in Enum.GetValues<QcLevel>())
+                    {
+                        <option value="@level">@Texts[$"QcLevel.{level}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Expiry"]</span>
+                <input class="input" type="date" data-field="expiry" required min="@ExpiryMin" @bind="_form.ExpiryDate" @bind:format="yyyy-MM-dd" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Manufacturer"]</span>
+                <input class="input" data-field="manufacturer" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Manufacturer" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.SupplierReference"]</span>
+                <input class="input" dir="ltr" data-field="reference" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.CatalogueReference" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.OpenedOn"]</span>
+                <input class="input" type="date" data-field="opened" max="@Today.ToString("yyyy-MM-dd")" @bind="_form.OpenedOn" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.OpenStabilityDays"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.IntervalMaxDays" data-field="stability" @bind="_form.StabilityAfterOpeningDays" />
+            </label>
+            <label class="field-check strong field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+            <p class="field-span-4 small muted">@Texts["Quality.MaterialStabilityNotice"]</p>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The material edited; null for a new lot.</summary>
+    [Parameter] public QcMaterialRow? Existing { get; set; }
+
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<QcMaterialRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private QcMaterialForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private bool KeyEditable => MasterDataEditorRules.KeyEditable(Existing);
+
+    private string Title => Existing is null ? Texts["Quality.NewQcMaterial"] : $"{Texts["Action.Edit"]} — {Existing.LotNumber}";
+
+    /// <summary>Not before today — unless the stored expiry has already passed, which is shown as it is.</summary>
+    private string? ExpiryMin => Existing is { } row && row.ExpiryDate < Today ? null : Today.ToString("yyyy-MM-dd");
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing, Today);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.QcMaterialId));
+    }
+}

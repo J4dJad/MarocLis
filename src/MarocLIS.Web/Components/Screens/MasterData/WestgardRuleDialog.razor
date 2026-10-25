@@ -1,0 +1,72 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    The Westgard rules a control runs, the workstation's WestgardRuleDialog: each rule ticked or
+    not, the one under the pointer described as the evaluator quotes it when it fires, and the two
+    sets a laboratory starts from — the classic multirule, or 1₃ₛ alone for a method whose
+    imprecision makes the tighter rules fire on noise. Nothing ticked is said in red and Save waits
+    for one rule: a control with none records points and never rejects a run. The list, the presets
+    and the summary are MasterDataScreenRules'.
+*@
+<Modal Name="westgard-rules" Title="@($"{Texts["Quality.EditRules"]} — {Parameter} · {Material}")" OnCancel="OnCancel">
+    <ChildContent>
+        <p class="small">@Texts["Quality.RuleSelectionExplanation"]</p>
+        <ul class="check-list" data-list="rules">
+            @foreach (var choice in MasterDataScreenRules.WestgardRules)
+            {
+                <li class="@(choice.Rule == _described ? "is-selected" : null)" data-rule="@choice.Rule" @onmouseenter="() => _described = choice.Rule">
+                    <label class="field-check">
+                        <input type="checkbox" checked="@_ticked.HasFlag(choice.Rule)" @onchange="e => Tick(choice.Rule, e.Value is true)" @onfocus="() => _described = choice.Rule" />
+                        <span class="mono">@Texts[choice.LabelKey]</span>
+                    </label>
+                </li>
+            }
+        </ul>
+        <p class="small" data-state="rule-description">@Description</p>
+        <p class="small @(Count == 0 ? "critical strong" : "muted")" data-state="rule-summary">@MasterDataScreenRules.RuleSummary(_ticked, Texts.T)</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Quality.ClassicMultirule" OnClick="() => Apply(MasterDataScreenRules.ClassicMultirule)" />
+        <ActionButton Key="Quality.SingleRuleOnly" OnClick="() => Apply(MasterDataScreenRules.SingleRule)" />
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(Count == 0)" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The parameter and the material of the target, as its lists show them.</summary>
+    [Parameter] public string Parameter { get; set; } = "—";
+    [Parameter] public string Material { get; set; } = "—";
+
+    [Parameter] public WestgardRule Rules { get; set; }
+    [Parameter] public EventCallback<WestgardRule> OnPick { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private WestgardRule _ticked;
+    private WestgardRule? _described;
+    private bool _initialised;
+
+    private int Count => MasterDataScreenRules.CountRules(_ticked);
+
+    private string? Description =>
+        MasterDataScreenRules.WestgardRules.FirstOrDefault(c => c.Rule == _described) is { } choice ? Texts[choice.DescriptionKey] : null;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _ticked = Rules;
+        _described = MasterDataScreenRules.WestgardRules.FirstOrDefault()?.Rule;
+    }
+
+    private void Tick(WestgardRule rule, bool on) =>
+        _ticked = MasterDataScreenRules.Combine(MasterDataScreenRules.WestgardRules.Select(c => c.Rule)
+            .Where(r => r == rule ? on : _ticked.HasFlag(r)));
+
+    private void Apply(WestgardRule preset) =>
+        _ticked = MasterDataScreenRules.Combine(MasterDataScreenRules.WestgardRules.Select(c => c.Rule).Where(r => preset.HasFlag(r)));
+
+    private Task SaveAsync() => Count == 0 ? Task.CompletedTask : OnPick.InvokeAsync(_ticked);
+}

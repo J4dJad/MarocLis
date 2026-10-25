@@ -1,0 +1,166 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+
+@*
+    Creating or amending a payer, the workstation's PayerEditorDialog — the dialog that decides how
+    every covered invoice divides between the payer and the patient. The rate is typed as a
+    percentage, as a convention is written, and stored as a fraction: the conversion is done once,
+    by the rules, not by whoever types the field. What the domain would refuse after Save is applied
+    to the boxes as the kind changes: an AMO scheme settles on the TNR, ticked and locked; self-pay
+    reimburses nothing and has no convention, so the rate is zeroed and the agreement turned off.
+    The fields, the locks and the request are MasterDataEditorRules'.
+*@
+<Modal Name="payer-editor" Title="@Title" Hint="@Texts["AdminDialog.PayerEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono upper" dir="ltr" data-field="code" maxlength="@MasterDataEditorRules.CodeMaxLength" @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameEn"]</span>
+                <input class="input" dir="ltr" data-field="nameen" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameEn" />
+            </label>
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Coverage.PayerKind"]</span>
+                <select class="input" data-field="kind" @onchange="KindChanged">
+                    @foreach (var kind in Enum.GetValues<PayerKind>())
+                    {
+                        <option value="@kind" selected="@(kind == _form.Kind)">@Texts[$"PayerKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Coverage.ReimbursementRatePercent"]</span>
+                <input class="input mono num" type="number" min="0" max="100" step="0.01" data-field="rate" disabled="@(!Locks.RateEnabled)" @bind="_form.RatePercent" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Coverage.PaymentTermsDays"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.PayerTermsMax" data-field="terms" @bind="_form.PaymentTermsDays" />
+            </label>
+
+            <label class="field-check strong">
+                <input type="checkbox" data-field="tnr" disabled="@Locks.ReferenceTariffLocked" @bind="_form.UsesReferenceTariff" /><span>@Texts["Coverage.ReferenceTariff"]</span>
+            </label>
+            <label class="field-check"><input type="checkbox" data-field="prescription" @bind="_form.RequiresPrescription" /><span>@Texts["Coverage.RequiresPrescription"]</span></label>
+            <label class="field-check"><input type="checkbox" data-field="inpe" @bind="_form.RequiresInpe" /><span>@Texts["Coverage.RequiresInpe"]</span></label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Ice"]</span>
+                <input class="input mono" dir="ltr" inputmode="numeric" data-field="ice" maxlength="@MasterDataEditorRules.IceMaxLength" @bind="_form.Ice" />
+            </label>
+            @if (MasterDataEditorRules.IsCompulsory(_form.Kind))
+            {
+                <p class="field-span-4 small abnormal" data-state="amo-notice">@Texts["Coverage.AmoTariffNotice"]</p>
+            }
+        </div>
+
+        <fieldset class="subcard form-grid form-grid-4" data-card="agreement">
+            <legend class="section-title accent">
+                <label class="field-check strong">
+                    <input type="checkbox" data-field="thirdparty" disabled="@(!Locks.ThirdPartyEnabled)" @bind="_form.ThirdParty" /><span>@Texts["Coverage.ThirdPartyPayment"]</span>
+                </label>
+            </legend>
+            <label class="field">
+                <span class="field-label">@Texts["Coverage.AgreementNumber"]</span>
+                <input class="input" dir="ltr" data-field="agreement" disabled="@(!AgreementEnabled)" maxlength="@MasterDataEditorRules.AgreementMaxLength" @bind="_form.AgreementNumber" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Coverage.AgreementValidUntil"]</span>
+                <input class="input" type="date" data-field="agreementuntil" disabled="@(!AgreementEnabled)" @bind="_form.AgreementValidUntil" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Coverage.AccountingAccount"]</span>
+                <input class="input mono" dir="ltr" data-field="account" maxlength="@MasterDataEditorRules.FiscalIdMaxLength" @bind="_form.AccountingAccount" />
+            </label>
+        </fieldset>
+
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.SupplierContact"]</span>
+                <input class="input" data-field="contact" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Contact" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Phone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="phone" maxlength="@MasterDataEditorRules.PhoneMaxLength" @bind="_form.Phone" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Email"]</span>
+                <input class="input" dir="ltr" type="email" data-field="email" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Email" />
+            </label>
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Patient.Address"]</span>
+                <input class="input" data-field="address" maxlength="@MasterDataEditorRules.AddressMaxLength" @bind="_form.Address" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.City"]</span>
+                <input class="input" data-field="city" maxlength="@MasterDataEditorRules.CityMaxLength" @bind="_form.City" />
+            </label>
+            <p class="field-span-3 small muted">@Texts["Coverage.PayerRateNotice"]</p>
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The payer edited; null for a new one.</summary>
+    [Parameter] public PayerRow? Existing { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<PayerRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PayerForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Coverage.NewPayer"] : $"{Texts["Coverage.EditPayer"]} — {Existing.Code}";
+
+    private PayerKindFields Locks => MasterDataEditorRules.Fields(_form.Kind);
+
+    private bool AgreementEnabled => MasterDataEditorRules.AgreementEnabled(_form);
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+
+        // The kind's rules are applied as the dialog opens, as the workstation's does.
+        var form = MasterDataEditorRules.FormOf(Existing);
+        _form = MasterDataEditorRules.WithKind(form, form.Kind);
+    }
+
+    private void KindChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PayerKind>(e.Value?.ToString(), out var kind)) _form = MasterDataEditorRules.WithKind(_form, kind);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.PayerId));
+    }
+}

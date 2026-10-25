@@ -1,0 +1,160 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    A control target, the workstation's QcTargetEditorDialog: what one control reads on one
+    instrument for one parameter — the record the Levey-Jennings series and the Westgard evaluation
+    hang from. Material, instrument and parameter are its key and are set once. The coefficient of
+    variation the mean and SD imply is echoed as they are typed, the number a biologist judges a
+    method by; the rules are picked in their own dialog, and a control left with none is said in
+    red, since it records points and never rejects a run. The fields, the checks and the request
+    are MasterDataEditorRules'; the rules' summary is MasterDataScreenRules'.
+*@
+<Modal Name="qc-target-editor" Title="@Title" Hint="@Texts["AdminDialog.QcTargetEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Quality.QcMaterial"]</span>
+                <select class="input" data-field="material" disabled="@(!KeyEditable)" @onchange="e => _form.MaterialId = IdOf(e)">
+                    @foreach (var (id, display) in MaterialChoices)
+                    {
+                        <option value="@id" selected="@(id == _form.MaterialId)">@display</option>
+                    }
+                </select>
+                <FieldMessage Refusal="_refusal" Field="material" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Result.Instrument"]</span>
+                <select class="input" data-field="instrument" disabled="@(!KeyEditable)" @onchange="e => _form.InstrumentId = IdOf(e)">
+                    @foreach (var (id, display) in InstrumentChoices)
+                    {
+                        <option value="@id" selected="@(id == _form.InstrumentId)">@display</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Result.Parameter"]</span>
+                <select class="input" data-field="parameter" disabled="@(!KeyEditable)" @onchange="e => _form.ParameterId = IdOf(e)">
+                    @foreach (var (id, display) in ParameterChoices)
+                    {
+                        <option value="@id" selected="@(id == _form.ParameterId)">@display</option>
+                    }
+                </select>
+            </label>
+
+            <p class="field-span-4 small accent">@Texts["Quality.AssignedLimitsNotice"]</p>
+            <label class="field">
+                <span class="field-label">@Texts["Quality.AssignedMean"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="mean" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Mean" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="mean" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Quality.AssignedSd"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="sd" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Sd" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="sd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Quality.MaxCv"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="cv" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.MaxCv" />
+                <FieldMessage Refusal="_refusal" Field="cv" />
+            </label>
+            <p class="small muted mono field-align-end" data-state="cv-echo">@MasterDataEditorRules.CvEcho(_form.Mean, _form.Sd, Texts.Culture)</p>
+
+            <div class="field field-span-4">
+                <span class="field-label">@Texts["Quality.Rules"]</span>
+                <button type="button" class="btn btn-secondary rules-button @(RuleCount == 0 ? "critical strong" : null)" data-action="Quality.Rules" @onclick="() => _picking = true">
+                    @MasterDataScreenRules.RuleSummary(_form.Rules, Texts.T)
+                </button>
+                <FieldMessage Refusal="_refusal" Field="rules" />
+            </div>
+
+            <label class="field-check strong"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+            <p class="field-span-4 small muted">@Texts["Quality.TargetLifecycleNotice"]</p>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@if (_picking)
+{
+    <WestgardRuleDialog Parameter="@Display(ParameterChoices, _form.ParameterId)" Material="@Display(MaterialChoices, _form.MaterialId)"
+                        Rules="_form.Rules" OnPick="Picked" OnCancel="() => _picking = false" />
+}
+
+@code {
+    /// <summary>The target edited; null for a new one.</summary>
+    [Parameter] public QcTargetRow? Existing { get; set; }
+
+    [Parameter] public IReadOnlyList<QcMaterialRow> Materials { get; set; } = [];
+    [Parameter] public IReadOnlyList<InstrumentMasterRow> Instruments { get; set; } = [];
+    [Parameter] public IReadOnlyList<ParameterOption> Parameters { get; set; } = [];
+
+    /// <summary>The material chosen on the screen, which a new target is entered against unless another is picked.</summary>
+    [Parameter] public Guid? Material { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<QcTargetRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private QcTargetForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+    private bool _picking;
+
+    private bool KeyEditable => MasterDataEditorRules.KeyEditable(Existing);
+
+    private int RuleCount => MasterDataScreenRules.CountRules(_form.Rules);
+
+    private string Title => Existing is null ? Texts["Quality.NewQcTarget"] : $"{Texts["Action.Edit"]} — {Existing.ParameterCode}";
+
+    private IEnumerable<(Guid Id, string Display)> MaterialChoices =>
+        Materials.Select(m => (m.QcMaterialId, $"{m.LotNumber} — {Texts[$"QcLevel.{m.Level}"]}"));
+
+    private IEnumerable<(Guid Id, string Display)> InstrumentChoices =>
+        Instruments.Select(i => (i.InstrumentId, $"{i.Code} — {i.Name.Fr}"));
+
+    private IEnumerable<(Guid Id, string Display)> ParameterChoices =>
+        Parameters.Select(p => (p.TestParameterId, $"{p.AnalysisCode} · {p.ParameterCode} — {p.ParameterName.Fr}"
+                                                   + (p.UnitSymbol is { Length: > 0 } unit ? $" ({unit})" : string.Empty)));
+
+    private static string Display(IEnumerable<(Guid Id, string Display)> choices, Guid? id) =>
+        choices.Where(c => c.Id == id).Select(c => c.Display).FirstOrDefault() ?? "—";
+
+    private static Guid? IdOf(ChangeEventArgs e) => Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing, Texts.Culture);
+
+        // The lists offer no « none »: a new target stands on the material chosen, else on the first of each list.
+        _form.MaterialId ??= Material is { } chosen && Materials.Any(m => m.QcMaterialId == chosen) ? chosen : Materials.FirstOrDefault()?.QcMaterialId;
+        _form.InstrumentId ??= Instruments.FirstOrDefault()?.InstrumentId;
+        _form.ParameterId ??= Parameters.FirstOrDefault()?.TestParameterId;
+    }
+
+    private void Picked(WestgardRule rules)
+    {
+        _form.Rules = rules;
+        _picking = false;
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.QcTargetId));
+    }
+}

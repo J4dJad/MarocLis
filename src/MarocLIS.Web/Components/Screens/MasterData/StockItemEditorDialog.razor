@@ -1,0 +1,240 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Inventory
+@inject WebTexts Texts
+
+@*
+    A stock article, the workstation's StockItemEditorDialog: what it is, where it comes from, the
+    levels that raise the reorder alert, and what a result costs in tests for the theoretical
+    consumption. The reorder point the consumption calls for is shown beside the one typed, and put
+    in its box on request. A reorder point below the safety stock is refused here as in the service:
+    the alert would fire after the laboratory is already below the level it meant to hold. The
+    fields, the checks and the request are MasterDataEditorRules'; the consumption settings are
+    validated by the domain.
+*@
+<Modal Name="stock-item-editor" Title="@Title" Hint="@Texts["AdminDialog.StockItemEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono" dir="ltr" data-field="code" maxlength="@MasterDataEditorRules.StockCodeMaxLength" @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Field.Name"]</span>
+                <select class="input" data-field="kind" @bind="_form.Kind">
+                    @foreach (var kind in Enum.GetValues<StockItemKind>())
+                    {
+                        <option value="@kind">@Texts[$"StockItemKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Unit"]</span>
+                <input class="input" data-field="unit" maxlength="@MasterDataEditorRules.UnitMaxLength" @bind="_form.Unit" />
+                <FieldMessage Refusal="_refusal" Field="unit" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.TestsPerPack"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.TestsPerPackMax" data-field="testsperpack" @bind="_form.TestsPerPack" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Sample.Storage"]</span>
+                <select class="input" data-field="storage" @bind="_form.Storage">
+                    @foreach (var storage in Enum.GetValues<StorageCondition>())
+                    {
+                        <option value="@storage">@Texts[$"StorageCondition.{storage}"]</option>
+                    }
+                </select>
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Manufacturer"]</span>
+                <input class="input" data-field="manufacturer" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Manufacturer" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                <select class="input" data-field="supplier" @onchange="SupplierChanged">
+                    <option value="" selected="@(_form.SupplierId is null)">—</option>
+                    @foreach (var supplier in Suppliers)
+                    {
+                        <option value="@supplier.SupplierId" selected="@(supplier.SupplierId == _form.SupplierId)">@supplier.Code — @supplier.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.SupplierReference"]</span>
+                <input class="input" dir="ltr" data-field="reference" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.SupplierReference" />
+            </label>
+
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Inventory.UsedByAnalyses"]</span>
+                <input class="input mono" dir="ltr" data-field="analyses" maxlength="@MasterDataEditorRules.AnalysesMaxLength" @bind="_form.UsedByAnalyses" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.DefaultLocation"]</span>
+                <input class="input" data-field="location" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.Location" />
+            </label>
+        </div>
+
+        <fieldset class="subcard form-grid form-grid-4" data-card="levels">
+            <legend class="section-title accent">@Texts["Inventory.ReorderNotice"]</legend>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.MinimumStock"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="minimum" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Minimum" />
+                <FieldMessage Refusal="_refusal" Field="minimum" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.ReorderPoint"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="reorder" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Reorder" />
+                <FieldMessage Refusal="_refusal" Field="reorder" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.ReorderQuantity"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="reorderquantity" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.ReorderQuantity" />
+                <FieldMessage Refusal="_refusal" Field="reorderquantity" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.MaximumStock"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="maximum" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Maximum" />
+                <FieldMessage Refusal="_refusal" Field="maximum" />
+            </label>
+
+            <label class="field-check strong"><input type="checkbox" data-field="critical" @bind="_form.Critical" /><span>@Texts["Inventory.IsCritical"]</span></label>
+            <p class="field-span-3 small muted field-align-end">@Texts["Inventory.CriticalNotice"]</p>
+
+            <label class="field-check field-align-end"><input type="checkbox" data-field="hazardous" @bind="_form.Hazardous" /><span>@Texts["Inventory.IsHazardous"]</span></label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.HazardClass"]</span>
+                <input class="input" dir="ltr" data-field="hazardclass" disabled="@(!MasterDataEditorRules.HazardClassEnabled(_form))"
+                       maxlength="@MasterDataEditorRules.HazardClassMaxLength" @bind="_form.HazardClass" />
+            </label>
+            <label class="field-check strong field-span-2 field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Gtin"]</span>
+                <input class="input mono" dir="ltr" inputmode="numeric" data-field="gtin" maxlength="@MasterDataEditorRules.GtinMaxLength" @bind="_form.Gtin" />
+            </label>
+            <label class="field-check field-align-end"><input type="checkbox" data-field="cemarked" @bind="_form.CeMarked" /><span>@Texts["Inventory.IsCeMarked"]</span></label>
+            <p class="field-span-2 small muted field-align-end">@Texts["Inventory.GtinNotice"]</p>
+        </fieldset>
+
+        <fieldset class="subcard form-grid form-grid-4" data-card="consumption">
+            <legend class="section-title accent">@Texts["Inventory.ConsumptionNotice"]</legend>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.TestsPerResult"]</span>
+                <input class="input mono" dir="ltr" data-field="testsperresult" maxlength="@MasterDataEditorRules.TestsPerResultMaxLength" @bind="_form.TestsPerResult" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.DeadVolumePercent"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="deadpercent" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.DeadVolumePercent" />
+                <FieldMessage Refusal="_refusal" Field="deadpercent" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.DeadVolumeTests"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="deadtests" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.DeadVolumeTests" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.TestsPerCalibration"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.TestsPerCalibrationMax" data-field="calibrationtests" @bind="_form.TestsPerCalibration" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.SafetyStockDays"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.SafetyDaysMax" data-field="safetydays" @bind="_form.SafetyStockDays" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.ShelfLifeDays"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.IntervalMaxDays" data-field="shelflife" @bind="_form.ShelfLifeDays" />
+            </label>
+            <label class="field-check strong field-align-end"><input type="checkbox" data-field="computed" @bind="_form.ReorderPointComputed" /><span>@Texts["Inventory.ReorderPointComputed"]</span></label>
+
+            <p class="field-span-3 small @(Proposal is null ? "muted" : "accent")" data-state="proposal">@ProposalText</p>
+            <span class="field-align-end">
+                <ActionButton Key="Inventory.ApplyReorderProposal" Disabled="@(Proposal is null)" OnClick="ApplyProposal" />
+            </span>
+        </fieldset>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+        else if (_invalid is { Length: > 0 } invalid)
+        {
+            <p class="message is-warning" role="alert" data-state="policy">@invalid</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The article edited; null for a new one.</summary>
+    [Parameter] public StockItemMasterRow? Existing { get; set; }
+
+    [Parameter] public IReadOnlyList<SupplierRow> Suppliers { get; set; } = [];
+
+    /// <summary>The reorder point the consumption calls for, when there is enough of it to say.</summary>
+    [Parameter] public ReorderPointProposal? Proposal { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<StockItemRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private StockItemForm _form = new();
+    private FieldRefusal? _refusal;
+    private string? _invalid;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Inventory.NewItem"] : $"{Texts["Action.Edit"]} — {Existing.Code}";
+
+    private string N(decimal value) => value.ToString("0.###", Texts.Culture);
+
+    private string ProposalText => Proposal is { Suggestion: var s } proposal
+        ? Texts.T("Inventory.ReorderProposal", N(s.ReorderPoint), N(s.AverageDailyConsumption), s.LeadTimeDays, N(s.SafetyStock),
+                  proposal.WindowDays, Texts[s.FromTheoretical ? "Inventory.FromTheoretical" : "Inventory.FromIssues"])
+        : Texts["Inventory.NoReorderProposal"];
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing, Texts.Culture);
+    }
+
+    private void SupplierChanged(ChangeEventArgs e) =>
+        _form.SupplierId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void ApplyProposal()
+    {
+        if (Proposal is { Suggestion: var s }) _form.Reorder = N(s.ReorderPoint);
+    }
+
+    private Task SaveAsync()
+    {
+        _invalid = null;
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        if (MasterDataEditorRules.Policy(_form).Validate() is { IsFailure: true } invalid)
+        {
+            _invalid = Texts.Describe(invalid.Errors);
+            return Task.CompletedTask;
+        }
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.StockItemId));
+    }
+}

@@ -1,0 +1,177 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Equipment
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    Entering an instrument, or editing one, the workstation's InstrumentEditorDialog: who it is,
+    who services it, and the intervals that matter — the calibration interval of an analyser is what
+    stops it producing patient results while its calibration is lapsed, so the dialog says it is
+    required while the kind is chosen. The dialog opens on the whole stored instrument and saves on
+    it, so what it does not show is kept. The fields, the checks and the request are
+    MasterDataEditorRules'.
+*@
+<Modal Name="instrument-editor" Title="@Title" Hint="@Texts["AdminDialog.InstrumentEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono" dir="ltr" data-field="code" maxlength="@MasterDataEditorRules.CodeMaxLength" @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameFr"]</span>
+                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="namefr" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.NameAr"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameAr" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Kind"]</span>
+                <select class="input" data-field="kind" @bind="_form.Kind">
+                    @foreach (var kind in Enum.GetValues<EquipmentKind>())
+                    {
+                        <option value="@kind">@Texts[$"EquipmentKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Location"]</span>
+                <input class="input" data-field="location" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Location" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.SerialNumber"]</span>
+                <input class="input mono" dir="ltr" data-field="serial" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.SerialNumber" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Manufacturer"]</span>
+                <input class="input" data-field="manufacturer" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Manufacturer" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Model"]</span>
+                <input class="input" data-field="model" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Model" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.SoftwareVersion"]</span>
+                <input class="input" dir="ltr" data-field="software" maxlength="@MasterDataEditorRules.SoftwareMaxLength" @bind="_form.SoftwareVersion" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                <select class="input" data-field="supplier" @onchange="SupplierChanged">
+                    <option value="" selected="@(_form.SupplierId is null)">—</option>
+                    @foreach (var supplier in Suppliers)
+                    {
+                        <option value="@supplier.SupplierId" selected="@(supplier.SupplierId == _form.SupplierId)">@supplier.Code — @supplier.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Contract"]</span>
+                <input class="input" dir="ltr" data-field="contract" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.Contract" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.SupportPhone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="support" maxlength="@MasterDataEditorRules.PhoneMaxLength" @bind="_form.SupportPhone" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.ContractValidUntil"]</span>
+                <input class="input" type="date" data-field="contractuntil" @bind="_form.ContractValidUntil" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.Commissioning"]</span>
+                <input class="input" type="date" data-field="commissioning" max="@Max" @bind="_form.CommissioningDate" @bind:format="yyyy-MM-dd" />
+            </label>
+        </div>
+
+        <fieldset class="subcard form-grid form-grid-3" data-card="intervals">
+            <legend class="section-title accent">@Texts["Equipment.Intervals"]</legend>
+            @if (MasterDataEditorRules.NeedsCalibrationInterval(_form.Kind))
+            {
+                <p class="field-span-4 small abnormal" data-state="calibration-notice">@Texts["Equipment.CalibrationIntervalNotice"]</p>
+            }
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.MaintenanceInterval"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.IntervalMaxDays" data-field="maintenance" @bind="_form.MaintenanceIntervalDays" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.CalibrationInterval"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.IntervalMaxDays" data-field="calibration" @bind="_form.CalibrationIntervalDays" />
+                <FieldMessage Refusal="_refusal" Field="calibration" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.VerificationInterval"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.IntervalMaxDays" data-field="verification" @bind="_form.VerificationIntervalDays" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.LastMaintenance"]</span>
+                <input class="input" type="date" data-field="lastmaintenance" max="@Max" @bind="_form.LastMaintenanceOn" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.LastCalibration"]</span>
+                <input class="input" type="date" data-field="lastcalibration" max="@Max" @bind="_form.LastCalibrationOn" @bind:format="yyyy-MM-dd" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Equipment.LastVerification"]</span>
+                <input class="input" type="date" data-field="lastverification" max="@Max" @bind="_form.LastVerificationOn" @bind:format="yyyy-MM-dd" />
+            </label>
+            <p class="field-span-4 small muted">@Texts["Equipment.LastDatesNotice"]</p>
+        </fieldset>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The instrument edited, as the grid shows it; null for a new one.</summary>
+    [Parameter] public InstrumentMasterRow? Existing { get; set; }
+
+    /// <summary>The whole stored instrument when editing: the fields the grid row lacks are read from it, and the request is built on it.</summary>
+    [Parameter] public InstrumentRequest? Stored { get; set; }
+
+    [Parameter] public IReadOnlyList<SupplierRow> Suppliers { get; set; } = [];
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<InstrumentRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private InstrumentForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Equipment.NewInstrument"] : $"{Texts["Action.Edit"]} — {Existing.Code}";
+
+    /// <summary>A date that has happened is not after today.</summary>
+    private string Max => Clock.Today.ToString("yyyy-MM-dd");
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing, Stored);
+    }
+
+    private void SupplierChanged(ChangeEventArgs e) =>
+        _form.SupplierId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.InstrumentId, Existing is null ? null : Stored));
+    }
+}

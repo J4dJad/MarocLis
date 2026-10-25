@@ -1,0 +1,708 @@
+@using System.Globalization
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Inventory
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<MasterDataScreen> Logger
+
+@*
+    « Données de référence », the workstation's MasterDataView: the analysers, the control
+    materials and their targets, the stock articles, the suppliers, the prescribers and the payers
+    — the records the other screens are useless without. Every tab is shown; each is kept by its
+    own right (MasterDataScreenRules.ManageRight) and its buttons are turned off for whoever lacks
+    it, as the service refuses them in any case. The bar says which screens the reference data
+    still leaves unusable. Control targets follow the material chosen at the start of the tab.
+    What is shown and checked is MasterDataScreenRules' and MasterDataEditorRules'; what is done,
+    MasterDataService's, which records each change in the audit trail.
+*@
+<div class="screen masterdata" data-screen="masterdata">
+    <div class="tabs" role="tablist">
+        @foreach (var tab in Enum.GetValues<MasterDataTab>())
+        {
+            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                    data-tab="@tab" @onclick="() => SelectTab(tab)">@TabCaption(tab)</button>
+        }
+    </div>
+
+    @switch (_tab)
+    {
+        case MasterDataTab.QualityControl:
+            <div class="screen-body split split-list-wide">
+                <aside class="card list-pane" data-card="materials">
+                    @ListTools(Texts["Nav.QualityControl"], _materials.Count)
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="materials">
+                            <tbody>
+                                @foreach (var row in _materials)
+                                {
+                                    <tr class="@(row.QcMaterialId == SelectedMaterial?.QcMaterialId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.LotNumber" @onclick="() => SelectMaterialAsync(row)" @ondblclick="() => Edit(Dialog.Material, row)">
+                                        <td>
+                                            <span class="cell-name"><span class="mono">@row.LotNumber</span> · @row.Name.For(Texts.Language)</span>
+                                            <span class="cell-sub">@Texts[$"QcLevel.{row.Level}"] · @Texts["Inventory.Expiry"] @row.ExpiryDate.ToString("dd/MM/yy", CultureInfo.InvariantCulture) (@row.DaysToExpiry) · @(row.Manufacturer ?? "—")</span>
+                                            <span class="cell-sub strong">@Texts[MasterDataScreenRules.StateKey(row)] · @Texts["Quality.QcTargets"] @row.TargetCount</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </aside>
+
+                <section class="card card-flush" data-card="targets">
+                    <h2 class="card-title card-pad">@Texts["Quality.QcTargets"]@(SelectedMaterial is { } material ? $" — {material.LotNumber}" : null) — @_targets.Count</h2>
+                    <p class="message is-info small card-pad">@Texts["Quality.TargetNotice"]</p>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="targets">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Quality.QcLot"]</th>
+                                    <th>@Texts["Quality.QcLevel"]</th>
+                                    <th>@Texts["Result.Parameter"]</th>
+                                    <th>@Texts["Result.Instrument"]</th>
+                                    <th class="num">@Texts["Quality.AssignedLimits"]</th>
+                                    <th class="num">@Texts["Quality.LaboratoryLimits"]</th>
+                                    <th class="num">@Texts["Quality.PointCount"]</th>
+                                    <th class="num">@Texts["Quality.Rules"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _targets)
+                                {
+                                    <tr class="@(row.QcTargetId == SelectedTarget?.QcTargetId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.ParameterCode" @onclick="() => _targetId = row.QcTargetId" @ondblclick="() => EditTargetAsync(row)">
+                                        <td class="mono">@row.MaterialLotNumber</td>
+                                        <td class="small">@Texts[$"QcLevel.{row.Level}"]</td>
+                                        <td><span class="mono strong">@row.ParameterCode</span> — @row.ParameterName.For(Texts.Language)</td>
+                                        <td class="mono">@row.InstrumentCode</td>
+                                        <td class="num mono" dir="ltr">@MasterDataScreenRules.Limits(row.AssignedMean, row.AssignedSd, Texts.Culture)</td>
+                                        <td class="num mono" dir="ltr">@MasterDataScreenRules.Limits(row.LaboratoryMean, row.LaboratorySd, Texts.Culture)</td>
+                                        <td class="num mono">@row.LaboratoryPointCount</td>
+                                        <td class="num mono">@MasterDataScreenRules.CountRules(row.ActiveRules)</td>
+                                        <td class="small strong">@Texts[MasterDataScreenRules.StateKey(row)]</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+
+        case MasterDataTab.Stock:
+            <div class="screen-body">
+                <section class="card card-flush" data-card="stock">
+                    @ListTools(Texts["Inventory.Items"], _stock.Count)
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="stock">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Code"]</th>
+                                    <th>@Texts["Inventory.Item"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Field.Unit"]</th>
+                                    <th class="num">@Texts["Inventory.ReorderPoint"]</th>
+                                    <th class="num">@Texts["Inventory.MinimumStock"]</th>
+                                    <th>@Texts["Sample.Storage"]</th>
+                                    <th>@Texts["Inventory.Supplier"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _stock)
+                                {
+                                    <tr class="@(row.StockItemId == SelectedStock?.StockItemId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.Code" @onclick="() => _stockId = row.StockItemId" @ondblclick="() => EditStockAsync(row)">
+                                        <td class="mono strong">@row.Code</td>
+                                        <td>@row.Name.For(Texts.Language)</td>
+                                        <td class="small">@Texts[$"StockItemKind.{row.Kind}"]</td>
+                                        <td class="mono">@row.UnitOfMeasure</td>
+                                        <td class="num mono">@row.ReorderPoint.ToString("N2", Texts.Culture)</td>
+                                        <td class="num mono">@row.MinimumStock.ToString("N2", Texts.Culture)</td>
+                                        <td class="small">@Texts[$"StorageCondition.{row.StorageCondition}"]</td>
+                                        <td class="small">@row.SupplierName</td>
+                                        <td>@MasterDataScreenRules.Flags(row)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+
+        case MasterDataTab.Suppliers:
+            <div class="screen-body">
+                <section class="card card-flush" data-card="suppliers">
+                    @ListTools(Texts["Nav.Suppliers"], _suppliers.Count)
+                    <p class="message is-info small card-pad">@Texts["Inventory.SupplierEvaluationNotice"]</p>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="suppliers">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Code"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Site.Ice"]</th>
+                                    <th>@Texts["Inventory.SupplierContact"]</th>
+                                    <th>@Texts["Site.Phone"]</th>
+                                    <th class="num">@Texts["Inventory.LeadTime"]</th>
+                                    <th>@Texts["Inventory.Approved"]</th>
+                                    <th>@Texts["Inventory.LastEvaluation"]</th>
+                                    <th class="num">@Texts["Inventory.Items"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _suppliers)
+                                {
+                                    <tr class="@(row.SupplierId == SelectedSupplier?.SupplierId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.Code" @onclick="() => _supplierId = row.SupplierId" @ondblclick="() => Edit(Dialog.Supplier, row)">
+                                        <td class="mono strong">@row.Code</td>
+                                        <td>@row.Name</td>
+                                        <td class="mono small">@row.Ice</td>
+                                        <td class="small">@row.ContactName</td>
+                                        <td class="mono small" dir="ltr">@row.Phone</td>
+                                        <td class="num small">@Texts.T("Stock.Days", row.LeadTimeDays)</td>
+                                        <td class="small">@(row.IsApproved ? Texts["Inventory.Approved"] : null)</td>
+                                        <td class="mono small">@MasterDataScreenRules.Evaluation(row)</td>
+                                        <td class="num mono">@row.StockItemCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+
+        case MasterDataTab.Prescribers:
+            <div class="screen-body">
+                <section class="card card-flush" data-card="prescribers">
+                    <div class="list-tools card-pad">
+                        <div class="search-box">
+                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+                            <input class="input" type="search" placeholder="@Texts["App.SearchPlaceholder"]" aria-label="@Texts["App.SearchPlaceholder"]"
+                                   data-field="prescriber-search" autocomplete="off" @bind="_prescriberSearch" @onkeydown="PrescriberSearchKeyAsync" />
+                        </div>
+                        @ToolsEnd(Texts["Order.Prescribers"], _prescribers.Count)
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="prescribers">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Order.Prescriber"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Order.Speciality"]</th>
+                                    <th>@Texts["Admin.OrderNumber"]</th>
+                                    <th>@Texts["Site.Inpe"]</th>
+                                    <th>@Texts["Order.Institution"]</th>
+                                    <th>@Texts["Site.Phone"]</th>
+                                    <th>@Texts["Report.Delivery"]</th>
+                                    <th class="num">@Texts["Order.Plural"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _prescribers)
+                                {
+                                    <tr class="@(row.PrescriberId == SelectedPrescriber?.PrescriberId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.PrescriberId" @onclick="() => _prescriberId = row.PrescriberId" @ondblclick="() => EditPrescriberAsync(row)">
+                                        <td class="strong">@MasterDataScreenRules.Name(row, Texts.Language)</td>
+                                        <td class="small">@Texts[$"PrescriberKind.{row.Kind}"]</td>
+                                        <td class="small">@row.Speciality?.For(Texts.Language)</td>
+                                        <td class="mono small">@row.ProfessionalOrderNumber</td>
+                                        <td class="mono small">@row.Inpe</td>
+                                        <td class="small">@row.InstitutionName</td>
+                                        <td class="mono small" dir="ltr">@row.Phone</td>
+                                        <td class="small">@Texts[$"ReportDeliveryPreference.{row.DeliveryPreference}"]</td>
+                                        <td class="num mono">@row.OrderCount</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+
+        case MasterDataTab.Payers:
+            <div class="screen-body">
+                <section class="card card-flush" data-card="payers">
+                    @ListTools(Texts["Coverage.Payers"], _payers.Count)
+                    <p class="message is-info small card-pad">@Texts["Coverage.PayerTariffNotice"]</p>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="payers">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Code"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Coverage.PayerKind"]</th>
+                                    <th class="num">@Texts["Coverage.ReimbursementRate"]</th>
+                                    <th>@Texts["Coverage.ReferenceTariff"]</th>
+                                    <th>@Texts["Coverage.ThirdPartyPayment"]</th>
+                                    <th>@Texts["Coverage.AgreementNumber"]</th>
+                                    <th class="num">@Texts["Coverage.PaymentTerms"]</th>
+                                    <th class="num">@Texts["Patient.Plural"]</th>
+                                    <th class="num">@Texts["Billing.Outstanding"]</th>
+                                    <th>@Texts["Claim.Blockers"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _payers)
+                                {
+                                    <tr class="@(row.PayerId == SelectedPayer?.PayerId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.Code" @onclick="() => _payerId = row.PayerId" @ondblclick="() => Edit(Dialog.Payer, row)">
+                                        <td class="mono strong">@row.Code</td>
+                                        <td>@row.Name.For(Texts.Language)</td>
+                                        <td class="small">@Texts[$"PayerKind.{row.Kind}"]</td>
+                                        @* The percentage, the unit a convention is written in; the stored value is the fraction the pricing needs. *@
+                                        <td class="num mono">@MasterDataScreenRules.Rate(row, Texts.Culture)</td>
+                                        <td class="small">@(row.UsesNationalReferenceTariff ? Texts["Coverage.Tnr"] : null)</td>
+                                        <td class="small">@(row.ThirdPartyPaymentAgreement ? Texts["Action.Yes"] : null)</td>
+                                        <td class="mono small">@row.AgreementNumber</td>
+                                        <td class="num small">@Texts.T("Stock.Days", row.PaymentTermsDays)</td>
+                                        <td class="num mono">@row.CoveredPatientCount</td>
+                                        <td class="num mono">@row.OpenInvoiceCount</td>
+                                        <td class="small strong">@MasterDataScreenRules.Problems(row, Texts.T)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+
+        default:
+            <div class="screen-body">
+                <section class="card card-flush" data-card="instruments">
+                    @ListTools(Texts["Nav.Instruments"], _instruments.Count)
+                    <p class="message is-info small card-pad">@Texts["Equipment.IntervalNotice"]</p>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="instruments">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Code"]</th>
+                                    <th>@Texts["Field.Name"]</th>
+                                    <th>@Texts["Equipment.Kind"]</th>
+                                    <th>@Texts["Field.Status"]</th>
+                                    <th>@Texts["Equipment.SerialNumber"]</th>
+                                    <th>@Texts["Equipment.Location"]</th>
+                                    <th class="num">@Texts["Equipment.MaintenanceInterval"]</th>
+                                    <th class="num">@Texts["Equipment.CalibrationInterval"]</th>
+                                    <th class="num">@Texts["Quality.QcTargets"]</th>
+                                    <th>@Texts["Nav.Instruments"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _instruments)
+                                {
+                                    <tr class="@(row.InstrumentId == SelectedInstrument?.InstrumentId ? "is-selected" : null) @RowTones.Class(MasterDataScreenRules.Tone(row))"
+                                        data-row="@row.Code" @onclick="() => _instrumentId = row.InstrumentId" @ondblclick="() => EditInstrumentAsync(row)">
+                                        <td class="mono strong">@row.Code</td>
+                                        <td>@row.Name.For(Texts.Language)</td>
+                                        <td class="small">@Texts[$"EquipmentKind.{row.Kind}"]</td>
+                                        <td class="small">@Texts[$"EquipmentStatus.{row.Status}"]</td>
+                                        <td class="mono small">@row.SerialNumber</td>
+                                        <td class="small">@row.Location</td>
+                                        <td class="num small">@MasterDataScreenRules.Interval(row.PreventiveMaintenanceIntervalDays, Texts.T)</td>
+                                        <td class="num small">@MasterDataScreenRules.Interval(row.CalibrationIntervalDays, Texts.T)</td>
+                                        <td class="num mono">@row.QcTargetCount</td>
+                                        <td>@(row.HasInterfaceConfigured ? "✓" : null)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+            break;
+    }
+
+    @{ var manage = CanManage; }
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            @switch (_tab)
+            {
+                case MasterDataTab.QualityControl:
+                    <ActionButton Key="Quality.NewQcMaterial" Disabled="@(!manage || _busy)" OnClick="() => Edit(Dialog.Material, null)" />
+                    <ActionButton Key="Action.Edit" Class="edit-material" Text="@($"{Texts["Action.Edit"]} · {Texts["Quality.QcMaterial"]}")"
+                                  Disabled="@(!manage || SelectedMaterial is null || _busy)" OnClick="() => Edit(Dialog.Material, SelectedMaterial)" />
+                    <ActionButton Key="Action.Edit" Class="edit-target" Text="@($"{Texts["Action.Edit"]} · {Texts["Quality.QcTargets"]}")"
+                                  Disabled="@(!manage || SelectedTarget is null || _busy)" OnClick="() => EditTargetAsync(SelectedTarget)" />
+                    break;
+
+                default:
+                    <ActionButton Key="Action.Edit" Disabled="@(!manage || !HasSelection || _busy)" OnClick="EditSelectedAsync" />
+                    break;
+            }
+        </Secondary>
+        <Primary>
+            <ActionButton Key="@NewKey" Primary="true" Disabled="@(!manage || _busy)" OnClick="CreateAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_dialog)
+{
+    case Dialog.Instrument:
+        <InstrumentEditorDialog Existing="@(_editing as InstrumentMasterRow)" Stored="_storedInstrument" Suppliers="_suppliers"
+                                Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SaveInstrumentAsync(r), r.Code)" OnCancel="Close" />
+        break;
+
+    case Dialog.Material:
+        <QcMaterialEditorDialog Existing="@(_editing as QcMaterialRow)" Today="Clock.Today"
+                                Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SaveQcMaterialAsync(r), r.LotNumber)" OnCancel="Close" />
+        break;
+
+    case Dialog.Target:
+        <QcTargetEditorDialog Existing="@(_editing as QcTargetRow)" Materials="_materials" Instruments="_instruments" Parameters="_parameters"
+                              Material="SelectedMaterial?.QcMaterialId"
+                              Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SaveQcTargetAsync(r), null)" OnCancel="Close" />
+        break;
+
+    case Dialog.Stock:
+        <StockItemEditorDialog Existing="@(_editing as StockItemMasterRow)" Suppliers="_suppliers" Proposal="_proposal"
+                               Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SaveStockItemAsync(r), r.Code)" OnCancel="Close" />
+        break;
+
+    case Dialog.Supplier:
+        <SupplierEditorDialog Existing="@(_editing as SupplierRow)" Today="Clock.Today"
+                              Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SaveSupplierAsync(r), r.Code)" OnCancel="Close" />
+        break;
+
+    case Dialog.Prescriber:
+        <PrescriberEditorDialog Existing="@(_editing as PrescriberRow)" Stored="_storedPrescriber"
+                                Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SavePrescriberAsync(r), r.LastName)" OnCancel="Close" />
+        break;
+
+    case Dialog.Payer:
+        <PayerEditorDialog Existing="@(_editing as PayerRow)"
+                           Refusal="@_refusal" OnSave="r => SaveAsync(s => s.SavePayerAsync(r), r.Code)" OnCancel="Close" />
+        break;
+}
+
+@code {
+    private enum Dialog { None, Instrument, Material, Target, Stock, Supplier, Prescriber, Payer }
+
+    private MasterDataTab _tab = MasterDataTab.Instruments;
+    private bool _includeInactive;
+    private string _prescriberSearch = string.Empty;
+
+    private IReadOnlyList<InstrumentMasterRow> _instruments = [];
+    private IReadOnlyList<QcMaterialRow> _materials = [];
+    private IReadOnlyList<QcTargetRow> _targets = [];
+    private IReadOnlyList<StockItemMasterRow> _stock = [];
+    private IReadOnlyList<SupplierRow> _suppliers = [];
+    private IReadOnlyList<PrescriberRow> _prescribers = [];
+    private IReadOnlyList<PayerRow> _payers = [];
+    private IReadOnlyList<ParameterOption> _parameters = [];
+
+    private Guid? _instrumentId, _materialId, _targetId, _stockId, _supplierId, _prescriberId, _payerId;
+
+    private Dialog _dialog;
+    private object? _editing;
+    private InstrumentRequest? _storedInstrument;
+    private PrescriberRequest? _storedPrescriber;
+    private ReorderPointProposal? _proposal;
+    private string? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private InstrumentMasterRow? SelectedInstrument => _instruments.FirstOrDefault(r => r.InstrumentId == _instrumentId) ?? _instruments.FirstOrDefault();
+    private QcMaterialRow? SelectedMaterial => _materials.FirstOrDefault(r => r.QcMaterialId == _materialId) ?? _materials.FirstOrDefault();
+    private QcTargetRow? SelectedTarget => _targets.FirstOrDefault(r => r.QcTargetId == _targetId) ?? _targets.FirstOrDefault();
+    private StockItemMasterRow? SelectedStock => _stock.FirstOrDefault(r => r.StockItemId == _stockId) ?? _stock.FirstOrDefault();
+    private SupplierRow? SelectedSupplier => _suppliers.FirstOrDefault(r => r.SupplierId == _supplierId) ?? _suppliers.FirstOrDefault();
+    private PrescriberRow? SelectedPrescriber => _prescribers.FirstOrDefault(r => r.PrescriberId == _prescriberId) ?? _prescribers.FirstOrDefault();
+    private PayerRow? SelectedPayer => _payers.FirstOrDefault(r => r.PayerId == _payerId) ?? _payers.FirstOrDefault();
+
+    /// <summary>Whether the tab's own right is held: its buttons are turned off otherwise.</summary>
+    private bool CanManage => MasterDataScreenRules.CanManage(Context.User, _tab);
+
+    private bool HasSelection => _tab switch
+    {
+        MasterDataTab.Stock => SelectedStock is not null,
+        MasterDataTab.Suppliers => SelectedSupplier is not null,
+        MasterDataTab.Prescribers => SelectedPrescriber is not null,
+        MasterDataTab.Payers => SelectedPayer is not null,
+        _ => SelectedInstrument is not null
+    };
+
+    private string NewKey => _tab switch
+    {
+        MasterDataTab.QualityControl => "Quality.NewQcTarget",
+        MasterDataTab.Stock => "Inventory.NewItem",
+        MasterDataTab.Suppliers => "Inventory.NewSupplier",
+        MasterDataTab.Prescribers => "Order.NewPrescriber",
+        MasterDataTab.Payers => "Coverage.NewPayer",
+        _ => "Equipment.NewInstrument"
+    };
+
+    private string TabCaption(MasterDataTab tab) => tab switch
+    {
+        MasterDataTab.QualityControl => Texts["Nav.QualityControl"],
+        MasterDataTab.Stock => Texts["Inventory.Items"],
+        MasterDataTab.Suppliers => Texts["Nav.Suppliers"],
+        MasterDataTab.Prescribers => Texts["Order.Prescribers"],
+        MasterDataTab.Payers => Texts["Coverage.Payers"],
+        _ => Texts["Nav.Instruments"]
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private void SelectTab(MasterDataTab tab) => _tab = tab;
+
+    /// <summary>The list tools of a tab: its title and count, the tick box for switched-off entries, refresh.</summary>
+    private RenderFragment ListTools(string caption, int count) => @<div class="list-tools card-pad">@ToolsEnd(caption, count)</div>;
+
+    private RenderFragment ToolsEnd(string caption, int count) => @<span class="list-tools-end">
+        <span class="muted small" data-state="count">@caption — @count</span>
+        <label class="field-check small">
+            <input type="checkbox" data-field="include-inactive" checked="@_includeInactive" @onchange="IncludeInactiveChangedAsync" />
+            <span>@Texts["Catalog.IncludeInactive"]</span>
+        </label>
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" OnClick="LoadAsync" />
+    </span>;
+
+    // ---- Loading -----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Every list, then the targets of the material chosen, then what is still unusable. A list the
+    /// operator may not read stays empty without a message: a reception supervisor holding
+    /// Equipment.View but not Billing.View has legitimate business on the other tabs.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var inactive = _includeInactive;
+            _instruments = await ReadAsync(s => s.GetInstrumentsAsync(inactive)) ?? _instruments;
+            _materials = await ReadAsync(s => s.GetQcMaterialsAsync(inactive)) ?? _materials;
+            _stock = await ReadAsync(s => s.GetStockItemsAsync(inactive)) ?? _stock;
+            _suppliers = await ReadAsync(s => s.GetSuppliersAsync(inactive)) ?? _suppliers;
+            _payers = await ReadAsync(s => s.GetPayersAsync(inactive)) ?? _payers;
+            _parameters = await ReadAsync(s => s.GetParametersAsync()) ?? _parameters;
+            await LoadPrescribersAsync();
+            await LoadTargetsAsync();
+
+            ShowCompleteness();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the reference data failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task<T?> ReadAsync<T>(Func<MasterDataService, Task<Result<T>>> read) where T : class
+    {
+        var result = await Scopes.RunAsync<MasterDataService, Result<T>>(read);
+        return result.IsSuccess ? result.Value : null;
+    }
+
+    private async Task LoadPrescribersAsync()
+    {
+        var search = string.IsNullOrWhiteSpace(_prescriberSearch) ? null : _prescriberSearch.Trim();
+        var inactive = _includeInactive;
+        _prescribers = await ReadAsync(s => s.GetPrescribersAsync(search, inactive)) ?? _prescribers;
+    }
+
+    private async Task LoadTargetsAsync()
+    {
+        var material = SelectedMaterial?.QcMaterialId;
+        _targets = await ReadAsync(s => s.GetQcTargetsAsync(material)) ?? _targets;
+    }
+
+    /// <summary>Which screens are still unusable: not obvious from six lists, and what an installation needs to know.</summary>
+    private void ShowCompleteness()
+    {
+        var blockers = MasterDataScreenRules.Blockers(_instruments.Count, _materials.Count, _targets.Count,
+                                                      _stock.Count, _prescribers.Count, _payers);
+        _status = (MasterDataScreenRules.Completeness(blockers, Texts.T), blockers.Count == 0 ? "normal" : "warning");
+    }
+
+    private async Task IncludeInactiveChangedAsync(ChangeEventArgs e)
+    {
+        _includeInactive = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task PrescriberSearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadPrescribersAsync();
+    }
+
+    private async Task SelectMaterialAsync(QcMaterialRow row)
+    {
+        if (row.QcMaterialId == SelectedMaterial?.QcMaterialId) return;
+        _materialId = row.QcMaterialId;
+        _targetId = null;
+        await LoadTargetsAsync();
+    }
+
+    // ---- Editors -----------------------------------------------------------------------------------
+
+    private Task CreateAsync() => _tab switch
+    {
+        MasterDataTab.QualityControl => EditTargetAsync(null),
+        MasterDataTab.Stock => EditStockAsync(null),
+        MasterDataTab.Suppliers => Done(() => Edit(Dialog.Supplier, null)),
+        MasterDataTab.Prescribers => EditPrescriberAsync(null),
+        MasterDataTab.Payers => Done(() => Edit(Dialog.Payer, null)),
+        _ => EditInstrumentAsync(null)
+    };
+
+    private Task EditSelectedAsync() => _tab switch
+    {
+        MasterDataTab.Stock => SelectedStock is { } stock ? EditStockAsync(stock) : Task.CompletedTask,
+        MasterDataTab.Suppliers => Done(() => Edit(Dialog.Supplier, SelectedSupplier)),
+        MasterDataTab.Prescribers => SelectedPrescriber is { } prescriber ? EditPrescriberAsync(prescriber) : Task.CompletedTask,
+        MasterDataTab.Payers => Done(() => Edit(Dialog.Payer, SelectedPayer)),
+        _ => SelectedInstrument is { } instrument ? EditInstrumentAsync(instrument) : Task.CompletedTask
+    };
+
+    private static Task Done(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>An editor opened on a row (or none, to create), when the tab's right is held.</summary>
+    private void Edit(Dialog dialog, object? row)
+    {
+        if (!CanManage || _busy) return;
+
+        _editing = row;
+        _refusal = null;
+        _dialog = dialog;
+    }
+
+    /// <summary>The whole stored instrument: the row has no software version, supplier, contract or commissioning date.</summary>
+    private async Task EditInstrumentAsync(InstrumentMasterRow? row)
+    {
+        if (!CanManage || _busy) return;
+
+        _storedInstrument = null;
+        if (row is not null)
+        {
+            var full = await Scopes.RunAsync<MasterDataService, Result<InstrumentRequest>>(s => s.GetInstrumentForEditAsync(row.InstrumentId));
+            if (full.IsFailure)
+            {
+                _status = (Texts.Describe(full.Errors), "critical");
+                return;
+            }
+
+            _storedInstrument = full.Value;
+        }
+
+        Edit(Dialog.Instrument, row);
+    }
+
+    /// <summary>A target needs a material, an instrument and a parameter to be defined against: said before the editor opens.</summary>
+    private Task EditTargetAsync(QcTargetRow? row)
+    {
+        if (!CanManage || _busy) return Task.CompletedTask;
+
+        if (MasterDataEditorRules.MissingPrerequisite(_materials.Count, _instruments.Count, _parameters.Count) is { } missing)
+        {
+            _status = (Texts[missing], "warning");
+            return Task.CompletedTask;
+        }
+
+        Edit(Dialog.Target, row);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The reorder point the consumption calls for, shown beside the one typed in.</summary>
+    private async Task EditStockAsync(StockItemMasterRow? row)
+    {
+        if (!CanManage || _busy) return;
+
+        _proposal = null;
+        if (row is not null)
+        {
+            var proposed = await Scopes.RunAsync<StockPlanningService, Result<ReorderPointProposal?>>(s => s.ProposeReorderPointAsync(row.StockItemId));
+            if (proposed.IsSuccess) _proposal = proposed.Value;
+        }
+
+        Edit(Dialog.Stock, row);
+    }
+
+    /// <summary>The whole stored prescriber: the row has one telephone and no ICE, fax, address, critical-result number or notes.</summary>
+    private async Task EditPrescriberAsync(PrescriberRow? row)
+    {
+        if (!CanManage || _busy) return;
+
+        _storedPrescriber = null;
+        if (row is not null)
+        {
+            var full = await Scopes.RunAsync<MasterDataService, Result<PrescriberRequest>>(s => s.GetPrescriberForEditAsync(row.PrescriberId));
+            if (full.IsFailure)
+            {
+                _status = (Texts.Describe(full.Errors), "critical");
+                return;
+            }
+
+            _storedPrescriber = full.Value;
+        }
+
+        Edit(Dialog.Prescriber, row);
+    }
+
+    private void Close()
+    {
+        _dialog = Dialog.None;
+        _editing = null;
+        _refusal = null;
+    }
+
+    /// <summary>
+    /// Saves through the service, which records the change in the audit trail; a refusal keeps the
+    /// editor open with what was typed. The record saved stays the current one after the reload.
+    /// </summary>
+    private async Task SaveAsync(Func<MasterDataService, Task<Result<Guid>>> save, string? code)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var saved = await Scopes.RunAsync<MasterDataService, Result<Guid>>(save);
+            if (saved.IsFailure)
+            {
+                _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            Keep(_dialog, saved.Value);
+            Close();
+            await LoadAsync();
+            _status = (code is { Length: > 0 } ? $"{code} — {Texts["Message.Saved"]}" : Texts["Message.Saved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the reference data failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Keep(Dialog dialog, Guid id)
+    {
+        switch (dialog)
+        {
+            case Dialog.Instrument: _instrumentId = id; break;
+            case Dialog.Material: _materialId = id; break;
+            case Dialog.Target: _targetId = id; break;
+            case Dialog.Stock: _stockId = id; break;
+            case Dialog.Supplier: _supplierId = id; break;
+            case Dialog.Prescriber: _prescriberId = id; break;
+            case Dialog.Payer: _payerId = id; break;
+        }
+    }
+}

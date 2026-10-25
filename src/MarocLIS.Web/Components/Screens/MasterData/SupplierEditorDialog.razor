@@ -1,0 +1,170 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Inventory
+@using MarocLIS.Domain.Morocco
+@inject WebTexts Texts
+
+@*
+    A supplier, the workstation's SupplierEditorDialog, with the ISO 15189 §4.6 evaluation its
+    approval has to rest on: an approval without an evaluation date is said before Save, and
+    refused, since the standard is about having assessed the supplier, not about having declared
+    them approved. A lapsed AMMPS registration is allowed but said. The payment terms cannot go
+    beyond what loi n° 69-21 allows. The fields, the checks and the request are
+    MasterDataEditorRules'.
+*@
+<Modal Name="supplier-editor" Title="@Title" Hint="@Texts["AdminDialog.SupplierEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-4">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono" dir="ltr" data-field="code" maxlength="@MasterDataEditorRules.CodeMaxLength" @bind="_form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="code" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Name"]</span>
+                <input class="input" data-field="name" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Name" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="name" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Ice"]</span>
+                <input class="input mono" dir="ltr" inputmode="numeric" data-field="ice" maxlength="@MasterDataEditorRules.IceMaxLength" @bind="_form.Ice" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Site.FiscalId"]</span>
+                <input class="input mono" dir="ltr" data-field="fiscalid" maxlength="@MasterDataEditorRules.FiscalIdMaxLength" @bind="_form.FiscalId" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.CommercialRegister"]</span>
+                <input class="input" dir="ltr" data-field="rc" maxlength="@MasterDataEditorRules.RegisterMaxLength" @bind="_form.CommercialRegister" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.SupplierContact"]</span>
+                <input class="input" data-field="contact" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Contact" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Site.Phone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="phone" maxlength="@MasterDataEditorRules.PhoneMaxLength" @bind="_form.Phone" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Email"]</span>
+                <input class="input" dir="ltr" type="email" data-field="email" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Email" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.City"]</span>
+                <input class="input" data-field="city" maxlength="@MasterDataEditorRules.CityMaxLength" @bind="_form.City" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.Region"]</span>
+                <select class="input" data-field="region" @bind="_form.Region">
+                    @foreach (var region in Enum.GetValues<MoroccanRegion>())
+                    {
+                        <option value="@region">@Texts[$"MoroccanRegion.{region}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-4">
+                <span class="field-label">@Texts["Patient.Address"]</span>
+                <input class="input" data-field="address" maxlength="@MasterDataEditorRules.AddressMaxLength" @bind="_form.Address" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.LeadTime"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.LeadTimeMax" data-field="leadtime" @bind="_form.LeadTimeDays" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Billing.PaymentTerms"]</span>
+                <input class="input mono num" type="number" min="0" max="@PaymentTerms.MaximumDays" data-field="terms" @bind="_form.PaymentTermsDays" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["SupplierInvoices.SupplierAccount"]</span>
+                <input class="input mono" dir="ltr" data-field="account" maxlength="@MasterDataEditorRules.FiscalIdMaxLength" @bind="_form.AccountingAccount" />
+            </label>
+            <p class="small muted field-align-end">@Texts["SupplierInvoices.PaymentTermsNotice"]</p>
+        </div>
+
+        <fieldset class="subcard form-grid form-grid-4" data-card="evaluation">
+            <legend class="section-title accent">@Texts["Inventory.SupplierEvaluationNotice"]</legend>
+            <label class="field-check strong field-align-end">
+                <input type="checkbox" data-field="approved" @bind="_form.Approved" /><span>@Texts["Inventory.Approved"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.LastEvaluation"]</span>
+                <input class="input" type="date" data-field="evaluated" max="@Today.ToString("yyyy-MM-dd")" @bind="_form.LastEvaluationDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="_refusal" Field="evaluation" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.EvaluationScore"]</span>
+                <input class="input mono num" type="number" min="0" max="@MasterDataEditorRules.ScoreMax" data-field="score" @bind="_form.EvaluationScore" />
+            </label>
+            <span></span>
+            @if (MasterDataEditorRules.ApprovalNeedsEvaluation(_form))
+            {
+                <p class="field-span-4 small abnormal" data-state="approval-notice">@Texts["Supplier_ApprovalNeedsEvaluation"]</p>
+            }
+
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Inventory.RegulatoryRegistration"]</span>
+                <input class="input" dir="ltr" data-field="registration" maxlength="@MasterDataEditorRules.RegistrationMaxLength" @bind="_form.Registration" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.RegulatoryRegistrationValidUntil"]</span>
+                <input class="input" type="date" data-field="registrationuntil" @bind="_form.RegistrationValidUntil" @bind:format="yyyy-MM-dd" />
+            </label>
+            <span></span>
+            @if (MasterDataEditorRules.RegistrationExpired(_form, Today))
+            {
+                <p class="field-span-4 small abnormal" data-state="registration-notice">@Texts["Supplier_RegistrationExpiredNotice"]</p>
+            }
+        </fieldset>
+
+        <div class="form-grid form-grid-4">
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" data-field="notes" maxlength="@MasterDataEditorRules.NotesMaxLength" @bind="_form.Notes" />
+            </label>
+            <label class="field-check strong field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The supplier edited; null for a new one.</summary>
+    [Parameter] public SupplierRow? Existing { get; set; }
+
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<SupplierRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private SupplierForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Inventory.NewSupplier"] : $"{Texts["Action.Edit"]} — {Existing.Code}";
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.SupplierId));
+    }
+}

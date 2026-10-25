@@ -1,0 +1,169 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Orders
+@inject WebTexts Texts
+
+@*
+    A prescriber, the workstation's PrescriberEditorDialog. The INPE is the field that matters
+    commercially — an AMO claim carrying this prescriber's prescription cannot be filed without it,
+    so a physician without one is said — and the critical-result telephone the one that matters
+    clinically: a panic value has to reach a named person on a number somebody recorded. A report
+    sent by e-mail, SMS link or fax without the address or number it goes to is said too. The
+    dialog opens on the whole stored prescriber — the stored names as they are, each number in its
+    own box — and saves on it. The fields, the checks and the request are MasterDataEditorRules'
+    and PrescriberEntryRules'.
+*@
+<Modal Name="prescriber-editor" Title="@Title" Hint="@Texts["AdminDialog.PrescriberEditorDialog"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Patient.LastName"]</span>
+                <input class="input" data-field="lastname" maxlength="@MasterDataEditorRules.PersonNameMaxLength" @bind="_form.LastName" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="lastname" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.FirstName"]</span>
+                <input class="input" data-field="firstname" maxlength="@MasterDataEditorRules.PersonNameMaxLength" @bind="_form.FirstName" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.LastNameArabic"]</span>
+                <input class="input" dir="rtl" data-field="namear" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.NameArabic" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Field.Name"]</span>
+                <select class="input" data-field="kind" @bind="_form.Kind">
+                    @foreach (var kind in Enum.GetValues<PrescriberKind>())
+                    {
+                        <option value="@kind">@Texts[$"PrescriberKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Order.Speciality"]</span>
+                <input class="input" data-field="speciality" maxlength="@MasterDataEditorRules.SpecialityMaxLength" @bind="_form.Speciality" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Order.Institution"]</span>
+                <input class="input" data-field="institution" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Institution" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Admin.OrderNumber"]</span>
+                <input class="input mono" dir="ltr" data-field="ordernumber" maxlength="@MasterDataEditorRules.OrderNumberMaxLength" @bind="_form.OrderNumber" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Inpe"]</span>
+                <input class="input mono" dir="ltr" inputmode="numeric" data-field="inpe" maxlength="@MasterDataEditorRules.ShortPhoneMaxLength" @bind="_form.Inpe" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Ice"]</span>
+                <input class="input mono" dir="ltr" inputmode="numeric" data-field="ice" maxlength="@MasterDataEditorRules.IceMaxLength" @bind="_form.Ice" />
+            </label>
+            @if (PrescriberEntryRules.WarnsOfMissingInpe(_form.Kind, _form.Inpe))
+            {
+                <p class="field-span-4 small abnormal" data-state="inpe-notice">@Texts["Order.InpeNotice"]</p>
+            }
+
+            <label class="field">
+                <span class="field-label">@Texts["Site.Phone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="phone" maxlength="@MasterDataEditorRules.PhoneMaxLength" @bind="_form.Phone" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.MobilePhone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="mobile" maxlength="@MasterDataEditorRules.ShortPhoneMaxLength" @bind="_form.Mobile" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Site.Fax"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="fax" maxlength="@MasterDataEditorRules.PhoneMaxLength" @bind="_form.Fax" @bind:event="oninput" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Field.Email"]</span>
+                <input class="input" dir="ltr" type="email" data-field="email" maxlength="@MasterDataEditorRules.LongNameMaxLength" @bind="_form.Email" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.City"]</span>
+                <input class="input" data-field="city" maxlength="@MasterDataEditorRules.CityMaxLength" @bind="_form.City" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Patient.Address"]</span>
+                <input class="input" data-field="address" maxlength="@MasterDataEditorRules.AddressMaxLength" @bind="_form.Address" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">@Texts["Order.CriticalResultPhone"]</span>
+                <input class="input mono" dir="ltr" type="tel" data-field="criticalphone" maxlength="@MasterDataEditorRules.ShortPhoneMaxLength" @bind="_form.CriticalPhone" />
+            </label>
+            <p class="field-span-2 small muted field-align-end">@Texts["Order.CriticalPhoneNotice"]</p>
+
+            <label class="field">
+                <span class="field-label">@Texts["Report.Delivery"]</span>
+                <select class="input" data-field="delivery" @bind="_form.Delivery">
+                    @foreach (var delivery in Enum.GetValues<ReportDeliveryPreference>())
+                    {
+                        <option value="@delivery">@Texts[$"ReportDeliveryPreference.{delivery}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field-check field-span-2 field-align-end"><input type="checkbox" data-field="partial" @bind="_form.SendPartial" /><span>@Texts["Report.SendPartial"]</span></label>
+            @if (MasterDataEditorRules.DeliveryContactMissing(_form))
+            {
+                <p class="field-span-4 small abnormal" data-state="delivery-notice">@Texts["Order.DeliveryContactNotice"]</p>
+            }
+
+            <label class="field">
+                <span class="field-label">@Texts["Billing.Discount"]</span>
+                <input class="input mono num" dir="ltr" inputmode="decimal" data-field="discount" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Discount" />
+                <FieldMessage Refusal="_refusal" Field="discount" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" data-field="notes" maxlength="@MasterDataEditorRules.NotesMaxLength" @bind="_form.Notes" />
+            </label>
+            <label class="field-check strong field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
+        </div>
+
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The prescriber edited, as the grid shows it; null for a new one.</summary>
+    [Parameter] public PrescriberRow? Existing { get; set; }
+
+    /// <summary>The whole stored prescriber when editing: the names as stored, each number in its box, and the request built on it.</summary>
+    [Parameter] public PrescriberRequest? Stored { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public EventCallback<PrescriberRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PrescriberForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _initialised;
+
+    private string Title => Existing is null ? Texts["Order.NewPrescriber"] : $"{Texts["Action.Edit"]} — {Existing.FullName}";
+
+    protected override void OnParametersSet()
+    {
+        if (_initialised) return;
+        _initialised = true;
+        _form = MasterDataEditorRules.FormOf(Existing, Stored, culture: Texts.Culture);
+    }
+
+    private Task SaveAsync()
+    {
+        _refusal = MasterDataEditorRules.Check(_form);
+        if (_refusal is not null) return Task.CompletedTask;
+
+        return OnSave.InvokeAsync(MasterDataEditorRules.ToRequest(_form, Existing?.PrescriberId, Existing is null ? null : Stored));
+    }
+}
