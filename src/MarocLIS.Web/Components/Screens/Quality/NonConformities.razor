@@ -70,7 +70,7 @@
                                     </td>
                                     <td class="nc-description"><span class="clamp-2" title="@string.Join("\n", NonConformityScreenRules.Tooltip(row, Texts.Language, Texts.T))">@description</span></td>
                                     <td class="small">
-                                        <span class="cell-wrap">@row.AssignedToName</span>
+                                        <span class="nc-person">@row.AssignedToName</span>
                                         <span class="cell-sub mono @(emphasis == NonConformityEmphasis.Overdue ? "critical strong" : null)" dir="ltr" title="@Texts["NonConformity.DueDate"]">@NonConformityScreenRules.ShortDate(row.DueDate)</span>
                                     </td>
                                     <td class="num mono">@NonConformityScreenRules.ActionsCell(row)</td>
@@ -117,7 +117,7 @@
                                     <td class="small @ink">@Texts[$"ActionKind.{action.Kind}"]</td>
                                     <td class="@ink"><span class="clamp-2" title="@text">@text</span></td>
                                     <td class="small">
-                                        <span class="cell-wrap">@action.ResponsibleName</span>
+                                        <span class="nc-person">@action.ResponsibleName</span>
                                         <span class="cell-sub mono @ink" dir="ltr" title="@Texts["NonConformity.DueDate"]">@NonConformityScreenRules.ShortDate(action.TargetDate)</span>
                                     </td>
                                     <td><Pill Text="@Texts[$"ActionStatus.{action.Status}"]" Tone="@QualityTones.Pill(NonConformityScreenRules.ActionTone(action))" /></td>

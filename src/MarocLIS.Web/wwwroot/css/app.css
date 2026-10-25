@@ -1058,8 +1058,14 @@ fieldset.subcard:disabled { opacity: .7; }
 .card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .quality-aside { display: flex; flex-direction: column; gap: 10px; }
 .quality-aside .facts { margin: 0; }
-.nc-description { min-inline-size: 220px; }
+.screen.nc > .screen-body.split { grid-template-columns: minmax(0, 1fr) 300px; }
+.nc-description { min-inline-size: 160px; }
 .grid td.nc-description { white-space: normal; }
+.nc-person { display: block; overflow-wrap: break-word; }
+.nc [data-grid=register] .pill { white-space: normal; text-align: center; border-radius: 10px; }
+.nc [data-grid=register] td:last-child { min-inline-size: 104px; }
+.quality-aside .facts { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.quality-aside .facts dt, .quality-aside .facts dd { overflow-wrap: break-word; min-inline-size: 0; }
 .pill-muted { background: var(--surface-sunken); color: var(--text-muted); }
 .ink-normal { color: var(--normal); }
 .input-year { inline-size: 96px; }
