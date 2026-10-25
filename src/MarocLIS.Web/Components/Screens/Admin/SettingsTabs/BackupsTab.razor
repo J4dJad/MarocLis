@@ -1,0 +1,325 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<BackupsTab> Logger
+
+@*
+    « Paramètres › Sauvegardes »: the age of the last backup first — what the tab is opened for —,
+    the server's task, the next run and the last attempt; the schedule the server's task follows;
+    « Sauvegarder maintenant »; the backups SQL Server lists, each with its check. The sentences,
+    the schedule typed, the sizes, the origins and what may be done are BackupScreenRules'; the
+    backup, the folder test and the schedule are BackupService's, which records each. The folder is
+    the server's, typed as text: SQL Server writes there, never the browser, and « Tester le
+    dossier » asks SQL Server itself. The restore is the server's alone (BackupService.CanRestoreAsync
+    refuses it from anywhere but the server machine): said here, where it is done.
+*@
+<div class="screen-body">
+    @if (_overview is { } overview)
+    {
+        var (critical, banner) = BackupScreenRules.Banner(overview);
+        var (agentWarning, agent) = BackupScreenRules.Agent(overview);
+        var (nextWarning, next) = BackupScreenRules.Next(overview);
+
+        <div class="banners" data-state="backup-banner">
+            <p class="message small @(critical ? "is-critical" : "is-normal")" data-state="last-backup">@((critical ? "⚠ " : "✓ ") + Line(banner))</p>
+            <p class="small @(agentWarning ? "abnormal" : "muted")" data-state="agent">@Line(agent)</p>
+            <p class="small @(nextWarning ? "abnormal" : "muted")" data-state="next">@Line(next)</p>
+            @if (BackupScreenRules.LastResult(overview) is { } result)
+            {
+                var at = result.At is { } when ? Moment(when) : string.Empty;
+                <p class="small @(result.Failed ? "critical" : "muted")" data-state="last-result">
+                    @(result.Failed ? Texts.T("Backup.LastResultFailed", at, Reason(result.Message)) : Texts.T("Backup.LastResultOk", at, result.Message ?? string.Empty))
+                </p>
+            }
+        </div>
+    }
+    else if (_readFailed is { } failure)
+    {
+        <p class="message is-critical small" data-state="read-failed">@Texts.T("Backup.ReadFailed", failure)</p>
+    }
+
+    <div class="stack-cards">
+        <fieldset class="card form-card reading-column" disabled="@_busy" data-card="schedule">
+            <h2 class="card-title">@Texts["Backup.ScheduleHeading"]</h2>
+            <label class="field-check">
+                <input type="checkbox" data-field="enabled" @bind="_enabled" />
+                <span>@Texts["Backup.Enabled"]</span>
+            </label>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Backup.Times"]</span>
+                    <input class="input mono" dir="ltr" data-field="times" disabled="@(!_enabled)" @bind="_times" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Backup.RetentionDays"]</span>
+                    <input class="input input-amount mono" type="number" dir="ltr" data-field="retention"
+                           min="@BackupSettings.MinRetentionDays" max="@BackupSettings.MaxRetentionDays" @bind="Retention" />
+                </label>
+            </div>
+            <div class="field">
+                <span class="field-label">@Texts["Backup.Days"]</span>
+                <div class="day-boxes" data-list="days">
+                    @foreach (var day in BackupScreenRules.WeekDays)
+                    {
+                        <label class="field-check">
+                            <input type="checkbox" data-field="day-@day" disabled="@(!_enabled)" checked="@_days.Contains(day)" @onchange="e => Tick(day, e)" />
+                            <span>@Texts.Culture.DateTimeFormat.GetAbbreviatedDayName(day)</span>
+                        </label>
+                    }
+                </div>
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Backup.Folder"]</span>
+                <span class="input-with-button">
+                    <input class="input mono" dir="ltr" data-field="folder" @bind="_folder" />
+                    <ActionButton Key="Backup.TestFolder" Disabled="@(!Actions.TestFolder)" OnClick="TestFolderAsync" />
+                </span>
+                <span class="small muted">@Texts["Backup.FolderHint"]</span>
+            </label>
+        </fieldset>
+
+        <div class="card" data-card="backups">
+            <h2 class="card-title">@Texts["Backup.ListHeading"]</h2>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="backups">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Backup.Column.Date"]</th>
+                            <th>@Texts["Backup.Column.Origin"]</th>
+                            <th class="num">@Texts["Backup.Column.Size"]</th>
+                            <th>@Texts["Backup.Column.Check"]</th>
+                            <th>@Texts["Backup.Column.File"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in _overview?.Backups ?? [])
+                        {
+                            <tr class="@(entry.Set.BackupSetId == _selectedId ? "is-selected" : null)" data-row="@entry.Set.BackupSetId"
+                                @onclick="() => _selectedId = entry.Set.BackupSetId">
+                                <td class="mono small">@Moment(entry.Set.FinishedAt)</td>
+                                <td class="small">@Origin(entry)</td>
+                                <td class="num mono">@FileSize(entry.FileBytes)</td>
+                                <td><Pill Text="@Texts[BackupScreenRules.CheckKey(entry)]" Tone="@Tone(BackupScreenRules.CheckTone(entry))" /></td>
+                                <td class="mono small" dir="ltr">@entry.Set.Path</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_overview is { } shown)
+            {
+                @* A browser is never the server machine: the restore is started from the Windows application there. *@
+                <p class="message is-info small" data-state="restore-note">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.RotateCcw" /> @Texts.T("Backup.RestoreNoteWorkstation", shown.Server.ServerMachine)
+                </p>
+            }
+        </div>
+    </div>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="LoadAsync" />
+        <ActionButton Key="Backup.BackupNow" Disabled="@(!Actions.BackupNow)" OnClick="BackupNowAsync" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Action.Save" Primary="true" Disabled="@(!Actions.Save)" OnClick="() => SaveAsync(checkFolder: true)" />
+    </Primary>
+</ActionBar>
+
+@if (_saveAnyway is { } doubt)
+{
+    <ConfirmPrompt Title="@Texts["Backup.Tab"]" Message="@Texts.T("Backup.SaveAnyway", doubt)"
+                   OnYes="() => SaveAsync(checkFolder: false)" OnNo="() => _saveAnyway = null" />
+}
+
+@code {
+    private BackupOverview? _overview;
+    private string? _readFailed;
+    private long? _selectedId;
+    private bool _busy, _enabled;
+    private string? _times, _folder;
+    private int _retention = BackupSettings.DefaultRetentionDays;
+    private HashSet<DayOfWeek> _days = [];
+    private string? _saveAnyway;
+    private (string Text, string Tone)? _status;
+
+    private BackupActions Actions =>
+        BackupScreenRules.Actions(_busy, _overview, _overview?.Backups.FirstOrDefault(b => b.Set.BackupSetId == _selectedId));
+
+    /// <summary>Kept within what the schedule accepts, as the workstation's spin box.</summary>
+    private int Retention
+    {
+        get => _retention;
+        set => _retention = BackupScreenRules.Retention(value);
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+
+        try
+        {
+            var overview = await Scopes.RunAsync<BackupService, Result<BackupOverview>>(s => s.GetOverviewAsync());
+            if (overview.IsFailure)
+            {
+                _status = (Texts.Describe(overview.Errors), "critical");
+                return;
+            }
+
+            _overview = overview.Value;
+            _readFailed = null;
+            Show(_overview.Settings);
+            _status = null;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex)
+        {
+            // SQL Server's history unreadable, or the server gone: the other tabs still work.
+            Logger.LogError(ex, "The backups could not be read.");
+            _readFailed = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the backups failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Show(BackupSettings settings)
+    {
+        _enabled = settings.Enabled;
+        _times = BackupScreenRules.TimesText(settings);
+        Retention = settings.RetentionDays;
+        _days = [.. BackupScreenRules.WeekDays.Where(settings.RunsOn)];
+        _folder = settings.Folder;
+    }
+
+    private void Tick(DayOfWeek day, ChangeEventArgs e)
+    {
+        if (e.Value is true) _days.Add(day);
+        else _days.Remove(day);
+    }
+
+    /// <summary>
+    /// The schedule typed (BackupScreenRules.Read), then saved with its folder tried by SQL Server;
+    /// a folder it cannot write to yet may be saved anyway, on a confirmation: the server's task
+    /// creates a missing local folder and opens it to SQL Server.
+    /// </summary>
+    private async Task SaveAsync(bool checkFolder)
+    {
+        _saveAnyway = null;
+        if (_busy) return;
+
+        var read = BackupScreenRules.Read(_enabled, _times, _days, _retention, _folder);
+        if (read.IsFailure)
+        {
+            _status = (Texts.Describe(read.Errors), "critical");
+            return;
+        }
+
+        var saved = await RunningAsync(Texts["Backup.CheckingFolder"], () =>
+            Scopes.RunAsync<BackupService, Result>(s => s.SaveSettingsAsync(read.Value, checkFolder)));
+        if (saved is null) return;
+
+        if (checkFolder && BackupScreenRules.MaySaveAnyway(saved))
+        {
+            _saveAnyway = Texts.Describe(saved.Errors);
+            return;
+        }
+
+        if (saved.IsFailure)
+        {
+            _status = (Texts.Describe(saved.Errors), "critical");
+            return;
+        }
+
+        await LoadAsync();
+        _status = (Texts["Backup.Saved"], "normal");
+    }
+
+    private async Task TestFolderAsync()
+    {
+        var folder = (_folder ?? string.Empty).Trim();
+        var tested = await RunningAsync(Texts["Backup.CheckingFolder"], () =>
+            Scopes.RunAsync<BackupService, Result>(s => s.TestFolderAsync(folder)));
+        if (tested is null) return;
+
+        // SQL Server's own answer is the useful part.
+        _status = tested.IsSuccess ? (Texts.T("Backup.FolderOk", folder), "normal") : (Texts.Describe(tested.Errors), "critical");
+    }
+
+    private async Task BackupNowAsync()
+    {
+        var outcome = await RunningAsync(Texts["Backup.Running"], () =>
+            Scopes.RunAsync<BackupService, Result<BackupOutcome>>(s => s.BackupNowAsync()));
+        if (outcome is null) return;
+
+        await LoadAsync();
+        _status = outcome.IsFailure
+            ? (Texts.Describe(outcome.Errors), "critical")
+            : (Texts.T(BackupScreenRules.DoneKey(outcome.Value), BackupNaming.FileOf(outcome.Value.Path)), "normal");
+    }
+
+    /// <summary>The tab while SQL Server works — minutes for a large database: the actions off, the status saying what runs.</summary>
+    private async Task<T?> RunningAsync<T>(string text, Func<Task<T>> work) where T : class
+    {
+        if (_busy) return null;
+        _busy = true;
+        _status = (text, "info");
+        StateHasChanged();
+
+        try
+        {
+            return await work();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A backup action failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+            return null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Texts ----------------------------------------------------------------------------------
+
+    private string Moment(DateTime at) => at.ToString("g", Texts.Culture);
+
+    /// <summary>A sentence of the tab (BackupScreenRules), its moments and its age written out.</summary>
+    private string Line(BackupLine line) =>
+        Texts.T(line.Key, [.. line.Arguments.Select(a => a switch
+        {
+            DateTime at => Moment(at),
+            BackupLine inner => Line(inner),
+            _ => a
+        })]);
+
+    private string FileSize(long bytes)
+    {
+        var (key, value, format) = BackupScreenRules.Size(bytes);
+        return Texts.T(key, value.ToString(format, Texts.Culture));
+    }
+
+    private string Origin(BackupEntry entry)
+    {
+        var (kindKey, who) = BackupScreenRules.Origin(entry);
+        return who is null ? Texts[kindKey] : $"{Texts[kindKey]} — {who}";
+    }
+
+    /// <summary>A failure recorded as a resource key, in words naming the schedule's folder.</summary>
+    private string Reason(string? key) =>
+        BackupScreenRules.Reason(key, _overview?.Settings.Folder) is { } error ? Texts.Describe(error) : string.Empty;
+
+    private static string Tone(BackupCheckTone tone) => tone switch
+    {
+        BackupCheckTone.Ok => "Ok",
+        BackupCheckTone.Critical => "Critical",
+        BackupCheckTone.Running => "Info",
+        _ => "Waiting"
+    };
+}

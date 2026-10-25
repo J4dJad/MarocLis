@@ -1,0 +1,302 @@
+@using System.Globalization
+@using System.Text
+@using MarocLIS.Application.Licensing
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Licensing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject ILogger<LicenceTab> Logger
+
+@*
+    « Paramètres › Licence »: the licence in force, why it is not when it is not, its terms, the
+    workstations in use against its limit, its modules, the server it is bound to and the key that
+    checks it, and the licences imported before. Reached with the licence right alone. A licence
+    file is chosen in the browser and read here, at the size a licence can have
+    (LicenceTabRules.IsReadableSize); LicenceService imports it, records it and puts it in force on
+    every workstation. The request for the vendor is downloaded. The pill, the notes and the rows
+    are LicenceTabRules', as on the workstation.
+*@
+<div class="screen-body">
+    <div class="split split-even">
+        <div class="card" data-card="licence">
+            <div class="card-heading">
+                <h2 class="card-title">@Texts["Licence.Heading"]</h2>
+                <Pill Text="@StateText" Tone="@PillTone" />
+            </div>
+
+            @if (Notes.Count > 0)
+            {
+                <p class="message is-critical small" data-state="problem">@string.Join(" ", Notes)</p>
+            }
+
+            <dl class="facts facts-wide" data-state="facts">
+                <dt>@Texts["Licence.Row.laboratory"]</dt><dd>@Laboratory</dd>
+                <dt>@Texts["Licence.Row.number"]</dt><dd class="mono">@(Terms is null ? "—" : Texts.T("Licence.NumberVersion", Terms.Number, Terms.Version))</dd>
+                <dt>@Texts["Licence.Row.kind"]</dt><dd>@(Terms is null ? "—" : Texts[$"LicenceKind.{Terms.Kind}"])</dd>
+                <dt>@Texts["Licence.Row.period"]</dt><dd>@Period</dd>
+                <dt>@Texts["Licence.Row.remaining"]</dt><dd class="strong @RemainingClass" data-state="remaining">@Remaining</dd>
+                <dt>@Texts["Licence.Row.updates"]</dt><dd>@(Terms?.UpdatesUntil is { } updates ? Date(updates) : "—")</dd>
+                <dt>@Texts["Licence.Row.workstations"]</dt><dd class="mono">@Workstations</dd>
+                <dt>@Texts["Licence.Row.modules"]</dt><dd>@string.Join(", ", new[] { Texts["Licence.Base"] }.Concat(Modules.Open.Select(m => Texts[LicenceModules.NameKey(m)])))</dd>
+                <dt>@Texts["Licence.Row.closed"]</dt><dd class="muted">@(Modules.Closed.Count == 0 ? "—" : string.Join(", ", Modules.Closed.Select(m => Texts[LicenceModules.NameKey(m)])))</dd>
+                <dt>@Texts["Licence.Row.server"]</dt>
+                <dd class="mono" dir="ltr">
+                    @(_status.ServerId ?? "—")
+                    @if (!string.IsNullOrEmpty(_status.ServerId))
+                    {
+                        <ActionButton Key="Licence.CopyServerId" Class="btn-small" OnClick="CopyServerIdAsync" />
+                    }
+                </dd>
+                <dt>@Texts["Licence.Row.binding"]</dt><dd class="@(Binding == LicenceBinding.BoundElsewhere ? "critical" : null)">@BindingText</dd>
+                <dt>@Texts["Licence.Row.key"]</dt><dd class="mono small" dir="ltr">@(_fingerprint ?? "—")</dd>
+            </dl>
+
+            @if (_developmentKey)
+            {
+                <p class="message is-warning small" data-state="development-key">@Texts["Licence.DevelopmentKey"]</p>
+            }
+        </div>
+
+        <div class="card" data-card="history">
+            <h2 class="card-title">@Texts["Licence.HistoryHeading"]</h2>
+            <div class="table-scroll">
+                <table class="grid" data-grid="history">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Licence.Row.number"]</th>
+                            <th>@Texts["Licence.Row.kind"]</th>
+                            <th>@Texts["Licence.History.Imported"]</th>
+                            <th>@Texts["Licence.History.By"]</th>
+                            <th>@Texts["Licence.History.Replaced"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _history)
+                        {
+                            <tr class="@(row.ReplacedAt is null ? null : "is-inactive")" data-row="@row.Number-@row.Version">
+                                <td class="mono strong">@Texts.T("Licence.NumberVersion", row.Number, row.Version)</td>
+                                <td>@Texts[$"LicenceKind.{row.Kind}"]</td>
+                                <td class="mono small">@Moment(row.ImportedAt)</td>
+                                <td class="small">@(row.ImportedBy ?? "—")</td>
+                                <td class="mono small">@(row.ReplacedAt is { } replaced ? Moment(replaced) : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<ActionBar StatusText="@_message?.Text" StatusClass="@($"is-{_message?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="() => LoadAsync(refresh: true)" />
+        <ActionButton Key="Licence.ExportRequest" Hidden="@(!CanManage)" Disabled="@_busy" OnClick="ExportRequestAsync" />
+    </Secondary>
+    <Primary>
+        @if (CanManage)
+        {
+            @* A file picked in the browser: the licence travels to the server, which alone checks it. *@
+            <label class="btn btn-primary @(_busy ? "is-disabled" : null)" data-action="Licence.Import" title="@Texts["Licence.FileFilter"]">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" />
+                @Texts["Licence.Import"]
+                <InputFile class="file-input" accept="@($"{LicenceFile.Extension},text/plain")" disabled="@_busy" OnChange="ImportAsync" />
+            </label>
+        }
+    </Primary>
+</ActionBar>
+
+@code {
+    private LicenceStatus _status = LicenceStatus.Pending;
+    private IReadOnlyList<LicenceHistoryRow> _history = [];
+    private int? _inUse;
+    private string? _fingerprint;
+    private bool _developmentKey, _busy;
+    private (string Text, string Tone)? _message;
+
+    private bool CanManage => Context.User.Has(Permissions.Administration.License);
+
+    private LicenceTerms? Terms => _status.Terms;
+
+    private string Date(DateOnly? date) => date?.ToString("d", Texts.Culture) ?? "—";
+
+    private string Moment(DateTimeOffset at) => at.ToLocalTime().ToString("g", Texts.Culture);
+
+    private string StateText => LicenceTabRules.SaysReadOnly(_status)
+        ? $"{Texts[$"LicenceState.{_status.State}"]} · {Texts["Licence.ReadOnly"]}"
+        : Texts[$"LicenceState.{_status.State}"];
+
+    private string PillTone => LicenceTabRules.Tone(_status) switch
+    {
+        LicenceBannerLevel.Normal => "Ok",
+        LicenceBannerLevel.Warning => "Warning",
+        _ => "Critical"
+    };
+
+    private string? RemainingClass => LicenceTabRules.Tone(_status) switch
+    {
+        LicenceBannerLevel.Normal => "normal",
+        LicenceBannerLevel.Warning => "abnormal",
+        _ => "critical"
+    };
+
+    /// <summary>Why the licence is not in force, in the words of the refusal; and a clock found behind.</summary>
+    private IReadOnlyList<string> Notes => [.. LicenceTabRules.Notes(_status).Select(note =>
+    {
+        if (note.Problem is { } problem) return Texts.Describe(problem);
+        var text = Texts.T(note.Key!, [.. note.Arguments.Select(a => a switch { DateOnly d => Date(d), null => "—", _ => a })]);
+        return note.AsSentence ? LicenceTabRules.Sentence(text, Texts.Culture) : text;
+    })];
+
+    private string Laboratory => Terms is null ? "—"
+        : string.Join(" — ", new[] { Terms.Laboratory, Terms.Site, Terms.Authorisation }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    private string Period => Terms is null ? "—"
+        : Terms.EndsOn is { } end ? Texts.T("Licence.Period", Date(Terms.StartsOn), Date(end))
+        : Texts.T("Licence.PeriodOpen", Date(Terms.StartsOn));
+
+    private string Remaining
+    {
+        get
+        {
+            var (key, argument) = LicenceTabRules.Remaining(_status);
+            return key switch
+            {
+                null => "—",
+                "Licence.NoEnd" => Texts[key],
+                "Licence.ExpiredOn" => Texts.T(key, Date(argument as DateOnly?)),
+                _ => Texts.T(key, argument)
+            };
+        }
+    }
+
+    private string Workstations => LicenceTabRules.WorkstationLimit(_status) is { } limit
+        ? $"{_inUse?.ToString(Texts.Culture) ?? "?"} / {limit}"
+        : "—";
+
+    private (IReadOnlyList<string> Open, IReadOnlyList<string> Closed) Modules => LicenceTabRules.Modules(_status);
+
+    private LicenceBinding Binding => LicenceTabRules.Binding(_status);
+
+    private string BindingText => Binding switch
+    {
+        LicenceBinding.Unbound => Texts["Licence.Unbound"],
+        LicenceBinding.BoundHere => Texts["Licence.BoundHere"],
+        LicenceBinding.BoundElsewhere => Texts.T("Licence.BoundElsewhere", Terms?.ServerId),
+        _ => "—"
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync(refresh: false);
+
+    private async Task LoadAsync(bool refresh)
+    {
+        try
+        {
+            (_status, _history, _fingerprint, _developmentKey) = await Scopes.RunAsync<LicenceService, (LicenceStatus, IReadOnlyList<LicenceHistoryRow>, string, bool)>(async s =>
+            {
+                var status = refresh ? await s.RefreshAsync() : s.Current;
+                return (status, await s.GetHistoryAsync(), s.KeyFingerprint, s.IsDevelopmentKey);
+            });
+            _inUse = (await Scopes.RunAsync<WorkstationPresenceService, IReadOnlyList<ActiveWorkstation>>(s => s.ActiveAsync())).Count;
+            _message = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the licence failed.");
+            _message = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task CopyServerIdAsync()
+    {
+        if (string.IsNullOrEmpty(_status.ServerId)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.copy", _status.ServerId);
+        }
+        catch (JSException)
+        {
+            // The browser refused the clipboard; the identifier is on screen to copy by hand.
+            _message = (Texts["Licence.ClipboardBusy"], "abnormal");
+        }
+    }
+
+    /// <summary>
+    /// Read in the browser at the size a licence can have — a few hundred bytes; anything far
+    /// larger is not one, and is not read — then imported by LicenceService, in force at once.
+    /// </summary>
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        if (!CanManage || _busy) return;
+
+        if (!LicenceTabRules.IsReadableSize(e.File.Size))
+        {
+            _message = (Texts["Licence_FileUnreadable"], "critical");
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            string text;
+            try
+            {
+                await using var stream = e.File.OpenReadStream(maxAllowedSize: LicenceFile.MaxFileBytes);
+                using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+                text = await reader.ReadToEndAsync();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+            {
+                _message = (Texts.T("Licence.FileNotRead", ex.Message), "critical");
+                return;
+            }
+
+            var fileName = e.File.Name;
+            var imported = await Scopes.RunAsync<LicenceService, Result<LicenceStatus>>(s => s.ImportAsync(text, fileName));
+            if (imported.IsFailure)
+            {
+                _message = (Texts.Describe(imported.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync(refresh: false);
+            var terms = imported.Value.Terms!;
+            _message = (Texts.T("Licence.Imported", terms.Number, terms.Version, terms.Laboratory), "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Importing a licence failed.");
+            _message = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The request for the vendor, named after the site so their inbox tells them apart, downloaded.</summary>
+    private async Task ExportRequestAsync()
+    {
+        if (!CanManage || _busy) return;
+        _busy = true;
+
+        try
+        {
+            var request = await Scopes.RunAsync<LicenceService, LicenceRequest>(s => s.BuildRequestAsync(WebWorkstations.AppVersion));
+            await JS.InvokeVoidAsync("marocLis.download", LicenceTabRules.RequestFileName(request), "text/plain",
+                                     Encoding.UTF8.GetBytes(request.Write()));
+            _message = (Texts["Web.LicenceRequestDownloaded"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exporting the licence request failed.");
+            _message = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

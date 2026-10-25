@@ -1,0 +1,110 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Web.Components.Screens.Admin.SettingsTabs
+@inject WebTexts Texts
+@inject SessionContext Context
+
+@*
+    « Paramètres », the workstation's SettingsView: the site's identity and what still blocks its
+    invoicing and its reports, the numbering, the settings held in the database, the invoices and
+    the discount ceiling, the languages, the storage places, the printers, the backups and the
+    licence — each tab offered with its right, the licence's with its own alone, as on the
+    workstation (SettingsScreenRules.Tabs). Each tab has its own action bar at the screen's foot.
+    The printers are each workstation's, set on the Windows workstation: said here.
+*@
+<div class="screen settings" data-screen="settings">
+    <div class="tabs" role="tablist">
+        @foreach (var tab in _tabs)
+        {
+            <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                    data-tab="@tab" @onclick="() => _tab = tab">@TabCaption(tab)</button>
+        }
+    </div>
+
+    @switch (_tab)
+    {
+        case SettingsTab.Site:
+            <SiteTab />
+            break;
+
+        case SettingsTab.Numbering:
+            <NumberingTab />
+            break;
+
+        case SettingsTab.Settings:
+            <SettingsListTab />
+            break;
+
+        case SettingsTab.InvoicePrint:
+            <InvoicePrintTab />
+            break;
+
+        case SettingsTab.Languages:
+            <LanguagesTab />
+            break;
+
+        case SettingsTab.Storage:
+            <StorageTab />
+            break;
+
+        case SettingsTab.Printers:
+            <div class="screen-body">
+                <div class="card reading-column" data-card="printers">
+                    <h2 class="card-title">@Texts["Printers.Title"]</h2>
+                    <p class="muted">@Texts["Printers.Intro"]</p>
+                    <p class="message is-info" data-state="printers-workstation">
+                        <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Printer" /> @Texts["Web.PrintersOnWorkstation"]
+                    </p>
+                </div>
+            </div>
+            <ActionBar />
+            break;
+
+        case SettingsTab.Backups:
+            <BackupsTab />
+            break;
+
+        case SettingsTab.Licence:
+            <LicenceTab />
+            break;
+
+        default:
+            <div class="screen-body"><p class="muted">@Texts["Message.NothingSelected"]</p></div>
+            break;
+    }
+</div>
+
+@code {
+    /// <summary>The tab asked for in the address (« ?onglet=licence » from the licence banner).</summary>
+    [Parameter] public string? Tab { get; set; }
+
+    private IReadOnlyList<SettingsTab> _tabs = [];
+    private SettingsTab _tab;
+    private string? _openedOn;
+
+    protected override void OnParametersSet()
+    {
+        // The licence tab whenever the installation evaluates a licence, as the workstation's; the
+        // backups whenever it reaches SQL Server's history, which the web's server does as well.
+        _tabs = SettingsScreenRules.Tabs(Context.User, licenceAvailable: true, backupsAvailable: true);
+
+        if (_openedOn == Tab && _tabs.Contains(_tab)) return;
+        _openedOn = Tab;
+
+        _tab = Enum.TryParse<SettingsTab>(Tab, ignoreCase: true, out var asked) && _tabs.Contains(asked)
+            ? asked
+            : _tabs.FirstOrDefault();
+    }
+
+    private string TabCaption(SettingsTab tab) => tab switch
+    {
+        SettingsTab.Site => Texts["Site.Title"],
+        SettingsTab.Numbering => Texts["Admin.Sequences"],
+        SettingsTab.Settings => Texts["Nav.Settings"],
+        SettingsTab.InvoicePrint => Texts["InvoicePrint.SettingsTab"],
+        SettingsTab.Languages => Texts["Languages.SettingsTab"],
+        SettingsTab.Storage => Texts["StorageLocations.Title"],
+        SettingsTab.Printers => Texts["Printers.Title"],
+        SettingsTab.Backups => Texts["Backup.Tab"],
+        _ => Texts["Licence.Tab"]
+    };
+}

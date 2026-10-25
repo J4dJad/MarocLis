@@ -1,0 +1,453 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Morocco
+@using MarocLIS.Domain.Organization
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<SiteTab> Logger
+
+@*
+    « Paramètres › Site »: the site's legal identity — the mentions an invoice must carry — its
+    authorisation and accreditation, its contact details and its logo, with the two banners of what
+    still blocks invoicing and the release of reports, by name; a partner laboratory, which does
+    neither here, says so instead. A site is created with its code, name and kind, then completed
+    here. The form, the request, the banners and the status are SettingsScreenRules'; the save,
+    ConfigurationService's, which records it. The logo is scaled in the browser to the width the
+    workstation keeps.
+*@
+<div class="list-tools">
+    <select class="input input-wide" data-field="site" aria-label="@Texts["Site.Title"]" @onchange="SiteChanged">
+        @foreach (var site in _sites)
+        {
+            <option value="@site.Id" selected="@(site.Id == Current?.Id)">@SettingsScreenRules.SiteDisplay(site, Texts[$"LabSiteKind.{site.Kind}"])</option>
+        }
+    </select>
+    <ActionButton Key="Site.New" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!CanEdit)" Disabled="@_busy" OnClick="() => _dialog = SiteDialog.New" />
+    <span class="list-tools-end">
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadAsync" />
+    </span>
+</div>
+
+<div class="screen-body">
+    @if (Current is { } current)
+    {
+        <div class="banners" data-state="banners">
+            @if (!SettingsScreenRules.ShowsBlockers(_form.Kind))
+            {
+                <p class="message is-muted small" data-state="partner">@Texts["Site.PartnerNotice"]</p>
+            }
+            else
+            {
+                <p class="message small @(_invoicing.Count == 0 ? "is-normal" : "is-critical")" data-state="invoicing">
+                    @(_invoicing.Count == 0 ? $"✓ {Texts["Site.InvoicingReady"]}" : $"⚠ {Texts["Site.InvoicingBlocked"]} — {string.Join("   ·   ", _invoicing.Select(k => Texts[k]))}")
+                </p>
+                <p class="message small @(_operation.Count == 0 ? "is-normal" : "is-critical")" data-state="reporting">
+                    @(_operation.Count == 0 ? $"✓ {Texts["Site.ReportingReady"]}" : $"⚠ {Texts["Site.ReportingBlocked"]} — {string.Join("   ·   ", _operation.Select(k => Texts[k]))}")
+                </p>
+            }
+        </div>
+
+        <fieldset class="card form-card" disabled="@(!CanEdit || _busy)" data-card="site">
+            <div class="form-grid form-grid-4">
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Code"]</span>
+                    <input class="input mono strong" dir="ltr" data-field="code" maxlength="@ConfigurationService.MaxSiteCodeLength" @bind="_form.Code" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameFr"]</span>
+                    <input class="input" data-field="name-fr" maxlength="@SettingsScreenRules.SiteNameMaxLength" @bind="_form.NameFr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameAr"]</span>
+                    <input class="input" dir="rtl" data-field="name-ar" maxlength="@SettingsScreenRules.SiteNameMaxLength" @bind="_form.NameAr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Kind"]</span>
+                    <select class="input" data-field="kind" @bind="_form.Kind">
+                        @foreach (var kind in Enum.GetValues<LabSiteKind>())
+                        {
+                            <option value="@kind">@Texts[$"LabSiteKind.{kind}"]</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            <h3 class="section-title">@Texts["Site.LegalIdentity"]</h3>
+            <div class="form-grid form-grid-4">
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Site.LegalName"]</span>
+                    <input class="input" data-field="legal-name" maxlength="@SettingsScreenRules.LegalNameMaxLength" @bind="_form.LegalName" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Ice"]</span>
+                    <input class="input mono" dir="ltr" data-field="ice" @bind="_form.Ice" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.FiscalId"]</span>
+                    <input class="input mono" dir="ltr" data-field="fiscal-id" @bind="_form.FiscalId" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.CommercialRegister"]</span>
+                    <input class="input" dir="ltr" data-field="rc" maxlength="@SettingsScreenRules.RegisterMaxLength" @bind="_form.CommercialRegisterNumber" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.CommercialRegisterCourt"]</span>
+                    <input class="input" data-field="rc-court" maxlength="@SettingsScreenRules.CourtMaxLength" @bind="_form.CommercialRegisterCourt" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.ProfessionalTax"]</span>
+                    <input class="input" dir="ltr" data-field="tax" maxlength="@SettingsScreenRules.RegisterMaxLength" @bind="_form.ProfessionalTaxNumber" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Cnss"]</span>
+                    <input class="input mono" dir="ltr" data-field="cnss" @bind="_form.CnssAffiliationNumber" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Inpe"]</span>
+                    <input class="input mono" dir="ltr" data-field="inpe" @bind="_form.Inpe" />
+                </label>
+            </div>
+
+            <h3 class="section-title">@Texts["Site.Authorization"]</h3>
+            <div class="form-grid form-grid-4">
+                <label class="field">
+                    <span class="field-label">@Texts["Site.MinistryAuthorization"]</span>
+                    <input class="input" dir="ltr" data-field="ministry" maxlength="@SettingsScreenRules.AuthorizationMaxLength" @bind="_form.MinistryAuthorization" />
+                </label>
+                <div class="field">
+                    <label class="field-check field-label">
+                        <input type="checkbox" data-field="has-ministry-date" @bind="_hasMinistryDate" />
+                        <span>@Texts["Site.MinistryAuthorizationDate"]</span>
+                    </label>
+                    <input class="input" type="date" data-field="ministry-date" max="@DateTime.Today.ToString("yyyy-MM-dd")" disabled="@(!_hasMinistryDate)"
+                           @bind="_ministryDate" @bind:format="yyyy-MM-dd" />
+                </div>
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Site.ResponsibleBiologist"]</span>
+                    @* Only a qualified biologist may be named: loi n° 12-01 reserves the direction of a laboratory to one. *@
+                    <select class="input" data-field="responsible" @onchange="ResponsibleChanged">
+                        <option value="" selected="@(_form.ResponsibleBiologistUserId is null)">—</option>
+                        @foreach (var biologist in _biologists)
+                        {
+                            <option value="@biologist.UserId" selected="@(biologist.UserId == _form.ResponsibleBiologistUserId)">@SettingsScreenRules.ResponsibleDisplay(biologist)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field field-check field-align-end">
+                    <input type="checkbox" data-field="accredited" @bind="_form.IsAccredited" />
+                    <span>@Texts["Site.IsAccredited"]</span>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.AccreditationNumber"]</span>
+                    <input class="input" dir="ltr" data-field="accreditation" disabled="@(!_form.IsAccredited)" maxlength="@SettingsScreenRules.AuthorizationMaxLength" @bind="_form.AccreditationNumber" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.AccreditationValidUntil"]</span>
+                    <input class="input" type="date" data-field="accreditation-until" disabled="@(!_form.IsAccredited)" @bind="_accreditationUntil" @bind:format="yyyy-MM-dd" />
+                </label>
+            </div>
+
+            <h3 class="section-title">@Texts["Patient.Contact"]</h3>
+            <div class="form-grid form-grid-4">
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Patient.Address"]</span>
+                    <input class="input" data-field="address-fr" maxlength="@SettingsScreenRules.AddressMaxLength" @bind="_form.AddressFr" />
+                </label>
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Field.DescriptionAr"]</span>
+                    <input class="input" dir="rtl" data-field="address-ar" maxlength="@SettingsScreenRules.AddressMaxLength" @bind="_form.AddressAr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Patient.City"]</span>
+                    <input class="input" data-field="city" maxlength="@SettingsScreenRules.CourtMaxLength" @bind="_form.City" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Patient.Region"]</span>
+                    <select class="input" data-field="region" @bind="_form.Region">
+                        @foreach (var region in Enum.GetValues<MoroccanRegion>())
+                        {
+                            <option value="@region">@Texts[$"MoroccanRegion.{region}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Patient.PostalCode"]</span>
+                    <input class="input mono" dir="ltr" data-field="postal" maxlength="@SettingsScreenRules.PostalCodeMaxLength" @bind="_form.PostalCode" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Phone"]</span>
+                    <input class="input mono" dir="ltr" data-field="phone" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Phone" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Fax"]</span>
+                    <input class="input mono" dir="ltr" data-field="fax" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Fax" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Email"]</span>
+                    <input class="input" dir="ltr" data-field="email" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Email" />
+                </label>
+                <label class="field field-span-2">
+                    <span class="field-label">@Texts["Site.Website"]</span>
+                    <input class="input" dir="ltr" data-field="website" maxlength="@SettingsScreenRules.ContactMaxLength" @bind="_form.Website" />
+                </label>
+            </div>
+
+            @* Printed at the head of every report and invoice, beside the identity above. *@
+            <div class="logo-block" data-card="logo">
+                <span class="field-label">@Texts["Site.Logo"]</span>
+                <div class="logo-row">
+                    <div class="logo-box">
+                        @if (_logo is { Length: > 0 } png)
+                        {
+                            <img src="@($"data:image/png;base64,{Convert.ToBase64String(png)}")" alt="@Texts["Site.Logo"]" data-state="logo" />
+                        }
+                    </div>
+                    <div class="logo-actions">
+                        <label class="btn btn-secondary @(CanEdit ? null : "is-disabled")" data-action="Site.ChooseLogo">
+                            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Image" />
+                            @Texts["Site.ChooseLogo"]
+                            <InputFile class="file-input" accept="image/png,image/jpeg,image/bmp,image/gif" disabled="@(!CanEdit)" OnChange="ChooseLogoAsync" />
+                        </label>
+                        <ActionButton Key="Site.RemoveLogo" Disabled="@(!CanEdit || _logo is null)" OnClick="RemoveLogo" />
+                    </div>
+                    <p class="small muted">@(_logoRefused ? Texts["Site.LogoInvalid"] : Texts["Site.LogoHint"])</p>
+                </div>
+            </div>
+        </fieldset>
+    }
+    else if (_loaded)
+    {
+        <p class="muted">@Texts["Message.NothingSelected"]</p>
+    }
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Primary>
+        <ActionButton Key="Action.Save" Primary="true" Hidden="@(!CanEdit)" Disabled="@(Current is null || _busy)" OnClick="SaveAsync" />
+    </Primary>
+</ActionBar>
+
+@if (_dialog == SiteDialog.New)
+{
+    <Modal Name="new-site" Title="@Texts["Site.New"]" Hint="@Texts["Site.NewHelp"]" OnCancel="CloseDialog">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Code"]</span>
+                    <input class="input mono" dir="ltr" data-field="new-code" style="text-transform: uppercase" maxlength="@ConfigurationService.MaxSiteCodeLength" @bind="_newCode" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Site.Kind"]</span>
+                    <select class="input" data-field="new-kind" @bind="_newKind">
+                        @foreach (var kind in Enum.GetValues<LabSiteKind>())
+                        {
+                            <option value="@kind">@Texts[$"LabSiteKind.{kind}"]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameFr"]</span>
+                    <input class="input" data-field="new-name-fr" maxlength="@SettingsScreenRules.SiteNameMaxLength" @bind="_newNameFr" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.NameAr"]</span>
+                    <input class="input" dir="rtl" data-field="new-name-ar" maxlength="@SettingsScreenRules.SiteNameMaxLength" @bind="_newNameAr" />
+                </label>
+            </div>
+            @if (_newRefusal is { } refusal)
+            {
+                <p class="message is-warning small" role="alert" data-refusal="new-site">@refusal</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="CloseDialog" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="@_busy" OnClick="CreateAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private enum SiteDialog { None, New }
+
+    private IReadOnlyList<SiteDetail> _sites = [];
+    private IReadOnlyList<UserRow> _biologists = [];
+    private Guid? _siteId;
+    private SiteForm _form = new();
+    private bool _hasMinistryDate;
+    private DateOnly _ministryDate = DateOnly.FromDateTime(DateTime.Today), _accreditationUntil = DateOnly.FromDateTime(DateTime.Today);
+    private byte[]? _logo;
+    private bool _logoRefused, _loaded, _busy;
+    private IReadOnlyList<string> _invoicing = [], _operation = [];
+
+    private SiteDialog _dialog;
+    private string _newCode = string.Empty, _newNameFr = string.Empty, _newNameAr = string.Empty;
+    private LabSiteKind _newKind = LabSiteKind.ReferralPartner;
+    private string? _newRefusal;
+    private (string Text, string Tone)? _status;
+
+    private bool CanEdit => SettingsScreenRules.CanEditSites(Context.User);
+
+    private SiteDetail? Current => _sites.FirstOrDefault(s => s.Id == _siteId) ?? _sites.FirstOrDefault();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var users = await Scopes.RunAsync<UserAdministrationService, Result<IReadOnlyList<UserRow>>>(s => s.GetUsersAsync(includeInactive: false));
+            if (users.IsSuccess) _biologists = SettingsScreenRules.ResponsibleCandidates(users.Value);
+
+            var sites = await Scopes.RunAsync<ConfigurationService, Result<IReadOnlyList<SiteDetail>>>(s => s.GetSitesAsync());
+            if (sites.IsFailure)
+            {
+                _status = (Texts.Describe(sites.Errors), "critical");
+                return;
+            }
+
+            _sites = sites.Value;
+            Populate();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the sites failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void SiteChanged(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var id)) return;
+        _siteId = id;
+        _status = null;
+        Populate();
+    }
+
+    private void Populate()
+    {
+        if (Current is not { } site) return;
+
+        _siteId = site.Id;
+        _form = SettingsScreenRules.FormOf(site);
+        _hasMinistryDate = site.HealthMinistryAuthorizationDate is not null;
+        _ministryDate = site.HealthMinistryAuthorizationDate ?? DateOnly.FromDateTime(DateTime.Today);
+        _accreditationUntil = site.AccreditationValidUntil ?? DateOnly.FromDateTime(DateTime.Today);
+        _logo = site.LogoPng;
+        _logoRefused = false;
+        (_invoicing, _operation) = (site.InvoicingBlockers, site.OperationBlockers);
+    }
+
+    private void ResponsibleChanged(ChangeEventArgs e) =>
+        _form.ResponsibleBiologistUserId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    /// <summary>Scaled to the width kept, as a PNG: a JPEG, a BMP or a GIF comes out as the PNG the service stores.</summary>
+    private async Task ChooseLogoAsync(InputFileChangeEventArgs e)
+    {
+        _logoRefused = false;
+        try
+        {
+            var image = await e.File.RequestImageFileAsync("image/png", SettingsScreenRules.LogoMaxWidth, 4000);
+            await using var stream = image.OpenReadStream(maxAllowedSize: 8 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+
+            if (buffer.Length == 0 || !image.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+            {
+                _logoRefused = true;
+                return;
+            }
+
+            _logo = _form.NewLogo = buffer.ToArray();
+            _form.LogoRemoved = false;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+        {
+            Logger.LogWarning(ex, "A logo image could not be read.");
+            _logoRefused = true;
+        }
+    }
+
+    private void RemoveLogo()
+    {
+        _logo = _form.NewLogo = null;
+        _form.LogoRemoved = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Current is not { } site || !CanEdit || _busy) return;
+        _busy = true;
+
+        try
+        {
+            _form.MinistryAuthorizationDate = _hasMinistryDate ? _ministryDate : null;
+            _form.AccreditationValidUntil = _accreditationUntil;
+            var request = SettingsScreenRules.ToRequest(site, _form);
+
+            var result = await Scopes.RunAsync<ConfigurationService, Result<SiteSaveOutcome>>(s => s.SaveSiteAsync(request));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            (_invoicing, _operation) = (result.Value.InvoicingBlockers, result.Value.OperationBlockers);
+            var (key, complete) = SettingsScreenRules.SavedStatus(result.Value);
+            _status = (Texts[key], complete ? "normal" : "abnormal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the site failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void CloseDialog()
+    {
+        _dialog = SiteDialog.None;
+        _newRefusal = null;
+    }
+
+    /// <summary>Kept open with what was typed when refused: a taken code costs one correction, not retyping everything.</summary>
+    private async Task CreateAsync()
+    {
+        if (!CanEdit || _busy) return;
+        _busy = true;
+
+        try
+        {
+            var request = SettingsScreenRules.NewSite(_newCode, _newNameFr, _newNameAr, _newKind);
+            var result = await Scopes.RunAsync<ConfigurationService, Result<Guid>>(s => s.CreateSiteAsync(request));
+            if (result.IsFailure)
+            {
+                _newRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            _siteId = result.Value;
+            CloseDialog();
+            await LoadAsync();
+            _status = (Texts.T("Site.Created", request.Code.ToUpperInvariant()), "normal");
+            _newCode = _newNameFr = _newNameAr = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Creating a site failed.");
+            _newRefusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

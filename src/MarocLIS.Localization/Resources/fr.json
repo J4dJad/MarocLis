@@ -6766,6 +6766,8 @@
       "ModuleHint": "Importez une licence qui comprend ce module depuis l'application Windows MarocLIS, sur le serveur, puis rechargez cette page."
     },
     "CashReviewNone": "Aucune caisse clôturée dans la période.",
-    "AuditNone": "Aucune entrée ne correspond aux filtres."
+    "AuditNone": "Aucune entrée ne correspond aux filtres.",
+    "PrintersOnWorkstation": "Les imprimantes se choisissent sur chaque poste Windows, dans Paramètres › Imprimantes de l'application installée. Depuis le navigateur, les documents s'ouvrent en PDF et s'impriment avec l'imprimante de ce poste.",
+    "LicenceRequestDownloaded": "Demande téléchargée. Envoyez ce fichier à votre fournisseur MarocLIS."
   }
 }

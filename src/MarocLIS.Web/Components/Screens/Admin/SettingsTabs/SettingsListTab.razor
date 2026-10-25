@@ -1,0 +1,162 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<SettingsListTab> Logger
+
+@*
+    « Paramètres › Paramètres »: the settings the database holds, installation-wide or for one site.
+    A sensitive value is never shown and its editor starts empty (SettingsScreenRules.DisplayValue
+    and EditInitial): some hold credentials. ConfigurationService checks and records each change.
+*@
+<div class="list-tools">
+    <span class="muted" data-state="count">@Texts.T("Audit.RowCount", _rows.Count)</span>
+    <span class="list-tools-end">
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadAsync" />
+    </span>
+</div>
+
+<div class="screen-body">
+    <div class="card" data-card="settings">
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="settings">
+                <thead>
+                    <tr>
+                        <th>@Texts["Admin.SettingKey"]</th>
+                        <th>@Texts["Admin.SettingValue"]</th>
+                        <th>@Texts["App.Site"]</th>
+                        <th>@Texts["Field.Description"]</th>
+                        <th>@Texts["Admin.SettingSensitive"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr class="@(row.SettingId == _selectedId ? "is-selected" : null) @(row.IsSecuritySensitive ? "is-abnormal" : null)" data-row="@row.Key"
+                            @onclick="() => _selectedId = row.SettingId">
+                            <td class="mono small strong" dir="ltr">@row.Key</td>
+                            <td class="mono small" dir="ltr">@SettingsScreenRules.DisplayValue(row)</td>
+                            <td class="mono small">@SiteCode(row)</td>
+                            <td class="small">@row.Description</td>
+                            <td class="small">@(row.IsSecuritySensitive ? Texts["Admin.SettingSensitive"] : null)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="message is-info small" data-state="notice">@Texts["Admin.SettingsNotice"]</p>
+    </div>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Action.New" Hidden="@(!CanManage)" Disabled="@_busy" OnClick="() => _dialog = SettingDialog.NewKey" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Action.Edit" Primary="true" Hidden="@(!CanManage)" Disabled="@(_busy || Selected is null)" OnClick="() => _dialog = SettingDialog.Edit" />
+    </Primary>
+</ActionBar>
+
+@switch (_dialog)
+{
+    case SettingDialog.Edit when Selected is { } edited:
+        <TextPrompt Name="setting-value" Title="@Texts["Action.Edit"]" Prompt="@Texts.T("Admin.SettingValuePrompt", edited.Key)"
+                    Initial="@SettingsScreenRules.EditInitial(edited)" MaxLength="@SettingsScreenRules.SettingValueMaxLength"
+                    OnConfirm="value => SaveAsync(edited.Key, value, edited.SiteId)" OnCancel="Close" />
+        break;
+
+    case SettingDialog.NewKey:
+        <TextPrompt Name="setting-key" Title="@Texts["Action.New"]" Prompt="@Texts["Admin.SettingKeyPrompt"]" Required="true"
+                    MaxLength="@SettingsScreenRules.SettingKeyMaxLength" OnConfirm="KeyTyped" OnCancel="Close" />
+        break;
+
+    case SettingDialog.NewValue when _newKey is { } typedKey:
+        <TextPrompt Name="setting-new-value" Title="@Texts["Action.New"]" Prompt="@Texts.T("Admin.SettingValuePrompt", typedKey)"
+                    MaxLength="@SettingsScreenRules.SettingValueMaxLength" OnConfirm="value => SaveAsync(typedKey, value, null)" OnCancel="Close" />
+        break;
+}
+
+@code {
+    private enum SettingDialog { None, Edit, NewKey, NewValue }
+
+    private IReadOnlyList<SettingRow> _rows = [];
+    private IReadOnlyList<SiteDetail> _sites = [];
+    private Guid? _selectedId;
+    private SettingDialog _dialog;
+    private string? _newKey;
+    private bool _busy;
+    private (string Text, string Tone)? _status;
+
+    private bool CanManage => SettingsScreenRules.CanEditSettings(Context.User);
+
+    private SettingRow? Selected => _rows.FirstOrDefault(r => r.SettingId == _selectedId);
+
+    private string SiteCode(SettingRow row) =>
+        row.SiteId is null ? "—" : _sites.FirstOrDefault(s => s.Id == row.SiteId)?.Code ?? "?";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var sites = await Scopes.RunAsync<ConfigurationService, Result<IReadOnlyList<SiteDetail>>>(s => s.GetSitesAsync());
+            if (sites.IsSuccess) _sites = sites.Value;
+
+            var result = await Scopes.RunAsync<ConfigurationService, Result<IReadOnlyList<SettingRow>>>(s => s.GetSettingsAsync());
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _rows = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the settings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Close()
+    {
+        _dialog = SettingDialog.None;
+        _newKey = null;
+    }
+
+    private void KeyTyped(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            Close();
+            return;
+        }
+
+        _newKey = key.Trim();
+        _dialog = SettingDialog.NewValue;
+    }
+
+    private async Task SaveAsync(string key, string value, Guid? siteId)
+    {
+        Close();
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<ConfigurationService, Result>(s => s.SetSettingAsync(key, value, siteId));
+            _status = result.IsFailure ? (Texts.Describe(result.Errors), "critical") : null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a setting failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

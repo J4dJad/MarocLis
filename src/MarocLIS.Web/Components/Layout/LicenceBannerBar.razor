@@ -15,7 +15,7 @@
         <span class="licence-banner-text">@Text(banner)</span>
         @if (Context.User.Has(Permissions.Administration.License))
         {
-            <a class="licence-banner-link" href="@WebMenu.HrefOf("settings")">@Texts["Licence.Banner.Open"]</a>
+            <a class="licence-banner-link" href="@($"{WebMenu.HrefOf("settings")}?onglet=licence")">@Texts["Licence.Banner.Open"]</a>
         }
     </div>
 }

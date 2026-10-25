@@ -30,48 +30,48 @@ public enum SettingsTab
 /// <param name="Closes">The button reads « Clôturer » on an open series, « Rouvrir » on a closed one.</param>
 public sealed record SequenceActions(bool EditFormat, bool ToggleClosed, bool SetStart, bool Closes);
 
-/// <summary>The site's identity as typed in the form, before it becomes a request.</summary>
+/// <summary>The site's identity as typed in the form, before it becomes a request: its boxes write to it.</summary>
 public sealed record SiteForm
 {
-    public string Code { get; init; } = string.Empty;
-    public string NameFr { get; init; } = string.Empty;
-    public string? NameAr { get; init; }
-    public LabSiteKind Kind { get; init; }
-    public string LegalName { get; init; } = string.Empty;
-    public string? Ice { get; init; }
-    public string? FiscalId { get; init; }
-    public string? CommercialRegisterNumber { get; init; }
-    public string? CommercialRegisterCourt { get; init; }
-    public string? ProfessionalTaxNumber { get; init; }
-    public string? CnssAffiliationNumber { get; init; }
-    public string? Inpe { get; init; }
-    public string? MinistryAuthorization { get; init; }
+    public string Code { get; set; } = string.Empty;
+    public string NameFr { get; set; } = string.Empty;
+    public string? NameAr { get; set; }
+    public LabSiteKind Kind { get; set; }
+    public string LegalName { get; set; } = string.Empty;
+    public string? Ice { get; set; }
+    public string? FiscalId { get; set; }
+    public string? CommercialRegisterNumber { get; set; }
+    public string? CommercialRegisterCourt { get; set; }
+    public string? ProfessionalTaxNumber { get; set; }
+    public string? CnssAffiliationNumber { get; set; }
+    public string? Inpe { get; set; }
+    public string? MinistryAuthorization { get; set; }
 
     /// <summary>The authorisation's date; null when its box is not ticked.</summary>
-    public DateOnly? MinistryAuthorizationDate { get; init; }
+    public DateOnly? MinistryAuthorizationDate { get; set; }
 
-    public bool IsAccredited { get; init; }
-    public string? AccreditationNumber { get; init; }
-    public DateOnly? AccreditationValidUntil { get; init; }
+    public bool IsAccredited { get; set; }
+    public string? AccreditationNumber { get; set; }
+    public DateOnly? AccreditationValidUntil { get; set; }
 
     /// <summary>The responsible biologist chosen; null for « — ».</summary>
-    public Guid? ResponsibleBiologistUserId { get; init; }
+    public Guid? ResponsibleBiologistUserId { get; set; }
 
-    public string? AddressFr { get; init; }
-    public string? AddressAr { get; init; }
-    public string? City { get; init; }
-    public MoroccanRegion Region { get; init; }
-    public string? PostalCode { get; init; }
-    public string? Phone { get; init; }
-    public string? Fax { get; init; }
-    public string? Email { get; init; }
-    public string? Website { get; init; }
+    public string? AddressFr { get; set; }
+    public string? AddressAr { get; set; }
+    public string? City { get; set; }
+    public MoroccanRegion Region { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Phone { get; set; }
+    public string? Fax { get; set; }
+    public string? Email { get; set; }
+    public string? Website { get; set; }
 
     /// <summary>A logo chosen in this form, as a PNG; null when none was chosen.</summary>
-    public byte[]? NewLogo { get; init; }
+    public byte[]? NewLogo { get; set; }
 
     /// <summary>Whether the stored logo was removed in this form.</summary>
-    public bool LogoRemoved { get; init; }
+    public bool LogoRemoved { get; set; }
 }
 
 /// <summary>

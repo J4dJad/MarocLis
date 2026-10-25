@@ -1,0 +1,179 @@
+@using MarocLIS.Application.Administration
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<NumberingTab> Logger
+
+@*
+    « Paramètres › Numérotation »: every series the laboratory numbers its documents with, its
+    format, the next number and the last one handed out. A format changes only before the first
+    number; the start moves before it, or forward on a series that is not fiscal; a series is
+    closed or reopened with a reason — SettingsScreenRules.Actions, ConfigurationService's checks
+    and its audit entries, as on the workstation.
+*@
+<div class="list-tools">
+    <span class="muted" data-state="count">@Texts.T("Audit.RowCount", _rows.Count)</span>
+    <span class="list-tools-end">
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadAsync" />
+    </span>
+</div>
+
+<div class="screen-body">
+    <div class="card" data-card="sequences">
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="sequences">
+                <thead>
+                    <tr>
+                        <th>@Texts["Admin.SequencePurpose"]</th>
+                        <th>@Texts["App.Site"]</th>
+                        <th class="num">@Texts["Field.Date"]</th>
+                        <th>@Texts["Admin.SequenceFormat"]</th>
+                        <th>@Texts["Admin.SequencePreview"]</th>
+                        <th class="num">@Texts["Admin.SequenceNext"]</th>
+                        <th class="num">@Texts["Admin.SequenceLastUsed"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr class="@(row.SequenceId == Selected?.SequenceId ? "is-selected" : null) @RowClass(row)" data-row="@row.Purpose"
+                            @onclick="() => _selectedId = row.SequenceId">
+                            <td class="strong">@Texts[$"SequencePurpose.{row.Purpose}"]</td>
+                            <td class="mono small">@(row.SiteCode ?? "—")</td>
+                            <td class="num mono">@(row.Year?.ToString(Texts.Culture) ?? "—")</td>
+                            <td class="mono" dir="ltr">@row.Format</td>
+                            <td class="mono" dir="ltr">@row.Preview</td>
+                            <td class="num mono strong">@row.NextValue.ToString("N0", Texts.Culture)</td>
+                            <td class="num mono">@(row.HasBeenUsed ? row.LastAllocatedValue.ToString("N0", Texts.Culture) : "—")</td>
+                            <td><Pill Text="@Texts[SettingsScreenRules.StateKey(row)]" Tone="@(row.IsClosed ? "Critical" : row.HasBeenUsed ? "Waiting" : "Info")" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="message is-info small" data-state="notice">@Texts["Admin.SequenceFormatNotice"]</p>
+    </div>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Admin.SequenceStart" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Pencil" Hidden="@(!CanManage)"
+                      Disabled="@(_busy || !Actions.SetStart)" OnClick="() => _dialog = SequenceDialog.Start" />
+    </Secondary>
+    <Destructive>
+        @if (Actions.Closes)
+        {
+            <ActionButton Key="Admin.CloseSequence" Danger="true" Hidden="@(!CanManage)" Disabled="@(_busy || !Actions.ToggleClosed)" OnClick="() => _dialog = SequenceDialog.Toggle" />
+        }
+        else
+        {
+            <ActionButton Key="Admin.ReopenSequence" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LockOpen" Hidden="@(!CanManage)" Disabled="@(_busy || !Actions.ToggleClosed)" OnClick="() => _dialog = SequenceDialog.Toggle" />
+        }
+    </Destructive>
+    <Primary>
+        <ActionButton Key="Admin.EditSequenceFormat" Primary="true" Hidden="@(!CanManage)" Disabled="@(_busy || !Actions.EditFormat)" OnClick="() => _dialog = SequenceDialog.Format" />
+    </Primary>
+</ActionBar>
+
+@switch (_dialog)
+{
+    case SequenceDialog.Format when Selected is { } formatted:
+        <TextPrompt Name="sequence-format" Title="@Texts["Admin.EditSequenceFormat"]" Required="true"
+                    Prompt="@Texts.T("Admin.SequenceFormatPrompt", Texts[$"SequencePurpose.{formatted.Purpose}"])"
+                    Initial="@formatted.Format" MaxLength="@SettingsScreenRules.SequenceFormatMaxLength"
+                    OnConfirm="format => RunAsync(s => s.SetSequenceFormatAsync(formatted.SequenceId, format.Trim()))" OnCancel="Close" />
+        break;
+
+    case SequenceDialog.Start when Selected is { } started:
+        <TextPrompt Name="sequence-start" Title="@Texts["Admin.SequenceStart"]" Required="true"
+                    Prompt="@Texts.T("Admin.SequenceStartPrompt", Texts[$"SequencePurpose.{started.Purpose}"], started.LastAllocatedValue)"
+                    Initial="@started.NextValue.ToString(System.Globalization.CultureInfo.InvariantCulture)" MaxLength="@SettingsScreenRules.SequenceStartMaxLength"
+                    OnConfirm="typed => StartAsync(started, typed)" OnCancel="Close" />
+        break;
+
+    case SequenceDialog.Toggle when Selected is { } toggledRow:
+        <ReasonPrompt Title="@Texts[toggledRow.IsClosed ? "Admin.ReopenSequence" : "Admin.CloseSequence"]"
+                      Prompt="@Texts.T(toggledRow.IsClosed ? "Admin.ReopenSequencePrompt" : "Admin.CloseSequencePrompt", Texts[$"SequencePurpose.{toggledRow.Purpose}"])"
+                      MaxLength="@SettingsScreenRules.SequenceReasonMaxLength"
+                      OnConfirm="reason => RunAsync(s => s.SetSequenceClosedAsync(toggledRow.SequenceId, !toggledRow.IsClosed, reason))" OnCancel="Close" />
+        break;
+}
+
+@code {
+    private enum SequenceDialog { None, Format, Start, Toggle }
+
+    private IReadOnlyList<SequenceRow> _rows = [];
+    private Guid? _selectedId;
+    private SequenceDialog _dialog;
+    private bool _busy;
+    private (string Text, string Tone)? _status;
+
+    private bool CanManage => SettingsScreenRules.CanEditSettings(Context.User);
+
+    private SequenceRow? Selected => _rows.FirstOrDefault(r => r.SequenceId == _selectedId);
+
+    private SequenceActions Actions => SettingsScreenRules.Actions(Context.User, Selected);
+
+    /// <summary>Closed in red, in service muted, still editable in the accent: the workstation's colours.</summary>
+    private static string RowClass(SequenceRow row) => row.IsClosed ? "is-critical-row" : row.HasBeenUsed ? "is-muted-row" : "is-accent-row";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<ConfigurationService, Result<IReadOnlyList<SequenceRow>>>(s => s.GetSequencesAsync());
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _rows = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the number sequences failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Close() => _dialog = SequenceDialog.None;
+
+    private async Task StartAsync(SequenceRow row, string typed)
+    {
+        if (SettingsScreenRules.ParseStart(typed) is not { } next)
+        {
+            Close();
+            _status = (Texts["Sequence_StartOutOfRange"], "critical");
+            return;
+        }
+
+        await RunAsync(s => s.SetSequenceStartAsync(row.SequenceId, next));
+    }
+
+    private async Task RunAsync(Func<ConfigurationService, Task<Result>> write)
+    {
+        Close();
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<ConfigurationService, Result>(write);
+            _status = result.IsFailure ? (Texts.Describe(result.Errors), "critical") : null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing a number sequence failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

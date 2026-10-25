@@ -1,0 +1,200 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Samples
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<StorageTab> Logger
+
+@*
+    « Paramètres › Lieux de stockage »: the fridges, freezers and benches reception and the serum
+    bank offer, so the same place is written the same way on every tube. A refused name keeps its
+    box open with what was typed, as the workstation asks again; switching a place off is confirmed
+    with the tubes it holds, which keep the name they were given. SampleStorageLocationService
+    checks and records each change (SettingsScreenRules.PlaceActions for what is offered).
+*@
+<div class="list-tools">
+    <span class="muted" data-state="count">@Texts.T("Audit.RowCount", _rows.Count)</span>
+    <span class="list-tools-end">
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadAsync" />
+    </span>
+</div>
+
+<div class="screen-body">
+    <div class="card reading-column" data-card="places">
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="places">
+                <thead>
+                    <tr>
+                        <th>@Texts["StorageLocations.Name"]</th>
+                        <th>@Texts["Field.Status"]</th>
+                        <th class="num">@Texts["StorageLocations.StoredSamples"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr class="@(row.Id == _selectedId ? "is-selected" : null) @(row.IsActive ? null : "is-inactive")" data-row="@row.Name"
+                            @onclick="() => _selectedId = row.Id">
+                            <td class="strong">@row.Name</td>
+                            <td><Pill Text="@Texts[row.IsActive ? "Admin.Active" : "Admin.Inactive"]" Tone="@(row.IsActive ? "Ok" : "Waiting")" /></td>
+                            <td class="num mono">@row.StoredSampleCount.ToString("N0", Texts.Culture)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="message is-info small" data-state="notice">@Texts["StorageLocations.Notice"]</p>
+    </div>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="StorageLocations.Rename" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Pencil" Hidden="@(!CanManage)"
+                      Disabled="@(_busy || !Actions.Rename)" OnClick="() => Open(PlaceDialog.Rename)" />
+    </Secondary>
+    <Destructive>
+        @if (Actions.Reactivates)
+        {
+            <ActionButton Key="Admin.Reactivate" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CircleCheck" Hidden="@(!CanManage)"
+                          Disabled="@(_busy || !Actions.Toggle)" OnClick="ToggleAsync" />
+        }
+        else
+        {
+            <ActionButton Key="Admin.Deactivate" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.X" Danger="true" Hidden="@(!CanManage)"
+                          Disabled="@(_busy || !Actions.Toggle)" OnClick="ToggleAsync" />
+        }
+    </Destructive>
+    <Primary>
+        <ActionButton Key="Action.Add" Primary="true" Hidden="@(!CanManage)" Disabled="@_busy" OnClick="() => Open(PlaceDialog.New)" />
+    </Primary>
+</ActionBar>
+
+@switch (_dialog)
+{
+    case PlaceDialog.New:
+        <TextPrompt Name="place-new" Title="@Texts["StorageLocations.Title"]" Prompt="@Texts["StorageLocations.NewPrompt"]" Required="true"
+                    MaxLength="@SampleStorageLocation.NameMaxLength" Refusal="@_refusal"
+                    OnConfirm="name => WriteAsync(s => s.CreateAsync(name), keepOpen: true)" OnCancel="Close" />
+        break;
+
+    case PlaceDialog.Rename when Selected is { } renamed:
+        <TextPrompt Name="place-rename" Title="@Texts["StorageLocations.Rename"]" Prompt="@Texts.T("StorageLocations.RenamePrompt", renamed.Name)" Required="true"
+                    Initial="@renamed.Name" MaxLength="@SampleStorageLocation.NameMaxLength" Refusal="@_refusal"
+                    OnConfirm="name => WriteAsync(s => s.RenameAsync(renamed.Id, name), keepOpen: true)" OnCancel="Close" />
+        break;
+
+    case PlaceDialog.ConfirmDeactivate when Selected is { } switchedOff:
+        <ConfirmPrompt Title="@Texts["Admin.Deactivate"]" Message="@Texts.T("StorageLocations.DeactivateConfirm", switchedOff.Name, switchedOff.StoredSampleCount)"
+                       OnYes="() => WriteAsync(s => s.SetActiveAsync(switchedOff.Id, false), keepOpen: false)" OnNo="Close" />
+        break;
+}
+
+@code {
+    private enum PlaceDialog { None, New, Rename, ConfirmDeactivate }
+
+    private IReadOnlyList<SampleStorageLocationRow> _rows = [];
+    private Guid? _selectedId;
+    private PlaceDialog _dialog;
+    private string? _refusal;
+    private bool _busy;
+    private (string Text, string Tone)? _status;
+
+    private bool CanManage => SettingsScreenRules.CanEditSettings(Context.User);
+
+    private SampleStorageLocationRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private (bool Rename, bool Toggle, bool Reactivates) Actions => SettingsScreenRules.PlaceActions(Context.User, Selected);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<SampleStorageLocationService, Result<IReadOnlyList<SampleStorageLocationRow>>>(s => s.GetAllAsync());
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _rows = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the storage places failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Open(PlaceDialog dialog)
+    {
+        _refusal = null;
+        _dialog = dialog;
+    }
+
+    private void Close()
+    {
+        _dialog = PlaceDialog.None;
+        _refusal = null;
+    }
+
+    /// <summary>Switching a place back on needs no confirmation; switching it off is confirmed with its tubes.</summary>
+    private Task ToggleAsync()
+    {
+        if (Selected is not { } row) return Task.CompletedTask;
+        if (!row.IsActive) return WriteAsync(s => s.SetActiveAsync(row.Id, true), keepOpen: false);
+
+        Open(PlaceDialog.ConfirmDeactivate);
+        return Task.CompletedTask;
+    }
+
+    private Task WriteAsync(Func<SampleStorageLocationService, Task<Result<Guid>>> write, bool keepOpen) =>
+        RunAsync(async s =>
+        {
+            var created = await write(s);
+            if (created.IsSuccess) _selectedId = created.Value;
+            return created.IsSuccess ? Result.Success() : Result.Failure(created.Errors);
+        }, keepOpen);
+
+    private Task WriteAsync(Func<SampleStorageLocationService, Task<Result>> write, bool keepOpen) => RunAsync(write, keepOpen);
+
+    private async Task RunAsync(Func<SampleStorageLocationService, Task<Result>> write, bool keepOpen)
+    {
+        if (_busy) return;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<SampleStorageLocationService, Result>(write);
+            if (result.IsFailure)
+            {
+                if (keepOpen)
+                {
+                    _refusal = Texts.Describe(result.Errors);
+                    return;
+                }
+
+                _status = (Texts.Describe(result.Errors), "critical");
+            }
+            else
+            {
+                _status = null;
+            }
+
+            Close();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing a storage place failed.");
+            Close();
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

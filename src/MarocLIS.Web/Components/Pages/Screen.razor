@@ -79,12 +79,16 @@
             <MarocLIS.Web.Components.Screens.Billing.CashReview />
             break;
 
+        case ScreenDecision.Open when Key == "users":
+            <MarocLIS.Web.Components.Screens.Admin.UserAdministration />
+            break;
+
         case ScreenDecision.Open when Key == "audit":
             <MarocLIS.Web.Components.Screens.Admin.AuditTrail />
             break;
 
-        case ScreenDecision.Open when Key == "users":
-            <MarocLIS.Web.Components.Screens.Admin.UserAdministration />
+        case ScreenDecision.Open when Key == "settings":
+            <MarocLIS.Web.Components.Screens.Admin.Settings Tab="@Onglet" />
             break;
 
         case ScreenDecision.Open:
@@ -128,6 +132,9 @@
     /// workstation's file opens them on it.
     /// </summary>
     [SupplyParameterFromQuery(Name = "recherche")] public string? Recherche { get; set; }
+
+    /// <summary>« Paramètres » opened on a tab: the licence banner's link opens it on the licence's, as the workstation's.</summary>
+    [SupplyParameterFromQuery(Name = "onglet")] public string? Onglet { get; set; }
 
     private ScreenDecision _decision = ScreenDecision.NotFound;
     private MarocLIS.Application.Navigation.MenuEntry? _entry;

@@ -1,0 +1,176 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<InvoicePrintTab> Logger
+
+@*
+    « Paramètres › Factures »: the default format of a patient invoice and what each format shows,
+    beside the discount ceiling — saved by the same button, each traced on its own by
+    InvoicePrintSettingsService. They apply to the next print or reprint and never change an amount.
+    Read by anyone who may open the screen, changed only with the right to manage settings. The
+    ceiling as typed is read by SettingsScreenRules.ReadDiscountCap, its refusal under its box.
+*@
+<div class="screen-body">
+    <fieldset class="card form-card reading-column" disabled="@(!CanManage || _busy)" data-card="invoice-print">
+        <p class="muted small">@Texts["InvoicePrint.SettingsIntro"]</p>
+
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["InvoicePrint.DefaultFormat"]</span>
+                <select class="input" data-field="format" @bind="_format">
+                    <option value="@InvoicePrintFormat.Standard">@Texts["InvoicePrint.FormatStandard"]</option>
+                    <option value="@InvoicePrintFormat.CotationB">@Texts["InvoicePrint.FormatCotationB"]</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="form-grid form-grid-2">
+            <div class="field" data-card="options">
+                <h3 class="section-title">@Texts["InvoicePrint.StandardOptions"]</h3>
+                <label class="field-check"><input type="checkbox" data-field="std-national-code" @bind="_stdCode" /><span>@Texts["InvoicePrint.OptNationalCode"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="std-coefficient" @bind="_stdCoefficient" /><span>@Texts["InvoicePrint.OptCoefficient"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="std-words" @bind="_stdWords" /><span>@Texts["InvoicePrint.OptWords"]</span></label>
+
+                <h3 class="section-title">@Texts["InvoicePrint.CotationOptions"]</h3>
+                <label class="field-check"><input type="checkbox" data-field="cot-line-price" @bind="_cotLinePrice" /><span>@Texts["InvoicePrint.OptLinePrice"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="cot-zero-fee" @bind="_cotZeroFee" /><span>@Texts["InvoicePrint.OptZeroFee"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="cot-words" @bind="_cotWords" /><span>@Texts["InvoicePrint.OptWords"]</span></label>
+                <label class="field-check"><input type="checkbox" data-field="cot-letter-value" @bind="_cotLetterValue" /><span>@Texts["InvoicePrint.OptLetterValue"]</span></label>
+            </div>
+
+            <div class="field" data-card="discount-cap">
+                <h3 class="section-title">@Texts["InvoicePrint.DiscountCap"]</h3>
+                <p class="muted small">@Texts["InvoicePrint.DiscountCapIntro"]</p>
+                <label class="field">
+                    <span class="field-label">@Texts["InvoicePrint.DiscountCapPercent"]</span>
+                    <input class="input input-amount mono" dir="ltr" data-field="cap-percent" maxlength="@AmountMaxLength" @bind="_capPercent" />
+                    <FieldMessage Refusal="_refusal" Field="cap-percent" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["InvoicePrint.DiscountCapAmount"]</span>
+                    <input class="input input-amount mono" dir="ltr" data-field="cap-amount" maxlength="@AmountMaxLength"
+                           placeholder="@Texts["InvoicePrint.DiscountCapNoAmount"]" @bind="_capAmount" />
+                    <FieldMessage Refusal="_refusal" Field="cap-amount" />
+                </label>
+            </div>
+        </div>
+    </fieldset>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="LoadAsync" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Action.Save" Primary="true" Hidden="@(!CanManage)" Disabled="@(_busy || !_loaded)" OnClick="SaveAsync" />
+    </Primary>
+</ActionBar>
+
+@code {
+    /// <summary>The length of the workstation's amount boxes.</summary>
+    private const int AmountMaxLength = 15;
+
+    private InvoicePrintSettings _settings = InvoicePrintSettings.Default;
+    private InvoicePrintFormat _format;
+    private bool _stdCode, _stdCoefficient, _stdWords, _cotLinePrice, _cotZeroFee, _cotWords, _cotLetterValue;
+    private string? _capPercent, _capAmount;
+    private FieldRefusal? _refusal;
+    private bool _busy, _loaded;
+    private (string Text, string Tone)? _status;
+
+    private bool CanManage => SettingsScreenRules.CanEditSettings(Context.User);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _refusal = null;
+        try
+        {
+            var settings = await Scopes.RunAsync<InvoicePrintSettingsService, Result<InvoicePrintSettings>>(s => s.GetAsync());
+            if (settings.IsFailure)
+            {
+                _status = (Texts.Describe(settings.Errors), "critical");
+                return;
+            }
+
+            _settings = settings.Value;
+            Show(_settings);
+
+            var cap = await Scopes.RunAsync<InvoicePrintSettingsService, Result<DiscountCapSettings>>(s => s.GetDiscountCapAsync());
+            if (cap.IsSuccess) (_capPercent, _capAmount) = SettingsScreenRules.DiscountCapTexts(cap.Value, Texts.Culture);
+
+            _status = null;
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the invoice print settings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Show(InvoicePrintSettings settings)
+    {
+        _format = settings.DefaultFormat;
+        (_stdCode, _stdCoefficient, _stdWords) = (settings.StandardShowNationalActCode, settings.StandardShowCoefficient, settings.StandardShowAmountInWords);
+        (_cotLinePrice, _cotZeroFee, _cotWords, _cotLetterValue) = (settings.CotationShowLinePrice, settings.CotationShowCollectionFeeWhenZero,
+                                                                    settings.CotationShowAmountInWords, settings.CotationShowLetterKeyValue);
+    }
+
+    /// <summary>The ceiling first, so a wrong box saves nothing; then the formats, then the ceiling, each refusal said.</summary>
+    private async Task SaveAsync()
+    {
+        if (!CanManage || _busy) return;
+
+        var (cap, refusal) = SettingsScreenRules.ReadDiscountCap(_capPercent, _capAmount);
+        _refusal = refusal;
+        if (cap is null) return;
+
+        _busy = true;
+        try
+        {
+            var settings = _settings with
+            {
+                DefaultFormat = _format,
+                StandardShowNationalActCode = _stdCode,
+                StandardShowCoefficient = _stdCoefficient,
+                StandardShowAmountInWords = _stdWords,
+                CotationShowLinePrice = _cotLinePrice,
+                CotationShowCollectionFeeWhenZero = _cotZeroFee,
+                CotationShowAmountInWords = _cotWords,
+                CotationShowLetterKeyValue = _cotLetterValue
+            };
+            var saved = await Scopes.RunAsync<InvoicePrintSettingsService, Result>(s => s.SaveAsync(settings));
+            if (saved.IsFailure)
+            {
+                _status = (Texts.Describe(saved.Errors), "critical");
+                return;
+            }
+
+            _settings = settings;
+
+            var capSaved = await Scopes.RunAsync<InvoicePrintSettingsService, Result>(s => s.SaveDiscountCapAsync(cap));
+            if (capSaved.IsFailure)
+            {
+                _status = (Texts.Describe(capSaved.Errors), "critical");
+                return;
+            }
+
+            (_capPercent, _capAmount) = SettingsScreenRules.DiscountCapTexts(cap, Texts.Culture);
+            _status = (Texts["InvoicePrint.Saved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the invoice print settings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

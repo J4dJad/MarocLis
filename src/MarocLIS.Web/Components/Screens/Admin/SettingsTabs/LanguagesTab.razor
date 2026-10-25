@@ -1,0 +1,113 @@
+@using MarocLIS.Application.Administration
+@using MarocLIS.Application.Licensing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject LicenceStatusHolder Licence
+@inject ILogger<LanguagesTab> Logger
+
+@*
+    « Paramètres › Langues »: the languages the laboratory works in. French always — the working
+    language and the one a record in a language switched off falls back to; Arabic only with its
+    module of the licence, its box off and saying why otherwise (SettingsScreenRules). Saved and
+    traced by ActiveLanguagesService. The session's own language follows at its next page, where
+    the language switch offers the new list.
+*@
+<div class="screen-body">
+    <fieldset class="card form-card reading-column" disabled="@(!CanManage || _busy)" data-card="languages">
+        <h2 class="card-title">@Texts["Languages.Heading"]</h2>
+        <p class="muted small">@Texts["Languages.Intro"]</p>
+
+        <div class="check-list" data-list="languages">
+            <label class="field-check is-disabled">
+                <input type="checkbox" data-field="french" checked disabled />
+                <span>@Texts["AppLanguage.French"]</span>
+            </label>
+            <label class="field-check @(ArabicLicensed ? null : "is-disabled")">
+                <input type="checkbox" data-field="arabic" disabled="@(!ArabicLicensed)" @bind="_arabic" />
+                <span>@(ArabicLicensed ? Texts["AppLanguage.Arabic"] : $"{Texts["AppLanguage.Arabic"]} — {Texts["Licence.ModuleNotLicensed"]}")</span>
+            </label>
+            <label class="field-check">
+                <input type="checkbox" data-field="english" @bind="_english" />
+                <span>@Texts["AppLanguage.English"]</span>
+            </label>
+        </div>
+
+        <p class="muted small">@Texts["Languages.FrenchAlways"]</p>
+        <p class="message is-info small" data-state="notice">@Texts["Languages.Notice"]</p>
+    </fieldset>
+</div>
+
+<ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+    <Secondary>
+        <ActionButton Key="Action.Refresh" Disabled="@_busy" OnClick="LoadAsync" />
+    </Secondary>
+    <Primary>
+        <ActionButton Key="Action.Save" Primary="true" Hidden="@(!CanManage)" Disabled="@_busy" OnClick="SaveAsync" />
+    </Primary>
+</ActionBar>
+
+@code {
+    private bool _arabic, _english, _busy;
+    private (string Text, string Tone)? _status;
+
+    private bool CanManage => SettingsScreenRules.CanEditSettings(Context.User);
+
+    private bool ArabicLicensed => SettingsScreenRules.ArabicLicensed(Licence.Current);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            Show(await Scopes.RunAsync<ActiveLanguagesService, LanguageSettings>(s => s.GetAsync()));
+            _status = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the working languages failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void Show(LanguageSettings settings)
+    {
+        _arabic = settings.IsActive(AppLanguage.Arabic);
+        _english = settings.IsActive(AppLanguage.English);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanManage || _busy) return;
+        _busy = true;
+
+        try
+        {
+            var active = SettingsScreenRules.ActiveLanguages(_arabic, _english);
+            var (saved, current) = await Scopes.RunAsync<ActiveLanguagesService, (Result, LanguageSettings)>(async s =>
+            {
+                var result = await s.SaveAsync(active);
+                return (result, s.Current);
+            });
+
+            if (saved.IsFailure)
+            {
+                _status = (Texts.Describe(saved.Errors), "critical");
+                return;
+            }
+
+            Show(current);
+            _status = (Texts["Languages.Saved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the working languages failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
