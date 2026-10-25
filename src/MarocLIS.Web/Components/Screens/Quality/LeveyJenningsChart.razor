@@ -1,0 +1,113 @@
+@using System.Globalization
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@inject WebTexts Texts
+
+@*
+    The Levey-Jennings chart, the workstation's LeveyJenningsChart drawn in SVG: the Y axis in
+    Z-score units from −4 to +4 SD, the in-control band (±2 s) shaded, the mean and the ±1/±2/±3 s
+    lines weighted by what they mean and labelled with their value in measurement units, the
+    points joined (a trend is only seen as a line) and read by shape as well as colour — a square
+    rejected, a triangle a warning, a circle accepted — a derogation ringed. Where each one goes and
+    what it says is LeveyJenningsLayout's. Time runs from the reading side: right to left in Arabic.
+*@
+<div class="lj" data-state="chart">
+    @if (LeveyJenningsLayout.EmptyText(Series, Texts.T) is { } empty)
+    {
+        <p class="lj-empty muted" data-state="chart-empty">@empty</p>
+    }
+    else
+    {
+        var series = Series!;
+        var points = series.Points;
+        var rtl = Texts.IsRightToLeft;
+        @* Above the points, in the page's text: it wraps rather than running past the chart. *@
+        <p class="lj-header small muted cell-wrap" data-state="chart-header">@LeveyJenningsLayout.Header(series, Texts.T, Texts.Culture)</p>
+        <svg class="lj-chart" viewBox="0 0 @F(Width) @F(Height)" role="img" dir="ltr" aria-label="@Texts["Quality.LeveyJennings"]" data-chart="levey-jennings">
+            <rect class="lj-band" x="@F(PlotLeft)" y="@F(Y(2m))" width="@F(PlotWidth)" height="@F(Y(-2m) - Y(2m))" />
+            @foreach (var z in LeveyJenningsLayout.Limits)
+            {
+                var y = Y(z);
+                <line class="lj-limit lj-limit-@LeveyJenningsLayout.KindOf(z).ToString().ToLowerInvariant()" x1="@F(PlotLeft)" x2="@F(PlotLeft + PlotWidth)" y1="@F(y)" y2="@F(y)" />
+                @Label(rtl ? Width - 2 : 2, y + 4, rtl ? "end" : "start", LeveyJenningsLayout.LimitLabel(series, z, Texts.Culture), "lj-label")
+            }
+            <rect class="lj-frame" x="@F(PlotLeft)" y="@F(Top)" width="@F(PlotWidth)" height="@F(PlotHeight)" />
+            @if (points.Count > 1)
+            {
+                <polyline class="lj-line" points="@string.Join(" ", points.Select((p, i) => $"{F(X(i, points.Count))},{F(Y(p.ZScore ?? 0m))}"))" />
+            }
+            @for (var i = 0; i < points.Count; i++)
+            {
+                var point = points[i];
+                var x = X(i, points.Count);
+                var y = Y(point.ZScore ?? 0m);
+                var tone = LeveyJenningsLayout.Tone(point.Outcome).ToString().ToLowerInvariant();
+                var picked = point.QcResultId == Picked;
+                var size = picked ? 6.5 : 4.5;
+                var tip = string.Join("\n", LeveyJenningsLayout.PointTip(point, series, Texts.T, Texts.Culture));
+                <g class="lj-point lj-@tone @(picked ? "is-picked" : null)" data-point="@point.Outcome" @onclick="() => OnPoint.InvokeAsync(point)">
+                    <title>@tip</title>
+                    @switch (LeveyJenningsLayout.Shape(point.Outcome))
+                    {
+                        case QcPointShape.Square:
+                            <rect x="@F(x - size)" y="@F(y - size)" width="@F(size * 2)" height="@F(size * 2)" />
+                            break;
+                        case QcPointShape.Triangle:
+                            <polygon points="@($"{F(x)},{F(y - size - 1)} {F(x + size + 1)},{F(y + size)} {F(x - size - 1)},{F(y + size)}")" />
+                            break;
+                        default:
+                            <circle cx="@F(x)" cy="@F(y)" r="@F(size)" />
+                            break;
+                    }
+                    @if (point.WasOverridden)
+                    {
+                        <circle class="lj-override" cx="@F(x)" cy="@F(y)" r="@F(size + 4)" />
+                    }
+                    @* The point's hit area: a few pixels around it, as the workstation's 10 px. *@
+                    <circle class="lj-hit" cx="@F(x)" cy="@F(y)" r="10" />
+                </g>
+            }
+            @foreach (var i in LeveyJenningsLayout.DateTicks(points.Count))
+            {
+                @Label(X(i, points.Count), Height - 8, "middle", LeveyJenningsLayout.DateLabel(points[i]), "lj-label")
+            }
+        </svg>
+        <ul class="lj-legend small muted" data-state="legend">
+            <li><svg viewBox="0 0 12 12" aria-hidden="true"><circle class="lj-normal" cx="6" cy="6" r="4.5" /></svg>@Texts["QcOutcome.Accepted"]</li>
+            <li><svg viewBox="0 0 12 12" aria-hidden="true"><polygon class="lj-abnormal" points="6,1 11,11 1,11" /></svg>@Texts["QcOutcome.Warning"]</li>
+            <li><svg viewBox="0 0 12 12" aria-hidden="true"><rect class="lj-critical" x="1.5" y="1.5" width="9" height="9" /></svg>@Texts["QcOutcome.Rejected"]</li>
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public LeveyJenningsSeries? Series { get; set; }
+
+    /// <summary>The point picked, drawn larger.</summary>
+    [Parameter] public Guid? Picked { get; set; }
+
+    [Parameter] public EventCallback<LeveyJenningsPoint> OnPoint { get; set; }
+
+    // The workstation's insets: room for the limit labels on the side and the dates underneath.
+    private const double Width = 560, Height = 250, Left = 70, Right = 12, Top = 8, Bottom = 28;
+
+    private double PlotWidth => Width - Left - Right;
+    private double PlotHeight => Height - Top - Bottom;
+
+    /// <summary>In Arabic the labels go on the right and time runs right to left.</summary>
+    private double PlotLeft => Texts.IsRightToLeft ? Right : Left;
+
+    private double X(int index, int count)
+    {
+        var x = LeveyJenningsLayout.X(index, count, Left, PlotWidth);
+        return Texts.IsRightToLeft ? Width - x : x;
+    }
+
+    private double Y(decimal z) => LeveyJenningsLayout.Y(z, Top, PlotHeight);
+
+    /// <summary>An SVG label, written as markup: Razor reads a &lt;text&gt; element inside code as its own tag.</summary>
+    private static MarkupString Label(double x, double y, string anchor, string content, string css) =>
+        new($"<text class=\"{css}\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+}

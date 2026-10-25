@@ -8,7 +8,7 @@
 <Modal Name="reason" Title="@(Title ?? Texts["Message.ReasonRequiredTitle"])" OnCancel="CancelAsync">
     <ChildContent>
         <label class="field">
-            <span class="field-label">@Prompt</span>
+            <span class="field-label prompt-text">@Prompt</span>
             <textarea class="input" rows="3" maxlength="@(MaxLength > 0 ? MaxLength : null)" data-field="reason"
                       @bind="_reason" @bind:event="oninput"></textarea>
         </label>

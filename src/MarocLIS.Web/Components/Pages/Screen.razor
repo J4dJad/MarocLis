@@ -103,6 +103,10 @@
             <MarocLIS.Web.Components.Screens.Instruments.InstrumentInterfaces />
             break;
 
+        case ScreenDecision.Open when Key == "qc":
+            <MarocLIS.Web.Components.Screens.Quality.QualityControl />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

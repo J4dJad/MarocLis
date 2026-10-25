@@ -1,0 +1,757 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Application.Quality
+@using MarocLIS.Domain.Quality
+@using MarocLIS.Web.Components.Screens.MasterData
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject NavigationManager Navigation
+@inject ILogger<QualityControl> Logger
+
+@*
+    « Contrôle qualité », the workstation's QualityControlView: the run typed, its Levey-Jennings
+    chart, and the rejections awaiting review, on one screen because they are one task — a
+    technician runs the controls, looks where the points landed, and records what was done about
+    one out. The values are submitted as one run, all levels together, since the multi-level
+    Westgard rules compare the levels with each other. The controls transmitted by the analysers
+    reach the laboratory through the Windows workstation that drives them; here the values are typed
+    and evaluated by the same QualityControlService, which checks each right and journals each run.
+    What is shown, coloured, offered and refused is QualityControlScreenRules' and
+    LeveyJenningsLayout's. The filters (analyte, analyser, level) and the chart's period are the
+    web's: the typed values of a control filtered out are kept, counted in the bar, and submitted.
+*@
+<div class="screen qc" data-screen="qc">
+    <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@HasTyped" />
+
+    @{ var actions = Actions; }
+    <div class="list-tools" data-tools="filters">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Web.QcSearch"]" aria-label="@Texts["Web.QcSearch"]"
+                   data-field="search" autocomplete="off" @bind="_search" @bind:event="oninput" />
+        </div>
+        <select class="input input-narrow" data-field="filter-analyser" aria-label="@Texts["Result.Instrument"]" @onchange="AnalyserFilterChanged">
+            <option value="" selected="@(_analyserFilter is null)">@Texts["Web.QcAllAnalysers"]</option>
+            @foreach (var analyser in QualityControlScreenRules.LotAnalysers(_rows, Texts.Culture))
+            {
+                <option value="@analyser.Id" selected="@(analyser.Id == _analyserFilter)">@analyser.Code</option>
+            }
+        </select>
+        <select class="input input-narrow" data-field="filter-level" aria-label="@Texts["Quality.QcLevel"]" @onchange="LevelFilterChanged">
+            <option value="" selected="@(_levelFilter is null)">@Texts["Web.QcAllLevels"]</option>
+            @foreach (var level in QualityControlScreenRules.Levels(_rows))
+            {
+                <option value="@level" selected="@(level == _levelFilter)">@Texts[$"QcLevel.{level}"]</option>
+            }
+        </select>
+        <span class="list-tools-end">
+            <span class="muted small" data-state="count">@QualityControlScreenRules.Count(_rows.Count, _pending.Count, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    @* The reagent lot the run is recorded against: a new lot under evaluation, or the lot in use; and the analyser it is loaded on. *@
+    <div class="list-tools qc-lot" data-tools="lot">
+        <label class="field-inline">
+            <span>@Texts["QualityHr.Qc.ReagentLot"]</span>
+            <select class="input" data-field="reagent-lot" disabled="@(!actions.ChooseReagentLot || _busy)" @onchange="LotChanged">
+                <option value="" selected="@(_lot is null)">@QualityControlScreenRules.LotLabel(null, Texts.T)</option>
+                @foreach (var lot in _lots)
+                {
+                    <option value="@lot.ReagentLotId" selected="@(lot.ReagentLotId == _lot)">@QualityControlScreenRules.LotLabel(lot, Texts.T)</option>
+                }
+            </select>
+        </label>
+        <select class="input input-narrow" data-field="@QualityControlScreenRules.LotAnalyserField" aria-label="@Texts["Qc.LotAnalyser"]"
+                disabled="@(!actions.ChooseLotAnalyser || _busy)" @onchange="LotAnalyserChanged">
+            <option value="" selected="@(_lotAnalyser is null)">@Texts["Qc.LotAnalyser"]</option>
+            @foreach (var analyser in QualityControlScreenRules.LotAnalysers(_rows, Texts.Culture))
+            {
+                <option value="@analyser.Id" selected="@(analyser.Id == _lotAnalyser)">@analyser.Code</option>
+            }
+        </select>
+        <ActionButton Key="Qc.StartEvaluation" Disabled="@(!actions.StartEvaluation || _busy)" OnClick="() => ChangeEvaluationAsync(true)" />
+        <ActionButton Key="Qc.StopEvaluation" Disabled="@(!actions.StopEvaluation || _busy)" OnClick="() => ChangeEvaluationAsync(false)" />
+        <FieldMessage Refusal="_refusal" Field="@QualityControlScreenRules.LotAnalyserField" />
+    </div>
+
+    <div class="screen-body">
+        <div class="qc-top">
+            <section class="card card-flush qc-entry" data-card="entry">
+                <div class="card-heading card-pad">
+                    <h2 class="card-title">@Texts["Quality.QualityControlEntry"] — @Shown.Count</h2>
+                </div>
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="entry">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Result.Parameter"]</th>
+                                <th>@Texts["Quality.QcLevel"]</th>
+                                <th class="num">@Texts["Result.Value"]</th>
+                                <th class="num">@Texts["Quality.Target"]</th>
+                                <th class="num">@Texts["Result.Previous"]</th>
+                                <th class="num" title="@Texts["Quality.Rules"]">@Texts["Web.QcRulesShort"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Shown)
+                            {
+                                var id = row.QcTargetId;
+                                var field = QualityControlScreenRules.ValueField(id);
+                                var refused = _refusal?.Field == field;
+                                var target = QualityControlScreenRules.Target(row, Texts.T, Texts.Culture);
+                                <tr class="@(id == _chartTargetId ? "is-selected" : null) @Tone(QualityControlScreenRules.Tone(row))" data-row="@($"{row.ParameterCode}-{row.Level}")"
+                                    @onclick="() => ChartAsync(id)">
+                                    <td>
+                                        <span class="list-name">@row.ParameterName.For(Texts.Language)</span>
+                                        <span class="cell-sub"><span class="mono" dir="ltr">@row.MaterialLotNumber</span> · <span class="mono" dir="ltr">@row.InstrumentCode</span></span>
+                                        @if (!row.MaterialUsable)
+                                        {
+                                            <span class="cell-sub strong" data-state="expired">@Texts.T("Qc_MaterialExpired", row.MaterialLotNumber)</span>
+                                        }
+                                    </td>
+                                    <td class="small">@Texts[$"QcLevel.{row.Level}"]</td>
+                                    <td class="num">
+                                        <input class="input input-value mono @(refused ? "is-refused" : null)" type="text" inputmode="decimal" autocomplete="off" dir="ltr"
+                                               data-entry-value data-field="@field" aria-label="@($"{row.ParameterName.For(Texts.Language)} · {Texts[$"QcLevel.{row.Level}"]}")"
+                                               readonly="@(!actions.Submit)" maxlength="16"
+                                               value="@_typed.GetValueOrDefault(id)" @oninput="e => Type(id, e.Value?.ToString())" @onfocus="() => ChartAsync(id)" />
+                                        <FieldMessage Refusal="_refusal" Field="@field" />
+                                    </td>
+                                    <td class="num mono @Tone(QualityControlScreenRules.TargetTone(row), "text")" title="@(row.UsingAssignedStatistics ? Texts["Quality.SupplierLimits"] : Texts["Quality.LaboratoryLimits"])">
+                                        @if (row.TargetMean is null)
+                                        {
+                                            <span class="clamp-2 qc-no-target" title="@target">@target</span>
+                                        }
+                                        else
+                                        {
+                                            <bdi dir="ltr">@target</bdi>
+                                        }
+                                    </td>
+                                    <td class="num mono @Tone(QualityControlScreenRules.LastTone(row), "text")" title="@(row.LastOutcome is { } outcome ? Texts[$"QcOutcome.{outcome}"] : null)">@QualityControlScreenRules.Last(row, Texts.Culture)</td>
+                                    <td class="num small" title="@string.Join("\n", QualityControlScreenRules.RulesTip(row, Texts.T, Texts.Culture))">@QualityControlScreenRules.RulesCell(row)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (Shown.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="no-control">@Texts[_rows.Count == 0 ? "Web.QcNoControl" : "Web.QcNoneShown"]</p>
+                    }
+                </div>
+                <p class="key-hints-note small muted card-pad" data-state="instruments">
+                    <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" />@Texts["Web.QcInstrumentsNotice"]
+                </p>
+            </section>
+
+            <section class="card qc-chart" data-card="chart">
+                <div class="card-heading">
+                    <h2 class="card-title">@Texts["Quality.LeveyJennings"]</h2>
+                    <div class="chips" role="group" aria-label="@Texts["Web.QcPeriod"]" data-state="periods">
+                        @foreach (var days in QualityControlScreenRules.ChartPeriods)
+                        {
+                            <button type="button" class="chip @(days == _days ? "is-pressed" : null)" data-chip="@($"days-{days}")" @onclick="() => PeriodAsync(days)">@Texts.T("Web.QcDays", days)</button>
+                        }
+                    </div>
+                </div>
+                @if (ChartedName is { } charted)
+                {
+                    <p class="strong small cell-wrap" data-state="charted">@charted</p>
+                }
+                <LeveyJenningsChart Series="_series" Picked="_pointId" OnPoint="PickPoint" />
+                @{ var rules = QualityControlScreenRules.ActiveRules(ChartedRow, Texts.T); }
+                @if (rules.Text.Length > 0)
+                {
+                    <p class="small @Tone(rules.Tone, "text")" data-state="active-rules">@rules.Text</p>
+                }
+                @if (_point is { } point)
+                {
+                    <p class="small mono @Tone(point.Tone, "text")" data-state="point" dir="ltr">@point.Text</p>
+                }
+            </section>
+        </div>
+
+        <section class="card card-flush qc-review" data-card="review">
+            <div class="card-heading card-pad">
+                <h2 class="card-title">@Texts["Quality.PendingReview"] — @ShownReview.Count</h2>
+                <Pill Text="@QualityControlScreenRules.Blocked(_pending, Texts.T)" Tone="Critical" />
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="review">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Result.MeasuredAt"]</th>
+                            <th>@Texts["Result.Parameter"]</th>
+                            <th>@Texts["Result.Instrument"]</th>
+                            <th>@Texts["Quality.QcLot"]</th>
+                            <th>@Texts["Quality.QcLevel"]</th>
+                            <th class="num">@Texts["Result.Value"]</th>
+                            <th class="num">Z</th>
+                            <th>@Texts["QualityHr.Qc.ViolatedRules"]</th>
+                            <th class="num">@Texts["NonConformity.AffectedResults"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in ShownReview)
+                        {
+                            <tr class="is-tone-critical-fill @(row.QcResultId == SelectedReview?.QcResultId ? "is-selected" : null)" data-row="@row.QcResultId"
+                                @onclick="() => PickReviewAsync(row)">
+                                <td class="mono small nowrap" dir="ltr">@QualityControlScreenRules.Measured(row)</td>
+                                <td>@row.ParameterName.For(Texts.Language)</td>
+                                <td class="mono small" dir="ltr">@row.InstrumentCode</td>
+                                <td class="mono small cell-wrap" dir="ltr">@row.MaterialLotNumber</td>
+                                <td class="small">@Texts[$"QcLevel.{row.Level}"]</td>
+                                <td class="num mono strong">@QualityControlScreenRules.Value(row, Texts.Culture)</td>
+                                <td class="num mono strong">@QualityControlScreenRules.ZScore(row.ZScore, Texts.Culture)</td>
+                                <td class="small strong mono" dir="ltr">@WestgardRuleNames.Describe(row.ViolatedRules)</td>
+                                <td class="num mono @(row.AffectedResultCount > 0 ? "strong" : null)">@QualityControlScreenRules.Affected(row)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (ShownReview.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-rejection">@Texts["Web.QcNoRejection"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")"
+               ShowMore="actions.ChartMore" InfoTitle="@TypedText">
+        <Secondary>
+            <ActionButton Key="Quality.Review" Disabled="@(!actions.Review || _busy)" OnClick="AskReview" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Quality.EstablishLimits" Disabled="@(!actions.EstablishLimits || _busy)" OnClick="AskLimits" />
+            <ActionButton Key="Quality.EditRules" Disabled="@(!actions.EditRules || _busy)" OnClick="AskRules" />
+        </More>
+        <Info>
+            @if (TypedText is { } typed)
+            {
+                <span data-state="typed">@typed</span>
+            }
+        </Info>
+        <Primary>
+            <ActionButton Key="Action.Save" Primary="true" Disabled="@(!actions.Submit || _busy)" OnClick="SubmitAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Review when SelectedReview is { } reviewed:
+        <ReasonPrompt Title="@Texts["Quality.CorrectiveAction"]" Prompt="@QualityControlScreenRules.ReviewPrompt(reviewed, Texts.Language, Texts.T)"
+                      MinimumLength="QualityControlScreenRules.CorrectiveActionMinimumLength" MaxLength="QualityControlScreenRules.CorrectiveActionMaxLength"
+                      OnConfirm="ReviewReasonGiven" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.NonConformity:
+        <ConfirmPrompt Title="@Texts["NonConformity.Title"]" Message="@Texts["Quality.OpenNonConformityQuestion"]"
+                       OnYes="() => ReviewAsync(true)" OnNo="() => ReviewAsync(false)" />
+        break;
+
+    case Prompt.Limits when ChartedRow is { } limited:
+        <TextPrompt Name="limits" Title="@Texts["Quality.EstablishLimits"]" Prompt="@QualityControlScreenRules.LimitsPrompt(limited, Texts.Language, Texts.T)"
+                    Initial="@QualityControlScreenRules.DefaultLimitDays.ToString(System.Globalization.CultureInfo.InvariantCulture)" MaxLength="5" Required="true"
+                    Refusal="@_limitsRefusal" OnConfirm="EstablishLimitsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Rules when ChartedRow is { } ruled:
+        <WestgardRuleDialog Parameter="@ruled.ParameterCode" Material="@ruled.MaterialLotNumber" Rules="ruled.ActiveRules"
+                            OnPick="SaveRulesAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Leave:
+        <ConfirmPrompt Title="@Texts["Nav.QualityControl"]" Message="@Texts["Message.UnsavedChanges"]" OnYes="LeaveAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _messages.Count > 0:
+        var message = _messages.Peek();
+        <Modal Name="qc-message" Title="@message.Title" OnCancel="NextMessage">
+            <ChildContent><p class="info-line prompt-text @(message.Critical ? "critical" : null)" data-state="qc-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="NextMessage" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Review, NonConformity, Limits, Rules, Leave, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical = false);
+
+    private IReadOnlyList<QcEntryRow> _rows = [];
+    private IReadOnlyList<QcReviewRow> _pending = [];
+    private IReadOnlyList<ReagentLotOption> _lots = [];
+    private LeveyJenningsSeries? _series;
+
+    /// <summary>The values typed and not yet submitted, by control: kept across a reload, a filter and a language change.</summary>
+    private readonly Dictionary<Guid, string?> _typed = [];
+
+    private string _search = string.Empty;
+    private Guid? _analyserFilter;
+    private QcLevel? _levelFilter;
+    private int _days = QualityControlScreenRules.ChartDays;
+
+    private Guid? _lot, _lotAnalyser;
+    private Guid? _chartTargetId, _reviewId, _pointId;
+    private (string Text, QcTone Tone)? _point;
+
+    private Prompt _prompt;
+    private string? _correctiveAction;
+    private FieldRefusal? _refusal;
+    private string? _limitsRefusal;
+    private string? _leaveTo;
+    private bool _leaving;
+    private readonly Queue<Message> _messages = new();
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private QcScreenActions Actions =>
+        QualityControlScreenRules.Actions(Context.User, ChartedRow is not null, _pending.Count, _lot, _lotAnalyser);
+
+    private IReadOnlyList<QcEntryRow> Shown =>
+        [.. _rows.Where(r => QualityControlScreenRules.Matches(r, _search, Texts.Language, _analyserFilter, _levelFilter))];
+
+    private IReadOnlyList<QcReviewRow> ShownReview =>
+        [.. _pending.Where(r => QualityControlScreenRules.Matches(r, _search, Texts.Language, _analyserFilter, _levelFilter, _rows))];
+
+    /// <summary>The rejection the review acts on: the one picked, or the first, as the workstation's current row.</summary>
+    private QcReviewRow? SelectedReview => ShownReview.FirstOrDefault(r => r.QcResultId == _reviewId) ?? ShownReview.FirstOrDefault();
+
+    /// <summary>The control the chart shows: its limits and rules are the ones « Plus d'actions » changes.</summary>
+    private QcEntryRow? ChartedRow => _rows.FirstOrDefault(r => r.QcTargetId == _chartTargetId);
+
+    private string? ChartedName => ChartedRow is { } row
+        ? $"{row.ParameterName.For(Texts.Language)} · {Texts[$"QcLevel.{row.Level}"]}"
+        : null;
+
+    private bool HasTyped => !_leaving && QualityControlScreenRules.HasTyped(_typed.Values);
+
+    private string? TypedText => _typed.Values.Count(t => !string.IsNullOrWhiteSpace(t)) is > 0 and var n
+        ? Texts.T("Web.QcTyped", n)
+        : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    // ---- Loading -----------------------------------------------------------------------------------
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (Context.User.Has(MarocLIS.Domain.Identity.Permissions.Quality.EnterQc))
+            {
+                var lots = await Scopes.RunAsync<LotQualityService, Result<IReadOnlyList<ReagentLotOption>>>(s => s.GetLotsForQcAsync());
+                if (lots.IsSuccess) _lots = lots.Value;
+                if (_lot is { } kept && _lots.All(l => l.ReagentLotId != kept)) _lot = null;
+            }
+
+            var sheet = await Scopes.RunAsync<QualityControlService, Result<IReadOnlyList<QcEntryRow>>>(s => s.GetEntrySheetAsync());
+            if (sheet.IsFailure)
+            {
+                _status = (Texts.Describe(sheet.Errors), "critical");
+                return;
+            }
+
+            _rows = sheet.Value;
+            _lotAnalyser = QualityControlScreenRules.PickAnalyser(QualityControlScreenRules.LotAnalysers(_rows, Texts.Culture), _lotAnalyser);
+            if (_analyserFilter is { } filtered && _rows.All(r => r.InstrumentId != filtered)) _analyserFilter = null;
+
+            var review = await Scopes.RunAsync<QualityControlService, Result<IReadOnlyList<QcReviewRow>>>(s => s.GetPendingReviewAsync());
+            if (review.IsSuccess) _pending = review.Value;
+
+            // The control charted stays charted; else the first rejection — the chart then shows the
+            // violation the reviewer has to act on — or the first control of the sheet.
+            var charted = _chartTargetId is { } current && (_rows.Any(r => r.QcTargetId == current) || _pending.Any(p => p.QcTargetId == current))
+                ? current
+                : _pending.FirstOrDefault()?.QcTargetId ?? Shown.FirstOrDefault()?.QcTargetId;
+
+            await ShowChartAsync(charted);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the quality control screen failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task ShowChartAsync(Guid? qcTargetId)
+    {
+        _chartTargetId = qcTargetId;
+        _pointId = null;
+        _point = null;
+
+        if (qcTargetId is not { } id)
+        {
+            _series = null;
+            return;
+        }
+
+        var days = _days;
+        var chart = await Scopes.RunAsync<QualityControlService, Result<LeveyJenningsSeries>>(s => s.GetChartAsync(id, days));
+        _series = chart.IsSuccess ? chart.Value : null;
+    }
+
+    private Task ChartAsync(Guid qcTargetId) =>
+        qcTargetId == _chartTargetId ? Task.CompletedTask : ShowChartAsync(qcTargetId);
+
+    private async Task PickReviewAsync(QcReviewRow row)
+    {
+        _reviewId = row.QcResultId;
+        await ChartAsync(row.QcTargetId);
+    }
+
+    private async Task PeriodAsync(int days)
+    {
+        if (days == _days) return;
+        _days = days;
+        await ShowChartAsync(_chartTargetId);
+    }
+
+    private void PickPoint(LeveyJenningsPoint point)
+    {
+        _pointId = point.QcResultId;
+        _point = LeveyJenningsLayout.PointLine(point, Texts.Culture);
+    }
+
+    // ---- Filters and typing ------------------------------------------------------------------------
+
+    private void AnalyserFilterChanged(ChangeEventArgs e) =>
+        _analyserFilter = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void LevelFilterChanged(ChangeEventArgs e) =>
+        _levelFilter = Enum.TryParse<QcLevel>(e.Value?.ToString(), out var level) ? level : null;
+
+    private void LotChanged(ChangeEventArgs e)
+    {
+        _lot = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        if (_refusal?.Field == QualityControlScreenRules.LotAnalyserField) _refusal = null;
+    }
+
+    private void LotAnalyserChanged(ChangeEventArgs e)
+    {
+        _lotAnalyser = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        if (_refusal?.Field == QualityControlScreenRules.LotAnalyserField) _refusal = null;
+    }
+
+    private void Type(Guid qcTargetId, string? text)
+    {
+        _typed[qcTargetId] = text;
+        if (_refusal?.Field == QualityControlScreenRules.ValueField(qcTargetId)) _refusal = null;
+    }
+
+    // ---- The run -----------------------------------------------------------------------------------
+
+    private async Task SubmitAsync()
+    {
+        if (!Actions.Submit || _busy) return;
+
+        _refusal = null;
+        var reading = QualityControlScreenRules.ReadRun(_rows, id => _typed.GetValueOrDefault(id), _lot, _lotAnalyser);
+
+        if (reading.Refusal is { } refusal)
+        {
+            _refusal = refusal;
+            _status = (FieldMessage.Say(Texts, refusal), "abnormal");
+            return;
+        }
+
+        if (reading.IsEmpty)
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        var entries = reading.Entries;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<QualityControlService, Result<QcSubmissionOutcome>>(s => s.SubmitAsync(entries));
+            if (result.IsFailure)
+            {
+                _refusal = QualityControlScreenRules.FieldOf(result.FirstError, entries);
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            var summary = QualityControlScreenRules.Summarise(result.Value, Texts.T, errors => Texts.Describe(errors), Texts.Culture);
+
+            // Submitted: the reload must not carry these values over as still pending.
+            _typed.Clear();
+            await LoadAsync();
+
+            // A rejection is announced as a dialog: the patient results the run covers are now held
+            // back, and that has to be acted on rather than noticed later.
+            if (summary.Rejection is { } rejection) Say(Texts["Nav.QualityControl"], rejection, critical: true);
+            if (summary.Warnings is { } warnings) Say(Texts["Nav.QualityControl"], warnings);
+
+            // The rejection just recorded is charted: the point out of control is on screen.
+            if (result.Value.Results.FirstOrDefault(r => r.Outcome == QcOutcome.Rejected) is { } rejected)
+                await ShowChartAsync(rejected.QcTargetId);
+
+            _status = (summary.Status, ToneClass(summary.StatusTone));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Submitting a control run failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Starts (or stops) the evaluation run of the named lot on its analyser: the next control of
+    /// each level that analyser transmits today is credited to the lot, the rest stays routine QC.
+    /// </summary>
+    private async Task ChangeEvaluationAsync(bool start)
+    {
+        if (_busy || _lot is not { } lotId) return;
+
+        if (start && _lotAnalyser is null)
+        {
+            _refusal = new FieldRefusal(QualityControlScreenRules.LotAnalyserField, "Qc.ChooseLotAnalyser");
+            return;
+        }
+
+        var analyser = _lotAnalyser;
+        _busy = true;
+
+        try
+        {
+            var changed = start
+                ? await Scopes.RunAsync<QualityControlService, Result>(s => s.StartLotEvaluationAsync(lotId, analyser!.Value))
+                : await Scopes.RunAsync<QualityControlService, Result>(s => s.StopLotEvaluationAsync(lotId));
+
+            if (changed.IsFailure)
+            {
+                _status = (Texts.Describe(changed.Errors), "critical");
+                return;
+            }
+
+            var lotLabel = QualityControlScreenRules.LotLabel(_lots.FirstOrDefault(l => l.ReagentLotId == lotId), Texts.T);
+            var analyserCode = _rows.FirstOrDefault(r => r.InstrumentId == analyser)?.InstrumentCode ?? string.Empty;
+            _status = (start ? Texts.T("Qc.EvaluationStarted", lotLabel, analyserCode) : Texts.T("Qc.EvaluationStopped", lotLabel), "muted");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Review --------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Reviews a rejected control: the corrective action is mandatory, then whether to open a
+    /// non-conformity — not asked when patient results were held back, because a departure has
+    /// demonstrably occurred.
+    /// </summary>
+    private void AskReview()
+    {
+        if (!Actions.Review || _busy) return;
+
+        if (SelectedReview is null)
+        {
+            _status = (Texts["Message.NothingSelected"], "muted");
+            return;
+        }
+
+        _prompt = Prompt.Review;
+    }
+
+    private async Task ReviewReasonGiven(string action)
+    {
+        _correctiveAction = action;
+
+        if (SelectedReview is { } row && QualityControlScreenRules.OpensNonConformityWithoutAsking(row))
+        {
+            await ReviewAsync(true);
+            return;
+        }
+
+        _prompt = Prompt.NonConformity;
+    }
+
+    private async Task ReviewAsync(bool openNonConformity)
+    {
+        _prompt = Prompt.None;
+        if (_busy || SelectedReview is not { } row || _correctiveAction is not { } action) return;
+
+        var id = row.QcResultId;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<QualityControlService, Result>(s => s.ReviewAsync(id, action, openNonConformity));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _reviewId = null;
+            _correctiveAction = null;
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reviewing a rejected control failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- The charted control's limits and rules -----------------------------------------------------
+
+    private void AskLimits()
+    {
+        if (!Actions.EstablishLimits || _busy) return;
+        _limitsRefusal = null;
+        _prompt = Prompt.Limits;
+    }
+
+    /// <summary>
+    /// The laboratory's own limits from a window ending today — a window, not all history, so a
+    /// period already explained and corrected can be left out. A refusal keeps the box open with it.
+    /// </summary>
+    private async Task EstablishLimitsAsync(string typed)
+    {
+        if (_busy || ChartedRow is not { } row) return;
+
+        var (days, refusal) = QualityControlScreenRules.ReadLimitDays(typed);
+        if (refusal is not null)
+        {
+            _limitsRefusal = FieldMessage.Say(Texts, refusal);
+            return;
+        }
+
+        var (from, to) = QualityControlScreenRules.LimitsWindow(days!.Value, Clock.Today);
+        var id = row.QcTargetId;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<QualityControlService, Result<(decimal Mean, decimal Sd, int Points)>>(
+                s => s.RecomputeStatisticsAsync(id, from, to));
+            if (result.IsFailure)
+            {
+                _limitsRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            _prompt = Prompt.None;
+            var (mean, sd, points) = result.Value;
+            await LoadAsync();
+            Say(Texts["Quality.EstablishLimits"], QualityControlScreenRules.LimitsSummary(mean, sd, points, Texts.T, Texts.Culture));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskRules()
+    {
+        if (!Actions.EditRules || _busy) return;
+        _prompt = Prompt.Rules;
+    }
+
+    /// <summary>The control strategy of the charted control: saved through the service, which refuses a control without any rule.</summary>
+    private async Task SaveRulesAsync(WestgardRule rules)
+    {
+        _prompt = Prompt.None;
+        if (_busy || ChartedRow is not { } row || rules == row.ActiveRules) return;
+
+        var id = row.QcTargetId;
+        _busy = true;
+
+        try
+        {
+            var result = await Scopes.RunAsync<QualityControlService, Result>(s => s.SetActiveRulesAsync(id, rules));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---- Leaving with values typed -----------------------------------------------------------------
+
+    private void BeforeLeaving(LocationChangingContext context)
+    {
+        if (!HasTyped || _busy) return;
+
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _prompt = Prompt.Leave;
+        StateHasChanged();
+    }
+
+    private Task LeaveAsync()
+    {
+        _prompt = Prompt.None;
+        _leaving = true;
+        if (_leaveTo is { } target) Navigation.NavigateTo(target);
+        return Task.CompletedTask;
+    }
+
+    // ---- Dialogs and tones ---------------------------------------------------------------------------
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _messages.Enqueue(new Message(title, text, critical));
+        _prompt = Prompt.Message;
+    }
+
+    private void NextMessage()
+    {
+        if (_messages.Count > 0) _messages.Dequeue();
+        _prompt = _messages.Count > 0 ? Prompt.Message : Prompt.None;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _correctiveAction = null;
+        _limitsRefusal = null;
+    }
+
+    private static string ToneClass(QcTone tone) => tone switch
+    {
+        QcTone.Critical or QcTone.CriticalFill => "critical",
+        QcTone.Abnormal => "abnormal",
+        QcTone.Normal => "normal",
+        _ => "muted"
+    };
+
+    /// <summary>The class of a tone: a row filled or coloured, or a text in its colour.</summary>
+    private static string? Tone(QcTone tone, string kind = "row") => (kind, tone) switch
+    {
+        ("row", QcTone.CriticalFill) => "is-tone-critical-fill",
+        ("row", _) => null,
+        (_, QcTone.Plain) => null,
+        (_, QcTone.Muted) => "muted",
+        (_, QcTone.Normal) => "qc-normal",
+        (_, QcTone.Abnormal) => "abnormal strong",
+        _ => "critical strong"
+    };
+}
