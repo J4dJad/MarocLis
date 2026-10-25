@@ -64,6 +64,20 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void ThePurchasingScreens_AreInTheMenu_ByTheirRights()
+    {
+        var storeman = Keys(WebMenu.Build(new User(permissions: Permissions.Inventory.View), FullStatus())).ToList();
+        storeman.Should().Contain("purchaseorders").And.NotContain(["quotes", "supplierinvoices", "supplierevaluation"]);
+
+        var payer = Keys(WebMenu.Build(new User(permissions: Permissions.Inventory.ApprovePayments), FullStatus())).ToList();
+        payer.Should().Contain("supplierinvoices").And.NotContain(["purchaseorders", "quotes", "supplierevaluation"]);
+
+        var buyer = Keys(WebMenu.Build(new User(permissions: [Permissions.Inventory.ManageQuotes, Permissions.Inventory.ManagePurchaseOrders]),
+                                       FullStatus())).ToList();
+        buyer.Should().Contain(["quotes", "supplierevaluation"]);
+    }
+
+    [Fact]
     public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
     {
         var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();
