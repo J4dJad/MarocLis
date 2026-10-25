@@ -22,6 +22,31 @@ public static class InstrumentsServiceCollectionExtensions
     public static IServiceCollection AddInstrumentInterfacing(this IServiceCollection services,
                                                                IConfiguration configuration)
     {
+        services.AddInstrumentConfiguration(configuration);
+
+        // Singleton: it holds process-wide state the screen reads — "is this link up right now?".
+        services.AddSingleton<InstrumentLinkMonitor>();
+
+        // Scoped: the sink writes through a database context, and each driver gets its own scope so
+        // one analyser's failed import cannot roll back another's results.
+        services.AddScoped<IInstrumentMessageSink>(
+            sp => sp.GetRequiredService<InstrumentMessageSink>());
+
+        services.AddHostedService<InstrumentHostedService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// What configuring the links needs without driving any analyser: the options, the service
+    /// account a replay attributes its values to, the replayer and the « Tester une trame »
+    /// previewer. The web server registers only this — the analysers are driven by one Windows
+    /// workstation, never by it — so its interface screen shows and configures the links, replays a
+    /// held transmission and tries a frame through the same services, and opens no port.
+    /// </summary>
+    public static IServiceCollection AddInstrumentConfiguration(this IServiceCollection services,
+                                                                 IConfiguration configuration)
+    {
         var options = configuration.GetSection(InstrumentHostOptions.SectionName)
                                     .Get<InstrumentHostOptions>()
                       ?? new InstrumentHostOptions();
@@ -34,20 +59,14 @@ public static class InstrumentsServiceCollectionExtensions
                                            .Get<IntegraHostOptions>()
                               ?? new IntegraHostOptions());
 
-        // Singletons: both hold process-wide state the screen reads. The monitor answers "is this
-        // link up right now?", and the service account is resolved once at start-up.
-        services.AddSingleton<InstrumentLinkMonitor>();
+        // Singleton: the service account is resolved once, at start-up or at the first replay.
         services.AddSingleton<InstrumentServiceAccount>();
         services.AddSingleton<IInstrumentServiceAccount>(
             sp => sp.GetRequiredService<InstrumentServiceAccount>());
 
-        // Scoped: the sink writes through a database context, and each driver gets its own scope so
-        // one analyser's failed import cannot roll back another's results.
         services.AddScoped<InstrumentMessageSink>();
-        services.AddScoped<IInstrumentMessageSink>(
-            sp => sp.GetRequiredService<InstrumentMessageSink>());
 
-        // The replayer is the same object, registered under the abstraction the application layer
+        // The replayer is the sink, registered under the abstraction the application layer
         // depends on. Registered unconditionally and independently of EnableInstrumentHost: a
         // technician accepting a held transmission is working at a bench, not at the one workstation
         // that drives the serial ports.
@@ -56,8 +75,6 @@ public static class InstrumentsServiceCollectionExtensions
 
         // Read-only: the "Tester une trame" window, on whatever workstation configures the link.
         services.AddScoped<IInstrumentMessagePreviewer, InstrumentMessagePreviewer>();
-
-        services.AddHostedService<InstrumentHostedService>();
 
         return services;
     }

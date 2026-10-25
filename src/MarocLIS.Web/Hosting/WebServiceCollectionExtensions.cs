@@ -2,6 +2,7 @@ using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Billing;
+using MarocLIS.Application.Migration;
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
@@ -11,6 +12,7 @@ using MarocLIS.Infrastructure;
 using MarocLIS.Infrastructure.Licensing;
 using MarocLIS.Infrastructure.Queries;
 using MarocLIS.Infrastructure.Security;
+using MarocLIS.Instruments;
 using MarocLIS.Localization;
 using MarocLIS.Reporting;
 using MarocLIS.Web.Security;
@@ -99,6 +101,19 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Catalog.ICatalogMaintenanceQueries, CatalogMaintenanceQueries>();
         services.AddScoped<Application.Catalog.INationalActQueries, NationalActQueries>();
         services.AddScoped<Application.Inventory.IStockPlanningQueries, StockPlanningQueries>();
+        // « Interfaces automates »: the links, their codes and their message log; the control
+        // targets a replayed transmission's control results are checked against.
+        services.AddScoped<Application.Instruments.IInstrumentInterfaceQueries, InstrumentInterfaceQueries>();
+        services.AddScoped<Application.Quality.IQualityQueries, QualityQueries>();
+
+        // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
+        // trying a frame, through the workstation's services. Never the host: the web server opens
+        // no serial port and no listener, the analysers being driven by one Windows workstation.
+        services.AddInstrumentConfiguration(configuration);
+
+        // ---- « Reprise de données »: the profiles of the server, one JSON file each, kept
+        // without a password (the web reads uploaded files, never an old application's database).
+        services.AddSingleton(new MigrationProfileStore(options.EffectiveMigrationProfilesFolder));
 
         // ---- Sessions: the browsers signed in, their workstations, and each scope's session.
         services.AddSingleton<WebSessionStore>();

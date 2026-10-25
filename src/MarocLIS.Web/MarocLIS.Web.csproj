@@ -10,8 +10,9 @@
       runs on the laboratory's server and answers the laboratory's local network only (see
       Security/NetworkAccess.cs and the "Web" section of appsettings.json).
 
-      The same core as the workstation, minus MarocLIS.Instruments: the analysers are driven by a
-      Windows workstation, never by the web server.
+      The same core as the workstation. Of MarocLIS.Instruments it registers only what configuring
+      the links needs (AddInstrumentConfiguration: the replay and « Tester une trame »), never its
+      host: the analysers are driven by one Windows workstation, never by the web server.
     -->
     <!-- The same reason as the workstation (see MarocLIS.Desktop.csproj): the ambient culture is the
          operator's language, and screen text follows it. -->
@@ -30,6 +31,7 @@
     <ProjectReference Include="..\MarocLIS.Application\MarocLIS.Application.csproj" />
     <ProjectReference Include="..\MarocLIS.Domain\MarocLIS.Domain.csproj" />
     <ProjectReference Include="..\MarocLIS.Infrastructure\MarocLIS.Infrastructure.csproj" />
+    <ProjectReference Include="..\MarocLIS.Instruments\MarocLIS.Instruments.csproj" />
     <ProjectReference Include="..\MarocLIS.Localization\MarocLIS.Localization.csproj" />
     <ProjectReference Include="..\MarocLIS.Reporting\MarocLIS.Reporting.csproj" />
   </ItemGroup>
