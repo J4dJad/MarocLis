@@ -80,9 +80,9 @@
                                         <td>@(row.UserName ?? "—")</td>
                                         <td class="small strong">@AuditTrailRules.Entity(row)</td>
                                         <td><Pill Text="@Texts[$"AuditOperation.{row.Operation}"]" Tone="@(AuditTrailRules.IsDeletion(row) ? "Critical" : "Waiting")" /></td>
-                                        <td class="mono small">@row.PatientRecordNumber</td>
+                                        <td class="mono small nowrap">@row.PatientRecordNumber</td>
                                         @* The list of field names keeps one line; the row opened shows each field with its values. *@
-                                        <td class="small cell-clip cell-clip-wide" title="@row.ChangedProperties">@row.ChangedProperties</td>
+                                        <td class="small cell-clip cell-clip-wide" dir="ltr" title="@row.ChangedProperties">@row.ChangedProperties</td>
                                         <td class="small cell-wrap">@row.Reason</td>
                                     </tr>
                                 }
@@ -112,7 +112,7 @@
                                         <td class="mono small nowrap">@When(row.OccurredAt)</td>
                                         <td>@(row.UserName ?? "—")</td>
                                         <td class="small">@Texts[$"DataAccessKind.{row.Kind}"]</td>
-                                        <td class="mono small">@row.PatientRecordNumber</td>
+                                        <td class="mono small nowrap">@row.PatientRecordNumber</td>
                                         <td class="num mono">@row.RecordCount?.ToString(CultureInfo.InvariantCulture)</td>
                                         <td class="small cell-clip cell-clip-wide" title="@row.QueryDescription">@row.QueryDescription</td>
                                         <td class="small cell-wrap">@row.Context</td>
