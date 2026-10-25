@@ -62,7 +62,19 @@ public static class ColdChain
         };
     }
 
-    /// <summary>The acceptable range, as printed in a message or on a non-conformity.</summary>
+    /// <summary>
+    /// The acceptable range, as an argument a screen or a message translates
+    /// (« ColdChainRange.Refrigerated » in the language files): said in the reader's language.
+    /// </summary>
+    public static ColdChainRange Range(StorageCondition condition) => condition switch
+    {
+        StorageCondition.Refrigerated => ColdChainRange.Refrigerated,
+        StorageCondition.Frozen => ColdChainRange.Frozen,
+        StorageCondition.DeepFrozen => ColdChainRange.DeepFrozen,
+        _ => ColdChainRange.Room
+    };
+
+    /// <summary>The acceptable range in French, for the French description of a non-conformity.</summary>
     public static string RangeText(StorageCondition condition) => condition switch
     {
         StorageCondition.Refrigerated => "2 à 8 °C",
@@ -70,6 +82,19 @@ public static class ColdChain
         StorageCondition.DeepFrozen => "≤ −60 °C",
         _ => "15 à 25 °C"
     };
+}
+
+/// <summary>The temperature range a delivery is checked against, translated where it is shown.</summary>
+public enum ColdChainRange
+{
+    /// <summary>15 à 25 °C, advice only.</summary>
+    Room = 0,
+    /// <summary>2 à 8 °C.</summary>
+    Refrigerated = 1,
+    /// <summary>≤ −15 °C.</summary>
+    Frozen = 2,
+    /// <summary>≤ −60 °C.</summary>
+    DeepFrozen = 3
 }
 
 /// <summary>A reception check that failed and has to be recorded as a non-conformity.</summary>
@@ -109,7 +134,7 @@ public sealed record ReceptionAssessment(TemperatureVerdict Temperature, IReadOn
 
         if (verdict == TemperatureVerdict.Missing)
             return Result.Failure<ReceptionAssessment>(
-                Error.Validation("Reception_TemperatureRequired", ColdChain.RangeText(condition)));
+                Error.Validation("Reception_TemperatureRequired", ColdChain.Range(condition)));
 
         var findings = new List<ReceptionFinding>();
         if (verdict == TemperatureVerdict.OutOfRange) findings.Add(ReceptionFinding.TemperatureOutOfRange);

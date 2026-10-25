@@ -148,7 +148,7 @@
   "Reception_TemperatureRequired": "صنف يُحفظ في {0}: سجّل درجة الحرارة عند الوصول قبل حفظ الاستلام.",
   "Reception_RefusalReasonRequired": "أدخل سبب رفض التسليم.",
   "SupplierPayment_AmountMustBePositive": "يجب أن يكون مبلغ الأداء أكبر من الصفر.",
-  "SupplierPayment_ExceedsOutstanding": "يتجاوز الأداء المبلغ المتبقي ({0} درهم).",
+  "SupplierPayment_ExceedsOutstanding": "يتجاوز الأداء المبلغ المتبقي ({0}).",
   "SupplierPayment_BeforeInvoice": "لا يمكن أن يسبق تاريخ الأداء تاريخ الفاتورة.",
   "SupplierPayment_ReferenceRequired": "أدخل مرجع التحويل أو الشيك أو الكمبيالة.",
   "SupplierPayment_DateInFuture": "لا يمكن أن يكون تاريخ الأداء في المستقبل.",
@@ -4376,6 +4376,12 @@
     "SparePart": "قطعة غيار"
   },
 
+  "ColdChainRange": {
+    "Room": "من 15 إلى 25 °م",
+    "Refrigerated": "من 2 إلى 8 °م",
+    "Frozen": "≤ −15 °م",
+    "DeepFrozen": "≤ −60 °م"
+  },
   "StorageCondition": {
     "RoomTemperature": "حرارة الغرفة",
     "Refrigerated": "مبرد (2–8 °م)",

@@ -1024,7 +1024,7 @@ internal sealed class ReceiveLotDialog : Form
 
         if (verdict.Refusal is { } refusal && refusal.Field != InventoryScreenRules.TemperatureField)
         {
-            _dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty));
+            _dialogs.Warn(_localizer.Format(refusal.Key, refusal.Value ?? string.Empty));
             Control box = refusal.Field switch
             {
                 InventoryScreenRules.LotNumberField => _lotNumber,

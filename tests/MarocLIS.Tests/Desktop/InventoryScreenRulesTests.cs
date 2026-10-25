@@ -185,6 +185,7 @@ public sealed class InventoryScreenRulesTests
         var refused = InventoryScreenRules.CheckReception(missing, itemId, StorageCondition.Refrigerated, Today).Refusal!;
         refused.Field.Should().Be(InventoryScreenRules.TemperatureField);
         refused.Key.Should().Be("Reception_TemperatureRequired");
+        refused.Argument.Should().Be(ColdChainRange.Refrigerated);
 
         var ok = InventoryScreenRules.CheckReception(Form(), itemId, StorageCondition.Refrigerated, Today);
         ok.Refusal.Should().BeNull();
@@ -205,7 +206,7 @@ public sealed class InventoryScreenRulesTests
         ambient.ArrivalTemperature = "31";
         InventoryScreenRules.CheckReception(ambient, itemId, StorageCondition.RoomTemperature, Today).AmbientWarning.Should().BeTrue();
 
-        InventoryScreenRules.Range(StorageCondition.Refrigerated).Should().Be(new ReceptionRange("Reception.RangeRequired", "2 à 8 °C", true));
+        InventoryScreenRules.Range(StorageCondition.Refrigerated).Should().Be(new ReceptionRange("Reception.RangeRequired", ColdChainRange.Refrigerated, true));
         InventoryScreenRules.Range(StorageCondition.RoomTemperature).Required.Should().BeFalse();
     }
 

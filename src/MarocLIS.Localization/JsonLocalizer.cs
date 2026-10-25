@@ -171,6 +171,14 @@ public sealed class JsonLocalizer : ILocalizer
 
         for (var i = 0; i < args.Length; i++)
         {
+            // An amount is written as money in the reader's language: « 1 200,00 DH », « 1,200.00 MAD », « 1 200,00 د.م. ».
+            if (args[i] is Money money)
+            {
+                translated ??= (object?[])args.Clone();
+                translated[i] = money.Format(language, CultureInfo.GetCultureInfo(language.ToCultureName()));
+                continue;
+            }
+
             if (args[i] is not Enum value || EnumLabel(value, language) is not { } label) continue;
             translated ??= (object?[])args.Clone();
             translated[i] = label;

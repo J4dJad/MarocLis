@@ -19,6 +19,7 @@
     {
         { Typed: { } typed } => texts.T(refusal.Key, typed),
         { Amount: { } amount } => texts.T(refusal.Key, Money.Of(amount).Format(texts.Language, texts.Culture)),
+        { Argument: { } argument } => texts.T(refusal.Key, argument),
         _ => texts[refusal.Key]
     };
 }

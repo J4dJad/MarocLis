@@ -653,7 +653,7 @@
         var error = result.FirstError;
         if (QuoteScreenRules.FieldOf(error) is { } field)
         {
-            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _fieldRefusal = FieldRefusal.Of(field, error);
             _dialogRefusal = null;
         }
         else

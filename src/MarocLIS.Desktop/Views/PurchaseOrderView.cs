@@ -752,7 +752,7 @@ internal sealed class PurchaseOrderDialog : MasterDataEditor
         }, DateOnly.FromDateTime(DateTime.Today));
         if (refusal is not null)
         {
-            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Value ?? string.Empty), Text);
             return;
         }
 
@@ -849,7 +849,7 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         });
         if (refusal is not null)
         {
-            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Value ?? string.Empty), Text);
             (refusal.Field switch
             {
                 PurchaseOrderScreenRules.PriceField => _price,
@@ -987,7 +987,7 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
                 return;
             }
 
-            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), Text);
+            Dialogs.Warn(Localizer.Format(refusal.Key, refusal.Value ?? string.Empty), Text);
             (refusal.Field == InventoryScreenRules.LotNumberField ? _lot : _quantity).Focus();
             return;
         }

@@ -80,7 +80,7 @@ public sealed record ReceptionVerdict(FieldRefusal? Refusal, ReceiveLotRequest? 
 public sealed record ArrivalVerdict(FieldRefusal? Refusal, ReceptionCheck? Check, bool AmbientWarning, bool NeedsNonConformity);
 
 /// <summary>The range line of the reception checks: required for the cold chain, advice otherwise.</summary>
-public sealed record ReceptionRange(string Key, string Range, bool Required);
+public sealed record ReceptionRange(string Key, ColdChainRange Range, bool Required);
 
 /// <summary>
 /// The rules of « Stock » that need no window: what is offered by which right and in which state,
@@ -407,8 +407,8 @@ public static class InventoryScreenRules
     /// <summary>The range line of the checks, by the article's storage condition.</summary>
     public static ReceptionRange Range(StorageCondition condition) =>
         ColdChain.RequiresTemperature(condition)
-            ? new ReceptionRange("Reception.RangeRequired", ColdChain.RangeText(condition), true)
-            : new ReceptionRange("Reception.RangeAdvisory", ColdChain.RangeText(condition), false);
+            ? new ReceptionRange("Reception.RangeRequired", ColdChain.Range(condition), true)
+            : new ReceptionRange("Reception.RangeAdvisory", ColdChain.Range(condition), false);
 
     /// <summary>
     /// Checks a delivery as the dialog does before it closes: the lot number, a quantity above zero,
@@ -464,7 +464,7 @@ public static class InventoryScreenRules
         var check = Check(form);
         var assessment = ReceptionAssessment.Assess(condition, check);
         if (assessment.IsFailure)
-            return new ArrivalVerdict(new FieldRefusal(TemperatureField, assessment.FirstError.ResourceKey, ColdChain.RangeText(condition)),
+            return new ArrivalVerdict(new FieldRefusal(TemperatureField, assessment.FirstError.ResourceKey, Argument: ColdChain.Range(condition)),
                                       null, false, false);
 
         return new ArrivalVerdict(null, check, assessment.Value.Temperature == TemperatureVerdict.Warning,

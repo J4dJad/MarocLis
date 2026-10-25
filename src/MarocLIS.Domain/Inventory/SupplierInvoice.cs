@@ -185,7 +185,7 @@ public sealed class SupplierInvoice : AuditableAggregateRoot, ISiteScoped
         if (payment.AmountMad <= 0m)
             return Result.Failure(Error.Validation("SupplierPayment_AmountMustBePositive"));
         if (payment.AmountMad > AmountOutstanding)
-            return Result.Failure(Error.Validation("SupplierPayment_ExceedsOutstanding", AmountOutstanding));
+            return Result.Failure(Error.Validation("SupplierPayment_ExceedsOutstanding", Money.Of(AmountOutstanding)));
         if (payment.PaidOn < InvoiceDate)
             return Result.Failure(Error.Validation("SupplierPayment_BeforeInvoice"));
         if (payment.Method != SupplierPaymentMethod.Cash && string.IsNullOrWhiteSpace(payment.Reference))

@@ -53,7 +53,7 @@ public sealed class AchatsReceptionTests
         var assessment = ReceptionAssessment.Assess(StorageCondition.Refrigerated, new ReceptionCheck());
 
         assessment.FirstError.ResourceKey.Should().Be("Reception_TemperatureRequired");
-        assessment.FirstError.Args.Single().Should().Be("2 à 8 °C");
+        assessment.FirstError.Args.Single().Should().Be(ColdChainRange.Refrigerated);
     }
 
     [Fact]

@@ -297,7 +297,7 @@
 
     private string NonConformityQuestion =>
         _verdict is { AmbientWarning: true }
-            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.RangeText(_condition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
+            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.Range(_condition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
             : Texts["Reception.NonConformityQuestion"];
 
     private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
@@ -689,7 +689,7 @@
             }
 
             var ambient = _verdict.AmbientWarning && !_verdict.NeedsNonConformity
-                ? Texts.T("Reception.AmbientWarning", ColdChain.RangeText(_condition)) + "\n\n"
+                ? Texts.T("Reception.AmbientWarning", ColdChain.Range(_condition)) + "\n\n"
                 : string.Empty;
             _verdict = null;
             _receiptLine = null;
@@ -760,7 +760,7 @@
         var field = PurchaseOrderScreenRules.FieldOf(error) ?? InventoryScreenRules.FieldOf(error);
         if (field is not null)
         {
-            _fieldRefusal = new FieldRefusal(field, error.ResourceKey, error.Args.FirstOrDefault()?.ToString());
+            _fieldRefusal = FieldRefusal.Of(field, error);
             _dialogRefusal = null;
         }
         else

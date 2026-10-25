@@ -149,13 +149,13 @@ internal sealed class ReceptionChecksPanel : Panel
     {
         if (verdict.Refusal is { } refusal)
         {
-            dialogs.Warn(_localizer.Format(refusal.Key, refusal.Typed ?? string.Empty), title);
+            dialogs.Warn(_localizer.Format(refusal.Key, refusal.Value ?? string.Empty), title);
             _temperature.Focus();
             return null;
         }
 
         if (verdict.AmbientWarning)
-            dialogs.Info(_localizer.Format("Reception.AmbientWarning", ColdChain.RangeText(_condition)), title);
+            dialogs.Info(_localizer.Format("Reception.AmbientWarning", ColdChain.Range(_condition)), title);
 
         if (verdict.NeedsNonConformity
             && !dialogs.Confirm(_localizer["Reception.NonConformityQuestion"], title))

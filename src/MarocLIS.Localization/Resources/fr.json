@@ -148,7 +148,7 @@
   "Reception_TemperatureRequired": "Article à conserver entre {0} : relevez la température à l'arrivée avant d'enregistrer la réception.",
   "Reception_RefusalReasonRequired": "Indiquez le motif du refus de la livraison.",
   "SupplierPayment_AmountMustBePositive": "Le montant du règlement doit être supérieur à zéro.",
-  "SupplierPayment_ExceedsOutstanding": "Le règlement dépasse le reste à payer ({0} MAD).",
+  "SupplierPayment_ExceedsOutstanding": "Le règlement dépasse le reste à payer ({0}).",
   "SupplierPayment_BeforeInvoice": "Le règlement ne peut pas être antérieur à la date de la facture.",
   "SupplierPayment_ReferenceRequired": "Indiquez la référence du virement, du chèque ou de l'effet.",
   "SupplierPayment_DateInFuture": "La date du règlement ne peut pas être dans le futur.",
@@ -4377,6 +4377,12 @@
     "SparePart": "Pièce de rechange"
   },
 
+  "ColdChainRange": {
+    "Room": "15 à 25 °C",
+    "Refrigerated": "2 à 8 °C",
+    "Frozen": "≤ −15 °C",
+    "DeepFrozen": "≤ −60 °C"
+  },
   "StorageCondition": {
     "RoomTemperature": "Température ambiante",
     "Refrigerated": "Réfrigéré (2–8 °C)",

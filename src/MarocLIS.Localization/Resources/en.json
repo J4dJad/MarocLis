@@ -148,7 +148,7 @@
   "Reception_TemperatureRequired": "Cold-chain item ({0}): record the arrival temperature before saving the receipt.",
   "Reception_RefusalReasonRequired": "Enter the reason the delivery is refused.",
   "SupplierPayment_AmountMustBePositive": "The payment amount must be greater than zero.",
-  "SupplierPayment_ExceedsOutstanding": "The payment exceeds the amount outstanding ({0} MAD).",
+  "SupplierPayment_ExceedsOutstanding": "The payment exceeds the amount outstanding ({0}).",
   "SupplierPayment_BeforeInvoice": "The payment cannot be dated before the invoice.",
   "SupplierPayment_ReferenceRequired": "Enter the reference of the transfer, cheque or bill of exchange.",
   "SupplierPayment_DateInFuture": "The payment date cannot be in the future.",
@@ -4376,6 +4376,12 @@
     "SparePart": "Spare part"
   },
 
+  "ColdChainRange": {
+    "Room": "15 to 25 °C",
+    "Refrigerated": "2 to 8 °C",
+    "Frozen": "≤ −15 °C",
+    "DeepFrozen": "≤ −60 °C"
+  },
   "StorageCondition": {
     "RoomTemperature": "Room temperature",
     "Refrigerated": "Refrigerated (2–8 °C)",

@@ -299,7 +299,7 @@
 
     private string NonConformityQuestion =>
         _verdict is { AmbientWarning: true } && _receiveItem is { } item
-            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.RangeText(item.StorageCondition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
+            ? $"{Texts.T("Reception.AmbientWarning", ColdChain.Range(item.StorageCondition))}\n\n{Texts["Reception.NonConformityQuestion"]}"
             : Texts["Reception.NonConformityQuestion"];
 
     protected override Task OnInitializedAsync() => ActivateAsync();
@@ -460,7 +460,7 @@
             }
 
             var ambient = _verdict.AmbientWarning && !_verdict.NeedsNonConformity
-                ? Texts.T("Reception.AmbientWarning", ColdChain.RangeText(item.StorageCondition)) + "\n\n"
+                ? Texts.T("Reception.AmbientWarning", ColdChain.Range(item.StorageCondition)) + "\n\n"
                 : string.Empty;
             _verdict = null;
             await LoadAsync(item.StockItemId, received.Value);
