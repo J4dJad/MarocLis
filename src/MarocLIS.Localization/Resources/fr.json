@@ -6736,6 +6736,16 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "NcPatientCount": "Patients concernés",
+    "NcNone": "Aucune non-conformité pour ce filtre.",
+    "NcNoAction": "Aucune action corrective pour cette non-conformité.",
+    "EqaNone": "Aucune participation EEQ pour cette année.",
+    "EqaNothingYet": "Ni résultat rendu ni évaluation reçue pour l'instant.",
+    "DocNone": "Aucun document dans le registre.",
+    "DocNoVersion": "Aucune version pour ce document.",
+    "DocNoFile": "Aucun fichier choisi",
+    "DocDownload": "Télécharger",
+    "DocDownloaded": "{0} téléchargé.",
     "QcSearch": "Analyse, lot ou automate…",
     "QcAllAnalysers": "Tous les automates",
     "QcAllLevels": "Tous les niveaux",

@@ -6735,6 +6735,16 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "NcPatientCount": "Patients affected",
+    "NcNone": "No non-conformity for this filter.",
+    "NcNoAction": "No corrective action for this non-conformity.",
+    "EqaNone": "No EQA participation for this year.",
+    "EqaNothingYet": "No result submitted and no evaluation received yet.",
+    "DocNone": "No document in the register.",
+    "DocNoVersion": "No version for this document.",
+    "DocNoFile": "No file chosen",
+    "DocDownload": "Download",
+    "DocDownloaded": "{0} downloaded.",
     "QcSearch": "Analyte, lot or analyser…",
     "QcAllAnalysers": "All analysers",
     "QcAllLevels": "All levels",
