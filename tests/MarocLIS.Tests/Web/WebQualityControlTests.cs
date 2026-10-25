@@ -252,4 +252,17 @@ public sealed class WebQualityControlTests : WebScreenContext
         page.Find("[data-chart=levey-jennings]").GetAttribute("dir").Should().Be("ltr", "the chart is laid out by hand, mirrored for Arabic");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");
     }
+
+    [Fact]
+    public void TheWebServer_ReadsTheReagentLots_ForTheEvaluationRow()
+    {
+        // The screen's lot row asks IPurchasingQualityQueries; a server without it fails at the first render.
+        var services = new ServiceCollection();
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+
+        MarocLIS.Web.Hosting.WebServiceCollectionExtensions.AddMarocLisWeb(services, configuration);
+
+        services.Should().Contain(d => d.ServiceType == typeof(IPurchasingQualityQueries));
+        services.Should().Contain(d => d.ServiceType == typeof(IQualityQueries));
+    }
 }
