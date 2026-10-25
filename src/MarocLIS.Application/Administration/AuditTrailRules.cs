@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MarocLIS.Domain.Audit;
 
 namespace MarocLIS.Application.Administration;
@@ -13,6 +14,9 @@ public enum AuditEmphasis
     /// <summary>A deletion of clinical data, a break-glass access, a refusal.</summary>
     Critical
 }
+
+/// <summary>One field of a change opened: its value before and after (none before a creation, none after a deletion).</summary>
+public sealed record AuditChangeLine(string Field, string? Before, string? After);
 
 /// <summary>The three tabs of « Journal d'audit », in their order.</summary>
 public enum AuditTab
@@ -103,6 +107,52 @@ public static class AuditTrailRules
         ArgumentNullException.ThrowIfNull(row);
         return Join(row.Changes, row.Reason);
     }
+
+    /// <summary>
+    /// The same before-and-after as <see cref="Detail(AuditEntryRow)"/>, one field a line, as the
+    /// recorder writes it: a value per field for a creation or a deletion, the old and the new value
+    /// for a modification. Null when the payload is not that object — it is then read as it is.
+    /// </summary>
+    public static IReadOnlyList<AuditChangeLine>? ChangeLines(AuditEntryRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (string.IsNullOrWhiteSpace(row.Changes)) return [];
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(row.Changes);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return null;
+
+            var lines = new List<AuditChangeLine>();
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                var value = property.Value;
+                if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty("old", out var before) && value.TryGetProperty("new", out var after))
+                    lines.Add(new AuditChangeLine(property.Name, Text(before), Text(after)));
+                else if (IsDeletion(row))
+                    lines.Add(new AuditChangeLine(property.Name, Text(value), null));
+                else
+                    lines.Add(new AuditChangeLine(property.Name, null, Text(value)));
+            }
+            return lines;
+        }
+    }
+
+    private static string? Text(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Null or JsonValueKind.Undefined => null,
+        JsonValueKind.String => value.GetString(),
+        _ => value.GetRawText()
+    };
 
     public static string Detail(DataAccessRow row)
     {

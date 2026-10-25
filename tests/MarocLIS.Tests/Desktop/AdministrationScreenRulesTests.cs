@@ -186,6 +186,29 @@ public sealed class AdministrationScreenRulesTests
         AuditTrailRules.PatientRecordNumber(" P-2026-0001 ").Should().Be("P-2026-0001");
     }
 
+    [Fact]
+    public void A_change_opened_reads_one_field_a_line_with_its_value_before_and_after()
+    {
+        AuditEntryRow Change(AuditOperation op, string? changes) =>
+            new(Guid.NewGuid(), Now, "AppUser", Guid.NewGuid(), op, "admin", "POSTE-01", "LastLoginAt", changes, null,
+                null, null, null, null);
+
+        AuditTrailRules.ChangeLines(Change(AuditOperation.Update,
+                """{"LastLoginAt":{"old":"2026-10-25T04:29:58+00:00","new":"2026-10-25T04:31:57+00:00"},"FailedLoginAttempts":{"old":2,"new":0},"Note":{"old":null,"new":"Départ"}}"""))
+            .Should().Equal(
+                new AuditChangeLine("LastLoginAt", "2026-10-25T04:29:58+00:00", "2026-10-25T04:31:57+00:00"),
+                new AuditChangeLine("FailedLoginAttempts", "2", "0"),
+                new AuditChangeLine("Note", null, "Départ"));
+        // A creation records the values set, a deletion the values removed.
+        AuditTrailRules.ChangeLines(Change(AuditOperation.Insert, """{"Id":"7","Code":"GLY"}"""))
+            .Should().Equal(new AuditChangeLine("Id", null, "7"), new AuditChangeLine("Code", null, "GLY"));
+        AuditTrailRules.ChangeLines(Change(AuditOperation.Delete, """{"Code":"GLY"}"""))
+            .Should().Equal(new AuditChangeLine("Code", "GLY", null));
+        // A payload that is not the recorder's object is read as it is.
+        AuditTrailRules.ChangeLines(Change(AuditOperation.Update, "4,2 → 5,1")).Should().BeNull();
+        AuditTrailRules.ChangeLines(Change(AuditOperation.Update, null)).Should().BeEmpty();
+    }
+
     // ---- Visa des caisses ----------------------------------------------------------------------
 
     [Fact]
