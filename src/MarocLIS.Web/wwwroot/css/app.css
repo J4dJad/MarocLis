@@ -1019,7 +1019,7 @@ fieldset.subcard:disabled { opacity: .7; }
 
 /* The Levey-Jennings chart: the band in control, the limits by weight, the points by shape. */
 .lj { display: flex; flex-direction: column; gap: 4px; }
-.lj-chart { inline-size: 100%; block-size: auto; display: block; background: var(--surface-raised); }
+.lj-chart { inline-size: 100%; block-size: auto; display: block; direction: ltr; background: var(--surface-raised); }
 .lj-empty { margin: 0; padding: 48px 0; text-align: center; }
 .lj-header { margin: 0; }
 .lj-band { fill: var(--normal-bg); }
