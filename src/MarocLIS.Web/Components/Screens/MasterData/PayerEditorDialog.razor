@@ -1,3 +1,4 @@
+@using System.Globalization
 @using MarocLIS.Application.Administration
 @using MarocLIS.Application.Input
 @using MarocLIS.Domain.Patients
@@ -45,7 +46,8 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Coverage.ReimbursementRatePercent"]</span>
-                <input class="input mono num" type="number" min="0" max="100" step="0.01" data-field="rate" disabled="@(!Locks.RateEnabled)" @bind="_form.RatePercent" />
+                <input class="input mono num" type="number" min="0" max="100" step="0.01" data-field="rate" disabled="@(!Locks.RateEnabled)"
+                       value="@_form.RatePercent.ToString("0.##", CultureInfo.InvariantCulture)" @onchange="RateChanged" />
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Coverage.PaymentTermsDays"]</span>
@@ -154,6 +156,13 @@
     private void KindChanged(ChangeEventArgs e)
     {
         if (Enum.TryParse<PayerKind>(e.Value?.ToString(), out var kind)) _form = MasterDataEditorRules.WithKind(_form, kind);
+    }
+
+    /// <summary>The rate as the workstation's spinner holds it: two decimals, between 0 and 100.</summary>
+    private void RateChanged(ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var rate))
+            _form.RatePercent = Math.Round(Math.Clamp(rate, 0m, 100m), 2);
     }
 
     private Task SaveAsync()

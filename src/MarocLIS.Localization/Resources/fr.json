@@ -6754,6 +6754,8 @@
       "Today": "Aujourd'hui"
     },
     "ParameterCount": "{0} paramètre(s)",
+    "StockItemKind": "Type d'article",
+    "PrescriberKind": "Catégorie du prescripteur",
     "ScreenUnavailable": "Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.",
     "InstrumentsFromWorkstation": "Les valeurs des analyseurs arrivent par le poste Windows qui les pilote ; elles s'affichent ici dès leur réception.",
     "ScreenNotFound": "Cet écran n'existe pas.",

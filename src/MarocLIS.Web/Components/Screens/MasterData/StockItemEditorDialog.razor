@@ -32,7 +32,7 @@
             </label>
 
             <label class="field">
-                <span class="field-label">@Texts["Field.Name"]</span>
+                <span class="field-label">@Texts["Web.StockItemKind"]</span>
                 <select class="input" data-field="kind" @bind="_form.Kind">
                     @foreach (var kind in Enum.GetValues<StockItemKind>())
                     {
@@ -89,7 +89,7 @@
         </div>
 
         <fieldset class="subcard form-grid form-grid-4" data-card="levels">
-            <legend class="section-title accent">@Texts["Inventory.ReorderNotice"]</legend>
+            <p class="field-span-4 small accent">@Texts["Inventory.ReorderNotice"]</p>
             <label class="field">
                 <span class="field-label">@Texts["Inventory.MinimumStock"]</span>
                 <input class="input mono num" dir="ltr" inputmode="decimal" data-field="minimum" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.Minimum" />
@@ -131,7 +131,7 @@
         </fieldset>
 
         <fieldset class="subcard form-grid form-grid-4" data-card="consumption">
-            <legend class="section-title accent">@Texts["Inventory.ConsumptionNotice"]</legend>
+            <p class="field-span-4 small accent">@Texts["Inventory.ConsumptionNotice"]</p>
             <label class="field field-span-2">
                 <span class="field-label">@Texts["Inventory.TestsPerResult"]</span>
                 <input class="input mono" dir="ltr" data-field="testsperresult" maxlength="@MasterDataEditorRules.TestsPerResultMaxLength" @bind="_form.TestsPerResult" />

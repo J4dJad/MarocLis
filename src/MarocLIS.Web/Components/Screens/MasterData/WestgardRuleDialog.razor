@@ -10,7 +10,7 @@
     for one rule: a control with none records points and never rejects a run. The list, the presets
     and the summary are MasterDataScreenRules'.
 *@
-<Modal Name="westgard-rules" Title="@($"{Texts["Quality.EditRules"]} — {Parameter} · {Material}")" OnCancel="OnCancel">
+<Modal Name="westgard-rules" Title="@($"{Texts["Quality.EditRules"]} — {Parameter} · {Material}")" Wide="true" OnCancel="OnCancel">
     <ChildContent>
         <p class="small">@Texts["Quality.RuleSelectionExplanation"]</p>
         <ul class="check-list" data-list="rules">

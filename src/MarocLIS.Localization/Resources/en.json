@@ -6753,6 +6753,8 @@
       "Today": "Today"
     },
     "ParameterCount": "{0} parameter(s)",
+    "StockItemKind": "Item type",
+    "PrescriberKind": "Prescriber type",
     "ScreenUnavailable": "This screen is not yet available in the Web version. Use the Windows version.",
     "InstrumentsFromWorkstation": "Analyser values arrive through the Windows workstation that drives the analysers; they show here as soon as they are received.",
     "ScreenNotFound": "This screen does not exist.",

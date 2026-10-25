@@ -6753,6 +6753,8 @@
       "Today": "اليوم"
     },
     "ParameterCount": "{0} معلمة",
+    "StockItemKind": "نوع المادة",
+    "PrescriberKind": "فئة الطبيب الواصف",
     "ScreenUnavailable": "هذه الشاشة غير متوفرة بعد في نسخة الويب. استخدم نسخة Windows.",
     "InstrumentsFromWorkstation": "تصل قيم أجهزة التحليل عبر محطة Windows التي تشغّلها، وتظهر هنا فور استلامها.",
     "ScreenNotFound": "هذه الشاشة غير موجودة.",

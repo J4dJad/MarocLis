@@ -31,7 +31,7 @@
             </label>
 
             <label class="field">
-                <span class="field-label">@Texts["Field.Name"]</span>
+                <span class="field-label">@Texts["Web.PrescriberKind"]</span>
                 <select class="input" data-field="kind" @bind="_form.Kind">
                     @foreach (var kind in Enum.GetValues<PrescriberKind>())
                     {
