@@ -446,7 +446,7 @@ public static class CatalogScreenRules
                 + (row.SupervisorName is { Length: > 0 } supervisor ? $" · {supervisor}" : string.Empty),
 
             NomenclatureKind.SpecimenType =>
-                (row.FastingHours > 0 ? $"{text("Order.Fasted")} {row.FastingHours} h" : string.Empty)
+                (row.FastingHours > 0 ? $"{text("Order.Fasted")} {text("Catalog.HoursValue", row.FastingHours)}" : string.Empty)
                 + (row.CollectionInstructions is { } instructions ? $" · {instructions.For(language)}" : string.Empty),
 
             NomenclatureKind.ContainerType =>

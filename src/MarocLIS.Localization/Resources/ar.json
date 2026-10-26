@@ -4660,6 +4660,7 @@
     "Turnaround": "مدة الإنجاز",
     "RoutineTurnaround": "المدة العادية (سا)",
     "UrgentTurnaround": "المدة المستعجلة (دقيقة)",
+    "HoursValue": "{0} سا",
     "Stability": "الاستقرار",
     "FastingRequired": "الصيام مطلوب",
     "ConsentRequired": "موافقة خاصة مطلوبة",

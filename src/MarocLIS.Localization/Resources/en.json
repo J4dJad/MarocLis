@@ -4660,6 +4660,7 @@
     "Turnaround": "Turnaround",
     "RoutineTurnaround": "Routine turnaround (h)",
     "UrgentTurnaround": "Urgent turnaround (min)",
+    "HoursValue": "{0} h",
     "Stability": "Stability",
     "FastingRequired": "Fasting required",
     "ConsentRequired": "Specific consent required",

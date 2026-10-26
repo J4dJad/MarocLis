@@ -1103,14 +1103,14 @@ public sealed class SampleReceptionView : LocalizedView
             _delayValue.Text = FormatElapsed(candidate.Elapsed);
             _delayValue.ForeColor = UiTheme.Critical;
             _delayLine.Text = $"⚠ {T("SampleDefect.ExcessiveDelay")} — " +
-                              $"{FormatElapsed(candidate.Elapsed)} > {candidate.ShortestStabilityHours} h";
+                              $"{FormatElapsed(candidate.Elapsed)} > {T("Catalog.HoursValue", candidate.ShortestStabilityHours)}";
             _delayLine.ForeColor = UiTheme.Critical;
             _delayLine.Visible = true;
         }
         else if (candidate.Elapsed is { } elapsed)
         {
             _delayValue.Text = FormatElapsed(elapsed) +
-                               (candidate.ShortestStabilityHours is { } hours ? $" / {hours} h" : string.Empty);
+                               (candidate.ShortestStabilityHours is { } hours ? $" / {T("Catalog.HoursValue", hours)}" : string.Empty);
             _delayValue.ForeColor = UiTheme.Normal;
             _delayLine.Visible = false;
         }

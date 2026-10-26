@@ -1131,7 +1131,7 @@ public sealed class CollectionView : LocalizedView
             _ => T("Collection.FastingBandQuestion")
         };
 
-        _fastingBanner.Text = $"{T("Catalog.FastingRequired")} : {fasting} h{forWhat}. {verdict}";
+        _fastingBanner.Text = $"{T("Catalog.FastingRequired")} : {T("Catalog.HoursValue", fasting)}{forWhat}. {verdict}";
         _fastingBanner.Font = UiTheme.BodyBold;
         _fastingBanner.ForeColor = answer is false ? UiTheme.Critical : UiTheme.Abnormal;
         _tips.SetToolTip(_fastingBanner, _fastingBanner.Text);

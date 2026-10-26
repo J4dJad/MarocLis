@@ -411,7 +411,7 @@
             _ => Texts["Collection.FastingBandQuestion"]
         };
 
-        return $"{Texts["Catalog.FastingRequired"]} : {required} h{forWhat}. {verdict}";
+        return $"{Texts["Catalog.FastingRequired"]} : {Texts.T("Catalog.HoursValue", required)}{forWhat}. {verdict}";
     }
 
     private string TubeTip(CollectionWorklistEntry tube)

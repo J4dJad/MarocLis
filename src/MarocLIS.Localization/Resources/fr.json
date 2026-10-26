@@ -4661,6 +4661,7 @@
     "Turnaround": "Délai de rendu",
     "RoutineTurnaround": "Délai routine (h)",
     "UrgentTurnaround": "Délai urgent (min)",
+    "HoursValue": "{0} h",
     "Stability": "Stabilité",
     "FastingRequired": "Jeûne requis",
     "ConsentRequired": "Consentement spécifique requis",

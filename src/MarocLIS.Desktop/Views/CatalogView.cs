@@ -708,7 +708,7 @@ public sealed partial class CatalogView : LocalizedView
                 row.SpecimenTypeName.For(language),
                 CatalogScreenRules.ParameterCount(row),
                 row.CurrentPrice is { } price ? Money.Of(price).Format(language) : "—",
-                $"{row.RoutineTurnaroundHours} h",
+                T("Catalog.HoursValue", row.RoutineTurnaroundHours),
                 string.Join(" · ", CatalogScreenRules.Flags(row, T)));
 
             _analyses.Rows[index].Tag = row;

@@ -201,7 +201,7 @@
                                     <td class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</td>
                                     <td>@(item.IsPanel ? "—" : item.DepartmentName?.For(Texts.Language) ?? string.Empty)</td>
                                     <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
-                                    <td class="num">@item.TurnaroundHours h</td>
+                                    <td class="num">@Texts.T("Catalog.HoursValue", item.TurnaroundHours)</td>
                                     <td class="num">@Price(item.Price)</td>
                                     <td class="cell-action">
                                         @if (state == CatalogItemState.Free)
@@ -879,7 +879,7 @@
     {
         var notes = new List<string>();
         if (item.IsPanel) notes.Add(Texts.T("ResultEntry.AnalysisMany", item.ComponentCount));
-        if (item.FastingHours is { } fasting) notes.Add($"{Texts["Order.Fasted"]} {fasting} h");
+        if (item.FastingHours is { } fasting) notes.Add($"{Texts["Order.Fasted"]} {Texts.T("Catalog.HoursValue", fasting)}");
         if (item.ConsentRequirement != ConsentRequirement.None) notes.Add(Texts["Consent.Required"]);
         if (item.IsSubcontracted) notes.Add(Texts["Catalog.Subcontracted"]);
         return string.Join(" · ", notes);
@@ -889,7 +889,7 @@
         string.Join(" · ", item.Code,
                     item.IsPanel ? Texts.T("OrderEntry.PanelBadge", item.ComponentCount)
                                  : item.DepartmentName?.For(Texts.Language) ?? "—",
-                    $"{item.TurnaroundHours} h");
+                    Texts.T("Catalog.HoursValue", item.TurnaroundHours));
 
     private string Price(decimal amount) => Money.Of(amount).Amount.ToString("N2", Texts.Culture);
 
@@ -929,7 +929,7 @@
         // Two panels can share members; the shared ones are billed once, on the first.
         var shared = _basket.SharedCount(item);
         if (shared > 0) notes.Add(Texts.T("Order.SharedAnalyses", shared));
-        if (item.FastingHours is { } fasting) notes.Add($"{fasting} h");
+        if (item.FastingHours is { } fasting) notes.Add(Texts.T("Catalog.HoursValue", fasting));
         if (item.ConsentRequirement != ConsentRequirement.None) notes.Add(Texts["Consent.Required"]);
         return string.Join(" · ", notes);
     }
@@ -1021,7 +1021,7 @@
 
             // The longest fast and a consent to collect.
             var reminders = new List<string> { Texts["OrderEntry.Ready"] };
-            if (_basket.MaxFastingHours is > 0 and var hours) reminders.Add($"{Texts["Catalog.FastingRequired"]} {hours} h");
+            if (_basket.MaxFastingHours is > 0 and var hours) reminders.Add($"{Texts["Catalog.FastingRequired"]} {Texts.T("Catalog.HoursValue", hours)}");
             if (_basket.RequiresConsent) reminders.Add(Texts["Consent.Required"]);
             return (string.Join(" · ", reminders), "normal");
         }

@@ -63,7 +63,7 @@
                     </div>
                     @if (tube.StabilityExceeded)
                     {
-                        <p class="message is-critical" data-state="delay">⚠ @Texts["SampleDefect.ExcessiveDelay"] — @FormatElapsed(tube.Elapsed) &gt; @tube.ShortestStabilityHours h</p>
+                        <p class="message is-critical" data-state="delay">⚠ @Texts["SampleDefect.ExcessiveDelay"] — @FormatElapsed(tube.Elapsed) &gt; @Texts.T("Catalog.HoursValue", tube.ShortestStabilityHours)</p>
                     }
                     else if (tube.Elapsed is null)
                     {
@@ -344,7 +344,7 @@
     private string DelayValue(SampleReceptionCandidate tube) =>
         tube.Elapsed is null
             ? "—"
-            : FormatElapsed(tube.Elapsed) + (!tube.StabilityExceeded && tube.ShortestStabilityHours is { } hours ? $" / {hours} h" : string.Empty);
+            : FormatElapsed(tube.Elapsed) + (!tube.StabilityExceeded && tube.ShortestStabilityHours is { } hours ? $" / {Texts.T("Catalog.HoursValue", hours)}" : string.Empty);
 
     private static string FormatElapsed(TimeSpan? elapsed) =>
         elapsed is not { } value

@@ -108,6 +108,34 @@ public sealed class WebPageTests : BunitContext
         }
     }
 
+    /// <summary>
+    /// A turnaround or a fast written « 4 h » in code read « h 4 » in Arabic, the Latin letter
+    /// thrown to the other end of the line: the hours now go through the catalogue's own text.
+    /// </summary>
+    [Fact]
+    public void HoursOfATurnaroundOrAFast_AreWrittenInTheScreensLanguage_NotWithAHardCodedH()
+    {
+        var root = WebMenuTests.RepositoryRoot();
+        var sources = new[] { "MarocLIS.Web", "MarocLIS.Desktop", "MarocLIS.Application" }
+            .SelectMany(project => Directory.GetFiles(Path.Combine(root, "src", project), "*.*", SearchOption.AllDirectories))
+            .Where(f => f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+
+        var hardCoded = sources
+            .SelectMany(f => File.ReadLines(f).Select((line, i) => (File: Path.GetFileName(f), Line: i + 1, Text: line)))
+            .Where(l => Regex.IsMatch(l.Text, @"(Hours|hours|fasting|Fasting|required)\} h\b") || Regex.IsMatch(l.Text, @"@[\w.]*Hours h\b"))
+            .Select(l => $"{l.File}:{l.Line}")
+            .ToList();
+        hardCoded.Should().BeEmpty("hours are written with Catalog.HoursValue");
+
+        var resources = Path.Combine(root, "src", "MarocLIS.Localization", "Resources");
+        foreach (var (language, expected) in new[] { ("fr", "{0} h"), ("en", "{0} h"), ("ar", "{0} سا") })
+        {
+            using var catalogue = JsonDocument.Parse(File.ReadAllText(Path.Combine(resources, language + ".json")));
+            catalogue.RootElement.GetProperty("Catalog").GetProperty("HoursValue").GetString().Should().Be(expected);
+        }
+    }
+
     [Fact]
     public void AScreenWithoutTheRight_IsRefused_WhenItsAddressIsTyped()
     {

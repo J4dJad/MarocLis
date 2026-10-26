@@ -1710,7 +1710,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 item.Name.For(language),
                 item.IsPanel ? "—" : item.DepartmentName?.For(language) ?? string.Empty,
                 item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName ?? "—",
-                $"{item.TurnaroundHours} h",
+                T("Catalog.HoursValue", item.TurnaroundHours),
                 Price(item.Price),
                 string.Empty);
 
@@ -1738,7 +1738,7 @@ public sealed class OrderRegistrationView : LocalizedView
     {
         var notes = new List<string>();
         if (item.IsPanel) notes.Add(T("ResultEntry.AnalysisMany", item.ComponentCount));
-        if (item.FastingHours is { } fasting) notes.Add($"{T("Order.Fasted")} {fasting} h");
+        if (item.FastingHours is { } fasting) notes.Add($"{T("Order.Fasted")} {T("Catalog.HoursValue", fasting)}");
         if (item.ConsentRequirement != Domain.Catalog.ConsentRequirement.None) notes.Add(T("Consent.Required"));
         if (item.IsSubcontracted) notes.Add(T("Catalog.Subcontracted"));
         return string.Join(" · ", notes);
@@ -1888,7 +1888,7 @@ public sealed class OrderRegistrationView : LocalizedView
         // Two panels can share members; the shared ones are billed once, on the first.
         var shared = _basketItems.SharedCount(item);
         if (shared > 0) notes.Add(T("Order.SharedAnalyses", shared));
-        if (item.FastingHours is { } fasting) notes.Add($"{fasting} h");
+        if (item.FastingHours is { } fasting) notes.Add(T("Catalog.HoursValue", fasting));
         if (item.ConsentRequirement != Domain.Catalog.ConsentRequirement.None) notes.Add(T("Consent.Required"));
         return string.Join(" · ", notes);
     }
@@ -2030,7 +2030,7 @@ public sealed class OrderRegistrationView : LocalizedView
             // What the old summary under the basket said: the longest fast and a consent to collect.
             var reminders = new List<string> { T("OrderEntry.Ready") };
             var maxFasting = _basketItems.MaxFastingHours;
-            if (maxFasting > 0) reminders.Add($"{T("Catalog.FastingRequired")} {maxFasting} h");
+            if (maxFasting > 0) reminders.Add($"{T("Catalog.FastingRequired")} {T("Catalog.HoursValue", maxFasting)}");
             if (_basketItems.RequiresConsent)
                 reminders.Add(T("Consent.Required"));
             _status.Text = string.Join(" · ", reminders);
@@ -2210,7 +2210,7 @@ public sealed class OrderRegistrationView : LocalizedView
         parts.Add(item.IsPanel
             ? T("OrderEntry.PanelBadge", item.ComponentCount)
             : item.DepartmentName?.For(Localizer.CurrentLanguage) ?? "—");
-        parts.Add($"{item.TurnaroundHours} h");
+        parts.Add(T("Catalog.HoursValue", item.TurnaroundHours));
         return string.Join(" · ", parts);
     }
 

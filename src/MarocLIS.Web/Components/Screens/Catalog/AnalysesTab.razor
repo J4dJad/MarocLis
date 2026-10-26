@@ -30,7 +30,7 @@
                     <dt>@Texts["Field.Department"]</dt><dd>@analysis.DepartmentName.For(Texts.Language)</dd>
                     <dt>@Texts["Sample.SpecimenType"]</dt><dd>@analysis.SpecimenTypeName.For(Texts.Language)</dd>
                     <dt>@Texts["Sample.ContainerType"]</dt><dd>@(analysis.ContainerName ?? "—")</dd>
-                    <dt>@Texts["Catalog.Turnaround"]</dt><dd class="mono">@analysis.RoutineTurnaroundHours h</dd>
+                    <dt>@Texts["Catalog.Turnaround"]</dt><dd class="mono">@Texts.T("Catalog.HoursValue", analysis.RoutineTurnaroundHours)</dd>
                     <dt>@Texts["Field.Price"]</dt>
                     <dd class="mono">@(analysis.CurrentPrice is { } price ? Money.Of(price).Format(Texts.Language, Texts.Culture) : "—")@(analysis.CurrentCoefficient is { } coefficient ? $" · B {coefficient.ToString("0.##", Texts.Culture)}" : null)</dd>
                 </dl>
