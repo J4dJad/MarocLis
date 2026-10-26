@@ -375,6 +375,18 @@ public sealed class MindrayTests
         specimen.Results.Select(r => r.InstrumentTestCode).Should().Contain(["WBC", "RBC", "HGB", "PLT"]);
     }
 
+    [Fact]
+    public void TheFrameTester_OffersASample_OnAMindrayLink()
+    {
+        var mindray = MarocLIS.Application.Instruments.MessageFormatSettings.Default with { Dialect = Hl7Dialect.MindrayBc };
+
+        MarocLIS.Application.Instruments.InstrumentInterfaceScreenRules.HasSample(InstrumentProtocol.Hl7V2, mindray).Should().BeTrue();
+        MarocLIS.Application.Instruments.InstrumentInterfaceScreenRules
+            .HasSample(InstrumentProtocol.Hl7V2, MarocLIS.Application.Instruments.MessageFormatSettings.Default).Should().BeFalse();
+        MarocLIS.Application.Instruments.InstrumentInterfaceScreenRules
+            .HasSample(InstrumentProtocol.RocheIntegra, MarocLIS.Application.Instruments.MessageFormatSettings.Default).Should().BeTrue();
+    }
+
     // ---- The bench -----------------------------------------------------------------------------------
 
     private static async Task<Lis> LisAsync(Hl7Dialect dialect, InstrumentDirection direction, RecordingSink sink)

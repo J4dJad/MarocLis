@@ -734,9 +734,14 @@
 
         // The INTEGRA speaks a protocol nobody has a frame of before the analyser is cabled: the
         // workstation's simulator writes one for the tube of the last transmission and the link's tests.
-        async Task<string> SampleAsync() =>
-            IntegraInstrumentEmulator.SampleTranscript(InstrumentInterfaceScreenRules.SampleTube(await RecentAsync()),
-                                                       InstrumentInterfaceScreenRules.SampleTests(mappings.Value));
+        // A Mindray link: the simulated analyser writes a result message of its family, for the link's codes.
+        async Task<string> SampleAsync()
+        {
+            var tube = InstrumentInterfaceScreenRules.SampleTube(await RecentAsync());
+            return protocol == InstrumentProtocol.RocheIntegra
+                ? IntegraInstrumentEmulator.SampleTranscript(tube, InstrumentInterfaceScreenRules.SampleTests(mappings.Value))
+                : MindrayInstrumentEmulator.SampleTranscript(format.Dialect, tube, InstrumentInterfaceScreenRules.SampleCodes(mappings.Value));
+        }
 
         _frameTest = new FrameTest(
             InstrumentInterfaceScreenRules.FrameTestSubtitle(link, protocol, Texts.T),
@@ -744,7 +749,7 @@
             InstrumentInterfaceScreenRules.ParameterLabels(mappings.Value),
             frame => Scopes.RunAsync<InstrumentInterfaceService, Result<MessagePreview>>(s => s.PreviewMessageAsync(id, protocol, format, frame)),
             LoadLastAsync,
-            InstrumentInterfaceScreenRules.HasSample(protocol) ? SampleAsync : null);
+            InstrumentInterfaceScreenRules.HasSample(protocol, format) ? SampleAsync : null);
     }
 
     // ---- Dialogs -----------------------------------------------------------------------------------

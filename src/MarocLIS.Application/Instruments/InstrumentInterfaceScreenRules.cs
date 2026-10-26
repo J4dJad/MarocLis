@@ -531,6 +531,30 @@ public static class InstrumentInterfaceScreenRules
     /// <summary>Only the INTEGRA's protocol has a sample: nobody has a frame of it before the analyser is cabled.</summary>
     public static bool HasSample(InstrumentProtocol protocol) => protocol == InstrumentProtocol.RocheIntegra;
 
+    /// <summary>
+    /// The INTEGRA, and a Mindray link: the simulated analyser writes a result message of the family
+    /// (BS, BC, CL) laid out as its manual shows it, for the link's own codes.
+    /// </summary>
+    public static bool HasSample(InstrumentProtocol protocol, MessageFormatSettings format)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        return HasSample(protocol) || (protocol == InstrumentProtocol.Hl7V2 && format.Dialect != Hl7Dialect.Standard);
+    }
+
+    /// <summary>The link's own codes for a Mindray sample: the first four enabled; null when there are none.</summary>
+    public static IReadOnlyList<string>? SampleCodes(IEnumerable<MappingRow> mappings)
+    {
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        var codes = mappings.Where(m => m.IsEnabled && !string.IsNullOrWhiteSpace(m.InstrumentTestCode))
+                            .Select(m => m.InstrumentTestCode.Trim())
+                            .Distinct(StringComparer.Ordinal)
+                            .Take(4)
+                            .ToList();
+
+        return codes.Count > 0 ? codes : null;
+    }
+
     /// <summary>A stored frame keeps CR between records; a text box needs a full line break.</summary>
     public static string Displayable(string? frame, string? newLine = null) =>
         (frame ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal)

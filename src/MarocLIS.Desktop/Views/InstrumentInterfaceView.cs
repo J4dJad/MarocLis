@@ -685,10 +685,13 @@ public sealed class InstrumentInterfaceView : LocalizedView
         async Task<string> SampleAsync()
         {
             var recent = await _interfaces.GetMessagesAsync(link.Id, InstrumentInterfaceScreenRules.RecentMessages);
+            var tube = InstrumentInterfaceScreenRules.SampleTube(recent.IsSuccess ? recent.Value : []);
 
-            return IntegraInstrumentEmulator.SampleTranscript(
-                InstrumentInterfaceScreenRules.SampleTube(recent.IsSuccess ? recent.Value : []),
-                InstrumentInterfaceScreenRules.SampleTests(mappings.Value));
+            // A Mindray link: a result message of its family, for the link's own codes.
+            return protocol == InstrumentProtocol.RocheIntegra
+                ? IntegraInstrumentEmulator.SampleTranscript(tube, InstrumentInterfaceScreenRules.SampleTests(mappings.Value))
+                : MindrayInstrumentEmulator.SampleTranscript(format.Dialect, tube,
+                                                             InstrumentInterfaceScreenRules.SampleCodes(mappings.Value));
         }
 
         using var dialog = new InstrumentFrameTestDialog(
@@ -696,7 +699,7 @@ public sealed class InstrumentInterfaceView : LocalizedView
             InstrumentInterfaceScreenRules.FrameTestSubtitle(link, protocol, T),
             frame => _interfaces.PreviewMessageAsync(link.Id, protocol, format, frame),
             LoadLastAsync, parameters, initial,
-            InstrumentInterfaceScreenRules.HasSample(protocol) ? SampleAsync : null);
+            InstrumentInterfaceScreenRules.HasSample(protocol, format) ? SampleAsync : null);
 
         dialog.ShowDialog(owner);
     }
