@@ -2760,6 +2760,13 @@
     "WouldStore": "يُحفظ"
   },
 
+  "Hl7Dialect": {
+    "Standard": "قياسي",
+    "MindrayBs": "Mindray BS (الكيمياء)",
+    "MindrayBc": "Mindray BC (أمراض الدم)",
+    "MindrayCl": "Mindray CL (المناعة)"
+  },
+
   "UnmappedNonNumericHandling": {
     "Ignore": "تجاهله (إنذارات، مخططات)",
     "Report": "الإبلاغ عنه في السجل"
@@ -4476,6 +4483,12 @@
     "ParityNone": "بدون",
     "TestFrameSample": "مثال رسالة",
     "IntegraNotice": "COBAS INTEGRA: يستعلم النظام من الجهاز (النتائج، الأنابيب بدون طلب). الرموز = أرقام الاختبارات («031»). نهاية السطر وفحص الكتلة وفترة الاستعلام: قسم Instruments:RocheIntegra في ملف الإعدادات.",
+    "Hl7Dialect": "نمط HL7",
+    "FormatProfile.MindrayBs": "Mindray BS (الكيمياء)",
+    "FormatProfile.MindrayBc": "Mindray BC (أمراض الدم)",
+    "FormatProfile.MindrayCl": "Mindray CL (المناعة، HL7)",
+    "MindrayNotice": "أجهزة Mindray بروتوكول HL7 2.3.1: على الجهاز، في شاشة LIS، أدخل عنوان IP لهذا الحاسوب والمنفذ المبيّن هنا، وفعّل HL7 والوضع ثنائي الاتجاه (طلب قائمة العمل). الرموز = رموز الاختبارات المضبوطة على الجهاز. تحقّق بواسطة «اختبار رسالة».",
+    "MindrayBcNotice": "أجهزة Mindray BC بروتوكول HL7 2.3.1: على الجهاز، في شاشة LIS، أدخل عنوان IP لهذا الحاسوب والمنفذ المبيّن هنا، بروتوكول HL7. الرموز = أسماء المؤشرات مثل WBC وHGB؛ تُتجاهل الإنذارات والمدرّجات. تُبرمج الأنابيب على الجهاز.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "سبب تعطيل ربط {0} (مثلا: الجهاز في الصيانة):",
     "EnablePrompt": "سبب إعادة تفعيل ربط {0}:",
@@ -6254,6 +6267,7 @@
   "Interface_FormatSuffixTooLong": "يجب ألا تتجاوز اللاحقة 10 أحرف.",
   "Interface_FormatTypesTooLong": "يجب ألا تتجاوز قائمة الأنواع 60 حرفًا.",
   "Interface_FormatSpecimenFieldInvalid": "الحقل «{0}» غير موجود لهذا البروتوكول.",
+  "Interface_FormatDialectInvalid": "نمط HL7 هذا غير موجود.",
   "Interface_Poct1AInvalidXml": "رسالة POCT1-A غير مقروءة: صيغة XML غير صالحة.",
   "Interface_Poct1ARoleIgnored": "تم تجاهل حدث POCT1-A من نوع «{0}» (تُستورد نتائج المرضى والمراقبة فقط).",
   "Interface_Poct1ANoObservation": "رسالة POCT1-A بدون أي نتيجة.",

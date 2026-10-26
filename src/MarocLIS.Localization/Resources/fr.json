@@ -2760,6 +2760,13 @@
     "WouldStore": "Enregistré"
   },
 
+  "Hl7Dialect": {
+    "Standard": "Standard (norme)",
+    "MindrayBs": "Mindray BS (chimie)",
+    "MindrayBc": "Mindray BC (hématologie)",
+    "MindrayCl": "Mindray CL (immuno)"
+  },
+
   "UnmappedNonNumericHandling": {
     "Ignore": "L'ignorer (alarmes, histogrammes)",
     "Report": "Le signaler dans le journal"
@@ -4477,6 +4484,12 @@
     "ParityNone": "Aucune",
     "TestFrameSample": "Exemple de trame",
     "IntegraNotice": "COBAS INTEGRA : le LIS interroge l'automate (résultats, tubes sans demande). Codes = numéros de test (« 031 »). Fin de ligne, contrôle de bloc et intervalle d'interrogation : section Instruments:RocheIntegra du fichier de configuration.",
+    "Hl7Dialect": "Dialecte HL7",
+    "FormatProfile.MindrayBs": "Mindray BS (chimie)",
+    "FormatProfile.MindrayBc": "Mindray BC (hématologie)",
+    "FormatProfile.MindrayCl": "Mindray CL (immuno, HL7)",
+    "MindrayNotice": "Mindray (HL7 2.3.1) : sur l'automate, écran LIS, saisir l'adresse IP de ce poste et le port ci-contre, activer HL7 et le mode bidirectionnel (requête de la liste de travail). Codes = codes des tests réglés sur l'automate. Vérifiez avec « Tester une trame ».",
+    "MindrayBcNotice": "Mindray BC (HL7 2.3.1) : sur l'automate, écran LIS, saisir l'adresse IP de ce poste et le port ci-contre, protocole HL7. Codes = noms des paramètres (WBC, HGB…) ; alarmes et histogrammes ignorés. Le tube se programme sur l'automate.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "Motif de la désactivation de la liaison de {0} (par exemple : automate en maintenance) :",
     "EnablePrompt": "Motif de la réactivation de la liaison de {0} :",
@@ -6255,6 +6268,7 @@
   "Interface_FormatSuffixTooLong": "Le suffixe à ignorer ne doit pas dépasser 10 caractères.",
   "Interface_FormatTypesTooLong": "La liste des types de résultat ne doit pas dépasser 60 caractères.",
   "Interface_FormatSpecimenFieldInvalid": "Le champ « {0} » n'existe pas pour ce protocole.",
+  "Interface_FormatDialectInvalid": "Ce dialecte HL7 n'existe pas.",
   "Interface_Poct1AInvalidXml": "Message POCT1-A illisible : le XML n'est pas valide.",
   "Interface_Poct1ARoleIgnored": "Événement POCT1-A de type « {0} » ignoré (seuls patients et contrôles sont importés).",
   "Interface_Poct1ANoObservation": "Message POCT1-A sans observation.",

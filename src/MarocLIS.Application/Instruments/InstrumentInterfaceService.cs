@@ -61,6 +61,9 @@ public sealed record MessageFormatSettings(
     public static readonly MessageFormatSettings Default =
         new(null, null, null, null, null, UnmappedNonNumericHandling.Report, true);
 
+    /// <summary>The vendor's reading of HL7 (Mindray BS, BC, CL); Standard on any other protocol.</summary>
+    public Hl7Dialect Dialect { get; init; }
+
     /// <summary>Field choices for the tube number, per protocol. Null means the protocol default.</summary>
     public static IReadOnlyList<string> SpecimenFieldsFor(InstrumentProtocol protocol) => protocol switch
     {
@@ -77,7 +80,8 @@ public sealed record MessageFormatSettings(
         TestCodeSuffix = TestCodeSuffix,
         SpecimenIdField = SpecimenIdField,
         SpecimenIdComponent = SpecimenIdComponent,
-        AcceptedResultTypes = AcceptedResultTypes
+        AcceptedResultTypes = AcceptedResultTypes,
+        Hl7Dialect = Dialect
     };
 }
 
@@ -457,6 +461,9 @@ public sealed class InstrumentInterfaceService(
         link.FormatAcceptedResultTypes = Trimmed(format.AcceptedResultTypes);
         link.UnmappedNonNumeric = format.UnmappedNonNumeric;
         link.KeepInstrumentFlags = format.KeepInstrumentFlags;
+
+        // A dialect is HL7's: on another protocol it would be a setting that silently does nothing.
+        link.Hl7Dialect = request.Protocol == InstrumentProtocol.Hl7V2 ? format.Dialect : Hl7Dialect.Standard;
     }
 
     private static Result ValidateFormat(InterfaceRequest request)
@@ -469,6 +476,9 @@ public sealed class InstrumentInterfaceService(
 
         if (Trimmed(format.TestCodeSuffix) is { Length: > 10 })
             errors.Add(Error.Validation("Interface_FormatSuffixTooLong"));
+
+        if (!Enum.IsDefined(format.Dialect))
+            errors.Add(Error.Validation("Interface_FormatDialectInvalid"));
 
         if (Trimmed(format.AcceptedResultTypes) is { Length: > 60 })
             errors.Add(Error.Validation("Interface_FormatTypesTooLong"));

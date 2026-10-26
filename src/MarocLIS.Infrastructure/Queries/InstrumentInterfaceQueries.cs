@@ -37,6 +37,7 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                 i.FormatAcceptedResultTypes,
                 i.UnmappedNonNumeric,
                 i.KeepInstrumentFlags,
+                i.Hl7Dialect,
                 i.LastConnectedAt,
                 i.LastMessageAt,
                 i.LastError,
@@ -131,6 +132,9 @@ public sealed class InstrumentInterfaceQueries(LisDbContext db) : IInstrumentInt
                         i.FormatTestCodeComponent, i.FormatTestCodeSuffix, i.FormatSpecimenIdField,
                         i.FormatSpecimenIdComponent, i.FormatAcceptedResultTypes,
                         i.UnmappedNonNumeric, i.KeepInstrumentFlags)
+                    {
+                        Dialect = i.Protocol == InstrumentProtocol.Hl7V2 ? i.Hl7Dialect : Hl7Dialect.Standard
+                    }
                 })
         ];
     }

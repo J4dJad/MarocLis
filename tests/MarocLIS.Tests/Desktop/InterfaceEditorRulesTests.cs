@@ -93,6 +93,78 @@ public sealed class InterfaceEditorRulesTests
         form.TestCodeSuffix.Should().Be(before);
     }
 
+    [Theory]
+    [InlineData(InterfaceEditorRules.MindrayBsProfile, Hl7Dialect.MindrayBs, "OBR-2", null, InstrumentDirection.Bidirectional, "ISO-8859-1", UnmappedNonNumericHandling.Report, "5100", "Interface.MindrayNotice")]
+    [InlineData(InterfaceEditorRules.MindrayBcProfile, Hl7Dialect.MindrayBc, "OBR-3", 2, InstrumentDirection.Unidirectional, "UTF-8", UnmappedNonNumericHandling.Ignore, "5101", "Interface.MindrayBcNotice")]
+    [InlineData(InterfaceEditorRules.MindrayClProfile, Hl7Dialect.MindrayCl, "OBR-2", null, InstrumentDirection.Bidirectional, "ISO-8859-1", UnmappedNonNumericHandling.Report, "5102", "Interface.MindrayNotice")]
+    public void A_Mindray_preset_sets_HL7_over_TCP_with_the_LIS_listening_and_the_family_s_layout(
+        string key, Hl7Dialect dialect, string specimenField, int? codeComponent, InstrumentDirection direction,
+        string encoding, UnmappedNonNumericHandling nonNumeric, string port, string notice)
+    {
+        var form = InterfaceEditorRules.FormOf(null);
+
+        InterfaceEditorRules.ApplyProfile(form, key);
+
+        form.Protocol.Should().Be(InstrumentProtocol.Hl7V2);
+        form.Transport.Should().Be(InstrumentTransportKind.Tcp);
+        form.ListenAsServer.Should().BeTrue("the analyser connects to the LIS");
+        form.TcpPort.Should().Be(port);
+        form.Direction.Should().Be(direction);
+        form.Encoding.Should().Be(encoding);
+        form.Hl7Dialect.Should().Be(dialect);
+        form.SpecimenIdField.Should().Be(specimenField);
+        form.TestCodeComponent.Should().Be(codeComponent);
+        form.UnmappedNonNumeric.Should().Be(nonNumeric);
+
+        InterfaceEditorRules.ProfileOf(form).Should().Be(key);
+        InterfaceEditorRules.FormatNoticeKey(form.Protocol, form.Hl7Dialect).Should().Be(notice);
+        InterfaceEditorRules.Check(form, Guid.NewGuid()).Should().BeNull("no host to name: the LIS listens");
+
+        var request = InterfaceEditorRules.ToRequest(form, null, Guid.NewGuid());
+        request.Format.Dialect.Should().Be(dialect);
+        request.Format.ToFormat().Hl7Dialect.Should().Be(dialect);
+        request.Format.ToFormat().IsMindray.Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_Mindray_preset_keeps_a_typed_port_and_another_preset_or_protocol_drops_the_dialect()
+    {
+        var form = InterfaceEditorRules.FormOf(null);
+        form.TcpPort = "6000";
+
+        InterfaceEditorRules.ApplyProfile(form, InterfaceEditorRules.MindrayBsProfile);
+        form.TcpPort.Should().Be("6000", "the port only has to match the analyser's, and the laboratory chose one");
+
+        // A field changed by hand: the preset no longer matches, the dialect stays what it was.
+        form.SpecimenIdField = "OBR-3";
+        InterfaceEditorRules.ProfileOf(form).Should().Be(InterfaceEditorRules.CustomProfile);
+        InterfaceEditorRules.Format(form).Dialect.Should().Be(Hl7Dialect.MindrayBs);
+
+        InterfaceEditorRules.ApplyProfile(form, "Interface.FormatProfile.Standard");
+        form.Hl7Dialect.Should().Be(Hl7Dialect.Standard);
+        form.Protocol.Should().Be(InstrumentProtocol.Hl7V2);
+        InterfaceEditorRules.ProfileOf(form).Should().Be("Interface.FormatProfile.Standard");
+
+        InterfaceEditorRules.ApplyProfile(form, InterfaceEditorRules.MindrayClProfile);
+        form.Protocol = InstrumentProtocol.AstmE1394;
+        InterfaceEditorRules.ProtocolChanged(form);
+        form.Hl7Dialect.Should().Be(Hl7Dialect.Standard, "a dialect is HL7's reading");
+        InterfaceEditorRules.IsDialectOffered(form.Protocol).Should().BeFalse();
+        InterfaceEditorRules.Format(form).Dialect.Should().Be(Hl7Dialect.Standard);
+    }
+
+    [Fact]
+    public void A_saved_Mindray_link_opens_on_its_preset()
+    {
+        var format = InterfaceEditorRules.FormatProfiles.Single(p => p.Key == InterfaceEditorRules.MindrayBcProfile).Format!;
+
+        InterfaceEditorRules.ProfileFor(InstrumentProtocol.Hl7V2, format).Should().Be(InterfaceEditorRules.MindrayBcProfile);
+        InterfaceEditorRules.ProfileFor(InstrumentProtocol.Hl7V2, format with { Dialect = Hl7Dialect.Standard })
+            .Should().Be(InterfaceEditorRules.CustomProfile, "the layout without the dialect is no Mindray link");
+        InterfaceEditorRules.MindrayProfile(Hl7Dialect.MindrayCl).Should().Be(InterfaceEditorRules.MindrayClProfile);
+        InterfaceEditorRules.MindrayProfile(Hl7Dialect.Standard).Should().BeNull();
+    }
+
     [Fact]
     public void Only_the_half_of_the_form_the_transport_gives_a_meaning_to_is_open()
     {

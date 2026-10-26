@@ -141,6 +141,15 @@
                         <span class="field-label">@Texts["Interface.MaxRetries"]</span>
                         <input class="input mono num" type="number" min="0" max="@InterfaceEditorRules.MaxRetriesMax" data-field="maxretries" @bind="MaxRetries" />
                     </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Interface.Hl7Dialect"]</span>
+                        <select class="input" data-field="hl7dialect" disabled="@(!InterfaceEditorRules.IsDialectOffered(_form.Protocol))" @bind="_form.Hl7Dialect">
+                            @foreach (var dialect in InterfaceEditorRules.Dialects)
+                            {
+                                <option value="@dialect">@Texts[$"Hl7Dialect.{dialect}"]</option>
+                            }
+                        </select>
+                    </label>
                     <p class="field-span-4 small muted">@Texts["Interface.EncodingNotice"]</p>
                 </div>
 
@@ -216,7 +225,7 @@
                     </select>
                 </label>
                 <label class="field-check"><input type="checkbox" data-field="keepflags" @bind="_form.KeepInstrumentFlags" /><span>@Texts["Interface.KeepInstrumentFlags"]</span></label>
-                <p class="message is-info small" data-state="format-notice">@Texts[InterfaceEditorRules.FormatNoticeKey(_form.Protocol)]</p>
+                <p class="message is-info small" data-state="format-notice">@Texts[InterfaceEditorRules.FormatNoticeKey(_form.Protocol, _form.Hl7Dialect)]</p>
                 @if (CanTestFrame)
                 {
                     <ActionButton Key="Interface.TestFrame" OnClick="TestFrameAsync" />

@@ -2760,6 +2760,13 @@
     "WouldStore": "Stored"
   },
 
+  "Hl7Dialect": {
+    "Standard": "Standard",
+    "MindrayBs": "Mindray BS (chemistry)",
+    "MindrayBc": "Mindray BC (haematology)",
+    "MindrayCl": "Mindray CL (immunoassay)"
+  },
+
   "UnmappedNonNumericHandling": {
     "Ignore": "Ignore it (alarms, histograms)",
     "Report": "Report it in the log"
@@ -4476,6 +4483,12 @@
     "ParityNone": "None",
     "TestFrameSample": "Sample frame",
     "IntegraNotice": "COBAS INTEGRA: the LIS polls the analyser (results, tubes without orders). Codes = test numbers (\"031\"). Line end, block check and polling interval: Instruments:RocheIntegra section of the configuration file.",
+    "Hl7Dialect": "HL7 dialect",
+    "FormatProfile.MindrayBs": "Mindray BS (chemistry)",
+    "FormatProfile.MindrayBc": "Mindray BC (haematology)",
+    "FormatProfile.MindrayCl": "Mindray CL (immunoassay, HL7)",
+    "MindrayNotice": "Mindray (HL7 2.3.1): on the analyser, LIS screen, enter this workstation's IP address and the port shown here, turn on HL7 and bidirectional mode (worklist query). Codes = the test codes set on the analyser. Check with \"Test a frame\".",
+    "MindrayBcNotice": "Mindray BC (HL7 2.3.1): on the analyser, LIS screen, enter this workstation's IP address and the port shown here, HL7 protocol. Codes = parameter names (WBC, HGB…); alarms and histograms ignored. Tubes are programmed on the analyser.",
     "FormatProfile.RocheIntegra": "Roche cobas INTEGRA 400 plus",
     "DisablePrompt": "Reason for disabling the link of {0} (for example: analyser in maintenance):",
     "EnablePrompt": "Reason for re-enabling the link of {0}:",
@@ -6254,6 +6267,7 @@
   "Interface_FormatSuffixTooLong": "The suffix to ignore cannot exceed 10 characters.",
   "Interface_FormatTypesTooLong": "The result type list cannot exceed 60 characters.",
   "Interface_FormatSpecimenFieldInvalid": "Field \"{0}\" does not exist for this protocol.",
+  "Interface_FormatDialectInvalid": "This HL7 dialect does not exist.",
   "Interface_Poct1AInvalidXml": "Unreadable POCT1-A message: the XML is not valid.",
   "Interface_Poct1ARoleIgnored": "POCT1-A event of type \"{0}\" ignored (only patients and controls are imported).",
   "Interface_Poct1ANoObservation": "POCT1-A message without any observation.",

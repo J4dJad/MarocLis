@@ -53,6 +53,9 @@ public sealed class InterfaceForm
     public string AcceptedResultTypes { get; set; } = string.Empty;
     public UnmappedNonNumericHandling UnmappedNonNumeric { get; set; } = UnmappedNonNumericHandling.Report;
     public bool KeepInstrumentFlags { get; set; } = true;
+
+    /// <summary>The vendor's reading of HL7; Standard on any other protocol.</summary>
+    public Hl7Dialect Hl7Dialect { get; set; }
 }
 
 /// <summary>Which half of the link editor means anything for the transport chosen, and what to say about it.</summary>
@@ -104,6 +107,10 @@ public static class InterfaceEditorRules
     public static readonly IReadOnlyList<string> Handshakes = ["None", "XOnXOff", "RequestToSend", "RequestToSendXOnXOff"];
     public static readonly IReadOnlyList<string> Encodings = ["ISO-8859-1", "UTF-8", "ASCII", "Windows-1252", "Windows-1256"];
 
+    /// <summary>The readings of HL7 the driver knows, offered on an HL7 link only.</summary>
+    public static readonly IReadOnlyList<Hl7Dialect> Dialects =
+        [Hl7Dialect.Standard, Hl7Dialect.MindrayBs, Hl7Dialect.MindrayBc, Hl7Dialect.MindrayCl];
+
     /// <summary>The components a code or a tube number can be read from; null is « Auto ».</summary>
     public static readonly IReadOnlyList<int?> Components = [null, 1, 2, 3, 4, 5, 6];
 
@@ -112,6 +119,21 @@ public static class InterfaceEditorRules
 
     public const string CustomProfile = "Interface.FormatProfile.Custom";
     public const string IntegraProfile = "Interface.FormatProfile.RocheIntegra";
+    public const string MindrayBsProfile = "Interface.FormatProfile.MindrayBs";
+    public const string MindrayBcProfile = "Interface.FormatProfile.MindrayBc";
+    public const string MindrayClProfile = "Interface.FormatProfile.MindrayCl";
+
+    /// <summary>
+    /// The port suggested for a Mindray link, the LIS listening: the analyser's « LIS » screen takes
+    /// the LIS address and a port, which only has to be the same on both sides. One per family, so a
+    /// BS and a BC cabled to the same workstation do not claim the same port.
+    /// </summary>
+    public static int SuggestedMindrayPort(Hl7Dialect dialect) => dialect switch
+    {
+        Hl7Dialect.MindrayBc => 5101,
+        Hl7Dialect.MindrayCl => 5102,
+        _ => 5100
+    };
 
     /// <summary>
     /// Presets for the vendors whose layout is known to depart from the standard. A preset fills the
@@ -128,8 +150,29 @@ public static class InterfaceEditorRules
         new("Interface.FormatProfile.Abbott", MessageFormatSettings.Default with { AcceptedResultTypes = "F" }),
         // COBAS INTEGRA 400 plus: its own host protocol, not ASTM. Choosing it also sets the
         // protocol and the serial line (see ApplyProfile); the format stays "Auto".
-        new(IntegraProfile, MessageFormatSettings.Default)
+        new(IntegraProfile, MessageFormatSettings.Default),
+        // Mindray in HL7 v2.3.1: the BS (and the CL, laid out alike) put the tube's barcode in OBR-2
+        // and the test code, as the analyser's test settings name it, in OBX-3. The BC puts the
+        // sample number in OBR-3 and « 6690-2^WBC^LN » in OBX-3: its second component is the name
+        // the laboratory knows (WBC, HGB), and its alarms and histograms are not values. Choosing one
+        // also sets HL7, TCP with the LIS listening, the direction and the encoding (see ApplyProfile).
+        new(MindrayBsProfile, MessageFormatSettings.Default with { SpecimenIdField = "OBR-2", Dialect = Hl7Dialect.MindrayBs }),
+        new(MindrayBcProfile, MessageFormatSettings.Default with
+        {
+            SpecimenIdField = "OBR-3", TestCodeComponent = 2,
+            UnmappedNonNumeric = UnmappedNonNumericHandling.Ignore, Dialect = Hl7Dialect.MindrayBc
+        }),
+        new(MindrayClProfile, MessageFormatSettings.Default with { SpecimenIdField = "OBR-2", Dialect = Hl7Dialect.MindrayCl })
     ];
+
+    /// <summary>The Mindray preset of a dialect, null for Standard.</summary>
+    public static string? MindrayProfile(Hl7Dialect dialect) => dialect switch
+    {
+        Hl7Dialect.MindrayBs => MindrayBsProfile,
+        Hl7Dialect.MindrayBc => MindrayBcProfile,
+        Hl7Dialect.MindrayCl => MindrayClProfile,
+        _ => null
+    };
 
     /// <summary>The form of a link being edited, or of a new one with the editor's defaults.</summary>
     public static InterfaceForm FormOf(InterfaceRow? existing)
@@ -167,7 +210,8 @@ public static class InterfaceEditorRules
             SpecimenIdComponent = Offered(format.SpecimenIdComponent),
             AcceptedResultTypes = format.AcceptedResultTypes ?? string.Empty,
             UnmappedNonNumeric = format.UnmappedNonNumeric,
-            KeepInstrumentFlags = format.KeepInstrumentFlags
+            KeepInstrumentFlags = format.KeepInstrumentFlags,
+            Hl7Dialect = existing?.Protocol == InstrumentProtocol.Hl7V2 ? format.Dialect : Hl7Dialect.Standard
         };
     }
 
@@ -217,12 +261,17 @@ public static class InterfaceEditorRules
 
         form.SpecimenIdField = OfferedField(form.Protocol, form.SpecimenIdField);
 
+        if (!IsDialectOffered(form.Protocol)) form.Hl7Dialect = Hl7Dialect.Standard;
+
         if (!IsDelimited(form.Protocol))
         {
             form.TestCodeComponent = null;
             form.SpecimenIdComponent = null;
         }
     }
+
+    /// <summary>A dialect is HL7's reading: offered on an HL7 link, Standard and greyed on any other.</summary>
+    public static bool IsDialectOffered(InstrumentProtocol protocol) => protocol == InstrumentProtocol.Hl7V2;
 
     /// <summary>The format the form describes, saved or not: what is tried in « Tester une trame » and what is saved.</summary>
     public static MessageFormatSettings Format(InterfaceForm form)
@@ -236,7 +285,10 @@ public static class InterfaceEditorRules
             form.SpecimenIdComponent,
             Blank(form.AcceptedResultTypes),
             form.UnmappedNonNumeric,
-            form.KeepInstrumentFlags);
+            form.KeepInstrumentFlags)
+        {
+            Dialect = IsDialectOffered(form.Protocol) ? form.Hl7Dialect : Hl7Dialect.Standard
+        };
     }
 
     /// <summary>
@@ -256,7 +308,8 @@ public static class InterfaceEditorRules
                 && string.Equals(p.TestCodeSuffix ?? "", format.TestCodeSuffix ?? "", StringComparison.Ordinal)
                 && string.Equals(p.SpecimenIdField ?? "", format.SpecimenIdField ?? "", StringComparison.OrdinalIgnoreCase)
                 && p.SpecimenIdComponent == format.SpecimenIdComponent
-                && string.Equals(p.AcceptedResultTypes ?? "", format.AcceptedResultTypes ?? "", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(p.AcceptedResultTypes ?? "", format.AcceptedResultTypes ?? "", StringComparison.OrdinalIgnoreCase)
+                && p.Dialect == (protocol == InstrumentProtocol.Hl7V2 ? format.Dialect : Hl7Dialect.Standard))
                 return profile.Key;
         }
 
@@ -276,6 +329,12 @@ public static class InterfaceEditorRules
     /// and an RS-232 line its « Configuration › General › Interface » screen offers: the manual lists
     /// the choices but recommends no speed, so 9600 8N1 is a starting point to align with the
     /// analyser, not a fact; it does recommend the software handshake and a host time-out of 180 s.
+    /// <para>
+    /// A Mindray preset is HL7 v2.3.1 over TCP, the analyser connecting to the LIS: the LIS listens,
+    /// on the family's suggested port unless one is typed already. The BS and the CL ask the LIS for
+    /// each tube's worklist (bidirectional); the BC only sends its counts, in UTF-8 (« UNICODE » in
+    /// its header), its alarms and histograms dropped as unknown non-numeric codes.
+    /// </para>
     /// </summary>
     public static void ApplyProfile(InterfaceForm form, string key)
     {
@@ -298,14 +357,28 @@ public static class InterfaceEditorRules
             form.AcknowledgementTimeoutSeconds = Math.Min(AcknowledgementTimeoutMax, 180);
             form.MaxRetries = Math.Min(MaxRetriesMax, 3);
         }
+        else if (format.Dialect != Hl7Dialect.Standard)
+        {
+            form.Protocol = InstrumentProtocol.Hl7V2;
+            form.Transport = InstrumentTransportKind.Tcp;
+            form.ListenAsServer = true;
+            if (string.IsNullOrWhiteSpace(form.TcpPort))
+                form.TcpPort = SuggestedMindrayPort(format.Dialect).ToString(CultureInfo.InvariantCulture);
+            form.Direction = format.Dialect == Hl7Dialect.MindrayBc
+                ? InstrumentDirection.Unidirectional
+                : InstrumentDirection.Bidirectional;
+            form.Encoding = format.Dialect == Hl7Dialect.MindrayBc ? "UTF-8" : "ISO-8859-1";
+            form.UnmappedNonNumeric = format.UnmappedNonNumeric;
+        }
         else if (form.Protocol == InstrumentProtocol.RocheIntegra)
         {
             form.Protocol = InstrumentProtocol.AstmE1394;
         }
 
+        form.Hl7Dialect = format.Dialect;
         form.TestCodeComponent = format.TestCodeComponent;
         form.TestCodeSuffix = format.TestCodeSuffix ?? string.Empty;
-        form.SpecimenIdField = null;
+        form.SpecimenIdField = format.SpecimenIdField;
         form.SpecimenIdComponent = format.SpecimenIdComponent;
         form.AcceptedResultTypes = format.AcceptedResultTypes ?? string.Empty;
 
@@ -314,7 +387,16 @@ public static class InterfaceEditorRules
 
     /// <summary>On an INTEGRA link the notice says where its own settings are, instead of the ASTM advice.</summary>
     public static string FormatNoticeKey(InstrumentProtocol protocol) =>
-        protocol == InstrumentProtocol.RocheIntegra ? "Interface.IntegraNotice" : "Interface.FormatNotice";
+        FormatNoticeKey(protocol, Hl7Dialect.Standard);
+
+    /// <summary>On a Mindray link the notice says what to set on the analyser's side.</summary>
+    public static string FormatNoticeKey(InstrumentProtocol protocol, Hl7Dialect dialect) => protocol switch
+    {
+        InstrumentProtocol.RocheIntegra => "Interface.IntegraNotice",
+        InstrumentProtocol.Hl7V2 when dialect == Hl7Dialect.MindrayBc => "Interface.MindrayBcNotice",
+        InstrumentProtocol.Hl7V2 when dialect != Hl7Dialect.Standard => "Interface.MindrayNotice",
+        _ => "Interface.FormatNotice"
+    };
 
     // ---- Transport -----------------------------------------------------------------------------
 

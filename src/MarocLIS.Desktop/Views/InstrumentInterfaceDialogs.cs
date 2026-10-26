@@ -27,7 +27,7 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
     private readonly Guid? _id;
     private readonly Guid _instrumentId;
 
-    private readonly ComboBox _protocol, _transport, _direction, _encoding;
+    private readonly ComboBox _protocol, _transport, _direction, _encoding, _dialect;
     private readonly TextBox _serialPort, _host, _tcpPort, _inbound, _outbound, _pattern,
                              _processed;
     private readonly ComboBox _baud, _dataBits, _parity, _stopBits, _handshake;
@@ -144,6 +144,11 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _maxRetries = Number("Interface.MaxRetries", 372, 326, 120, existing?.MaxRetries ?? 3,
                               max: InterfaceEditorRules.MaxRetriesMax);
 
+        // HL7's vendor reading (Mindray BS / BC / CL): greyed on any other protocol.
+        _dialect = Choice("Interface.Hl7Dialect", 508, 326, 168, form.Hl7Dialect, "Hl7Dialect",
+                          [.. InterfaceEditorRules.Dialects]);
+        _dialect.DropDownWidth = 240;
+
         Notice(20, 374, 656, 30, "Interface.EncodingNotice");
 
         // --- behaviour -------------------------------------------------------------------------
@@ -232,12 +237,21 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         _codeSuffix.TextChanged += (_, _) => SyncProfile();
         _resultTypes.TextChanged += (_, _) => SyncProfile();
 
-        _protocol.SelectedIndexChanged += (_, _) =>
+        _dialect.SelectedIndexChanged += (_, _) =>
         {
-            RefreshSpecimenFields(_specimenField.SelectedItem?.ToString());
             SyncProfile();
             RefreshFormatNotice();
         };
+
+        _protocol.SelectedIndexChanged += (_, _) =>
+        {
+            RefreshSpecimenFields(_specimenField.SelectedItem?.ToString());
+            RefreshDialect();
+            SyncProfile();
+            RefreshFormatNotice();
+        };
+
+        RefreshDialect();
 
         RefreshFormatNotice();
 
@@ -340,9 +354,18 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         }
     }
 
-    /// <summary>On an INTEGRA link the notice says where its own settings are, instead of the ASTM advice.</summary>
+    /// <summary>On an INTEGRA or a Mindray link the notice says where its own settings are, instead of the ASTM advice.</summary>
     private void RefreshFormatNotice() =>
-        _formatNotice.Text = Localizer[InterfaceEditorRules.FormatNoticeKey(Selected<InstrumentProtocol>(_protocol))];
+        _formatNotice.Text = Localizer[InterfaceEditorRules.FormatNoticeKey(Selected<InstrumentProtocol>(_protocol),
+                                                                            Selected<Hl7Dialect>(_dialect))];
+
+    /// <summary>The dialect is HL7's: back to Standard and greyed on any other protocol.</summary>
+    private void RefreshDialect()
+    {
+        var offered = InterfaceEditorRules.IsDialectOffered(Selected<InstrumentProtocol>(_protocol));
+        if (!offered) SelectValue(_dialect, Hl7Dialect.Standard);
+        _dialect.Enabled = offered;
+    }
 
     private static void Select(ComboBox combo, string value)
     {
@@ -401,7 +424,8 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
             SpecimenIdComponent = ComponentOf(_specimenComponent),
             AcceptedResultTypes = _resultTypes.Text,
             UnmappedNonNumeric = Selected<UnmappedNonNumericHandling>(_unmappedNonNumeric),
-            KeepInstrumentFlags = _keepFlags.Checked
+            KeepInstrumentFlags = _keepFlags.Checked,
+            Hl7Dialect = Selected<Hl7Dialect>(_dialect)
         };
     }
 
@@ -419,6 +443,12 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
         Select(_handshake, form.Handshake);
         Select(_encoding, form.Encoding);
 
+        // A Mindray preset also sets the line: the LIS listens, on the family's port.
+        _tcpPort.Text = form.TcpPort;
+        _listenAsServer.Checked = form.ListenAsServer;
+        SelectValue(_dialect, form.Hl7Dialect);
+        SelectValue(_unmappedNonNumeric, form.UnmappedNonNumeric);
+
         _ackTimeout.Value = Math.Min(_ackTimeout.Maximum, form.AcknowledgementTimeoutSeconds);
         _maxRetries.Value = Math.Min(_maxRetries.Maximum, form.MaxRetries);
 
@@ -428,6 +458,10 @@ internal sealed class InstrumentInterfaceDialog : MasterDataEditor
                                : InterfaceEditorRules.SpecimenFields(form.Protocol).First(f => f.Value == form.SpecimenIdField).Caption);
         Select(_specimenComponent, Component(form.SpecimenIdComponent));
         _resultTypes.Text = form.AcceptedResultTypes;
+
+        RefreshDialect();
+        RefreshTransport();
+        RefreshFormatNotice();
     }
 
     /// <summary>A fixed list of values, where free text would only be a way to mistype one.</summary>
