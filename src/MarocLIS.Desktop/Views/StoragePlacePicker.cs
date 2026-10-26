@@ -1,3 +1,4 @@
+using MarocLIS.Application.Samples;
 using MarocLIS.Desktop.Infrastructure;
 
 namespace MarocLIS.Desktop.Views;
@@ -31,44 +32,26 @@ internal static class StoragePlacePicker
 
     /// <summary>
     /// Fills <paramref name="combo"/> with <paramref name="places"/>, the empty entry first, and
-    /// selects <paramref name="current"/>.
+    /// selects <paramref name="current"/> — kept and marked when it is not in the list
+    /// (SampleStorageScreenRules.PlaceChoices, the web's list).
     /// </summary>
     /// <param name="emptyText">The first entry, meaning no place.</param>
     /// <param name="outOfList">How a kept place missing from the list is shown, {0} being its name.</param>
     public static void Fill(ComboBox combo, IReadOnlyList<string> places, string? current,
                             string emptyText, Func<string, string> outOfList)
     {
-        var wanted = current?.Trim() ?? string.Empty;
+        var choices = SampleStorageScreenRules.PlaceChoices(places, current, emptyText, outOfList);
 
         combo.BeginUpdate();
         combo.Items.Clear();
-        combo.Items.Add(new Choice(string.Empty, emptyText));
 
-        foreach (var place in places) combo.Items.Add(new Choice(place, place));
+        foreach (var choice in choices) combo.Items.Add(new Choice(choice.Value, choice.Display));
 
-        var index = IndexOf(combo, wanted);
-
-        if (index < 0 && wanted.Length > 0)
-            index = combo.Items.Add(new Choice(wanted, outOfList(wanted)));
-
-        combo.SelectedIndex = Math.Max(0, index);
+        combo.SelectedIndex = Math.Max(0, SampleStorageScreenRules.SelectedIndex(choices, current));
         combo.EndUpdate();
     }
 
     /// <summary>The place chosen, or null for the empty entry.</summary>
     public static string? Selected(ComboBox combo) =>
-        combo.SelectedItem is Choice { Value.Length: > 0 } choice ? choice.Value : null;
-
-    private static int IndexOf(ComboBox combo, string value)
-    {
-        if (value.Length == 0) return 0;
-
-        for (var i = 1; i < combo.Items.Count; i++)
-        {
-            if (combo.Items[i] is Choice c && string.Equals(c.Value, value, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-
-        return -1;
-    }
+        combo.SelectedItem is Choice choice ? SampleStorageScreenRules.Chosen(choice.Value) : null;
 }

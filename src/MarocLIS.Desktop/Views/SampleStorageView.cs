@@ -49,6 +49,10 @@ public sealed class SampleStorageView : LocalizedView
     // loaded list.
     private bool _onlyExpired;
     private bool _onlyUnshelved;
+
+    private StorageFilter Filter => _onlyExpired ? StorageFilter.PastRetention
+        : _onlyUnshelved ? StorageFilter.Unshelved
+        : StorageFilter.All;
     private readonly ChipButton _allChip;
     private readonly ChipButton _expiredChip;
     private readonly ChipButton _unshelvedChip;
@@ -187,21 +191,21 @@ public sealed class SampleStorageView : LocalizedView
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not StoredSampleRow row) return;
 
-        // Past retention leads, because purging is the action this screen exists to enable.
-        if (row.IsPastRetention)
+        // Past retention leads, because purging is the action this screen exists to enable; then the
+        // tube received but nowhere; then a tube due within a week (SampleStorageScreenRules.Ink).
+        switch (SampleStorageScreenRules.Ink(row))
         {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.IsUnshelved)
-        {
-            // Received but nowhere: the tube that cannot be found when an add-on arrives.
-            e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-            e.CellStyle.ForeColor = UiTheme.Abnormal;
-        }
-        else if (row.DaysToKeepUntil is <= 7)
-        {
-            e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            case StorageInk.PastRetention:
+                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                e.CellStyle.ForeColor = UiTheme.Critical;
+                break;
+            case StorageInk.Unshelved:
+                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+                e.CellStyle.ForeColor = UiTheme.Abnormal;
+                break;
+            case StorageInk.Soon:
+                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+                break;
         }
     }
 
@@ -243,8 +247,7 @@ public sealed class SampleStorageView : LocalizedView
         try
         {
             var result = await _samples.GetStoredSamplesAsync(
-                string.IsNullOrWhiteSpace(_search.Text) ? null : _search.Text.Trim(),
-                _onlyExpired, ct);
+                SampleStorageScreenRules.Search(_search.Text), _onlyExpired, ct);
 
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -270,50 +273,35 @@ public sealed class SampleStorageView : LocalizedView
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
-        foreach (var row in _onlyUnshelved ? _rows.Where(r => r.IsUnshelved) : _rows)
+        foreach (var row in SampleStorageScreenRules.Shown(_rows, Filter))
         {
-            var flags = new List<string>(3);
-            if (row.IsUnshelved) flags.Add("?");
-            if (row.HasDefects) flags.Add("!");
-            if (row.IsAcceptedWithReservation) flags.Add("R");
-
             var index = _grid.Rows.Add(
                 row.Barcode,
                 row.AccessionNumber,
                 row.PatientName,
                 row.SpecimenTypeName,
-                row.ReceivedAt?.ToLocalTime().ToString("dd/MM/yy HH:mm") ?? string.Empty,
-                row.StorageLocation is { Length: > 0 }
-                    ? row.StoragePosition is { Length: > 0 }
-                        ? $"{row.StorageLocation} / {row.StoragePosition}"
-                        : row.StorageLocation
-                    : T("Sample.NotShelved"),
-                row.KeepUntil?.ToString("dd/MM/yy") ?? "—",
-                row.DaysToKeepUntil?.ToString() ?? "—",
-                row.VolumeMl?.ToString("0.#") ?? string.Empty,
-                row.AliquotCount > 0 ? row.AliquotCount.ToString() : string.Empty,
-                string.Join(" ", flags));
+                SampleStorageScreenRules.ReceivedAt(row),
+                SampleStorageScreenRules.Place(row, T),
+                SampleStorageScreenRules.KeepUntil(row),
+                SampleStorageScreenRules.DaysLeft(row),
+                SampleStorageScreenRules.Volume(row),
+                SampleStorageScreenRules.Aliquots(row),
+                SampleStorageScreenRules.Flags(row));
 
             _grid.Rows[index].Tag = row;
+            _grid.Rows[index].Cells["flags"].ToolTipText = SampleStorageScreenRules.FlagsMeaning(row, T);
         }
 
         _grid.ResumeLayout(performLayout: true);
 
-        var expired = _rows.Count(r => r.IsPastRetention);
-        var unshelved = _rows.Count(r => r.IsUnshelved);
-
-        var parts = new List<string>(3) { $"{_rows.Count}" };
-        if (expired > 0) parts.Add($"{expired} {T("Sample.PastRetention").ToLowerInvariant()}");
-        if (unshelved > 0) parts.Add($"{unshelved} {T("Sample.NotShelved").ToLowerInvariant()}");
-
-        _head.Count.Text = string.Join(" · ", parts);
+        _head.Count.Text = SampleStorageScreenRules.Count(_rows, T);
 
         // While the past-retention filter is on, the list holds only those tubes: the other
-        // counts are not known and are not shown.
-        _allChip.Text = T("Sample.FilterAll");
-        _expiredChip.Text = $"{T("Sample.PastRetention")} · {expired}";
-        // Counted among the past-retention tubes only, the figure read as the whole bank's.
-        _unshelvedChip.Text = _onlyExpired ? T("Sample.NotShelved") : $"{T("Sample.NotShelved")} · {unshelved}";
+        // counts are not known and are not shown (SampleStorageScreenRules.Chips).
+        var chips = SampleStorageScreenRules.Chips(_rows, Filter, T);
+        _allChip.Text = chips[0].Caption;
+        _expiredChip.Text = chips[1].Caption;
+        _unshelvedChip.Text = chips[2].Caption;
         _allChip.Selected = !_onlyExpired && !_onlyUnshelved;
         _expiredChip.Selected = _onlyExpired;
         _unshelvedChip.Selected = _onlyUnshelved;
@@ -343,22 +331,14 @@ public sealed class SampleStorageView : LocalizedView
 
         _aside.Heading.Font = Pilotage.CodeTitle;
         _aside.Heading.Text = row.Barcode;
-        _aside.Subtitle.Text = $"{row.PatientName} · {row.SpecimenTypeName}";
-        _aside.SetPills(
-            (row.IsPastRetention ? $"! {T("Sample.PastRetention")}" : string.Empty, EntryPaint.Critical),
-            (row.IsUnshelved ? $"? {T("Sample.NotShelved")}" : string.Empty, EntryPaint.Warning),
-            (row.HasDefects ? $"! {T("Sample.HasDefects")}" : string.Empty, EntryPaint.Warning),
-            (row.IsAcceptedWithReservation ? $"R {T("Sample.WithReservation")}" : string.Empty, EntryPaint.Info));
-        _aside.SetFacts(
-            (T("Order.AccessionNumber"), row.AccessionNumber, true),
-            (T("Sample.ReceivedAt"), row.ReceivedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"), true),
-            (T("Sample.Storage"), row.StorageLocation is { Length: > 0 }
-                ? row.StoragePosition is { Length: > 0 } ? $"{row.StorageLocation} / {row.StoragePosition}" : row.StorageLocation
-                : T("Sample.NotShelved"), true),
-            (T("Sample.KeepUntil"), row.KeepUntil?.ToString("dd/MM/yyyy"), true),
-            (T("Sample.DaysLeft"), row.DaysToKeepUntil?.ToString(), true),
-            (T("Sample.Volume"), row.VolumeMl?.ToString("0.#"), true),
-            (T("Sample.Aliquots"), row.AliquotCount > 0 ? row.AliquotCount.ToString() : string.Empty, true));
+        _aside.Subtitle.Text = SampleStorageScreenRules.Subtitle(row);
+        _aside.SetPills([.. SampleStorageScreenRules.Pills(row, T).Select(p => (p.Text, p.Tone switch
+        {
+            "Critical" => EntryPaint.Critical,
+            "Warning" => EntryPaint.Warning,
+            _ => EntryPaint.Info
+        }))]);
+        _aside.SetFacts([.. SampleStorageScreenRules.Facts(row, T).Select(f => (f.Label, (string?)f.Value, true))]);
         _aside.ShowRow(true);
     }
 
@@ -366,17 +346,15 @@ public sealed class SampleStorageView : LocalizedView
 
     private void RefreshActions()
     {
-        var row = Selected;
+        // By tube and by right (SampleStorageScreenRules.Actions): aliquoting needs a tube that is
+        // actually present and not already refused, the purge a tube past its retention. A menu entry
+        // is not a control the gate can hold: the rule checks the right for it.
+        var actions = SampleStorageScreenRules.Actions(Selected, _rows, p => PermissionGate.Allows(p));
 
-        _shelve.Enabled = row is not null;
-        _discard.Enabled = row is not null;
-
-        // Aliquoting needs a tube that is actually present and not already refused.
-        _aliquot.Enabled = row is { Status: not SampleStatus.Rejected };
-
-        var expired = _rows.Count(r => r.IsPastRetention);
-        // A menu entry is not a control the gate can hold: the right is checked here instead.
-        _purge.Enabled = expired > 0 && PermissionGate.Allows(Permissions.Samples.Reject);
+        _shelve.Enabled = actions.Shelve;
+        _discard.Enabled = actions.Discard;
+        _aliquot.Enabled = actions.Aliquot;
+        _purge.Enabled = actions.Purge;
         _purge.ForeColor = _purge.Enabled ? UiTheme.Abnormal : UiTheme.TextMuted;
         Pilotage.SyncMore(_more, _moreMenu);
     }
@@ -397,7 +375,7 @@ public sealed class SampleStorageView : LocalizedView
         if (result.IsFailure) { _dialogs.ShowFailure(result, T("Sample.Shelve")); return; }
 
         _status.ForeColor = UiTheme.Normal;
-        _status.Text = $"{row.Barcode} — {dialog.StorageLocation}";
+        _status.Text = SampleStorageScreenRules.Shelved(row, dialog.StorageLocation);
 
         await ActivateAsync();
     }
@@ -451,7 +429,7 @@ public sealed class SampleStorageView : LocalizedView
             return;
 
         var note = _dialogs.PromptForReason(T("Sample.DiscardPrompt", row.Barcode),
-                                             T("Sample.Discard"), maxLength: Sample.EventDetailMaxLength);
+                                             T("Sample.Discard"), maxLength: SampleStorageScreenRules.DiscardNoteMaxLength);
 
         if (note is null) return;
 
@@ -460,7 +438,7 @@ public sealed class SampleStorageView : LocalizedView
         if (result.IsFailure) { _dialogs.ShowFailure(result, T("Sample.Discard")); return; }
 
         _status.ForeColor = UiTheme.TextSecondary;
-        _status.Text = $"{row.Barcode} — {T("SampleStatus.Discarded")}";
+        _status.Text = SampleStorageScreenRules.Discarded(row, T);
 
         await ActivateAsync();
     }
@@ -475,7 +453,7 @@ public sealed class SampleStorageView : LocalizedView
     /// </summary>
     private async Task PurgeAsync()
     {
-        var expired = _rows.Where(r => r.IsPastRetention).ToList();
+        var expired = SampleStorageScreenRules.PurgeCandidates(_rows);
 
         if (expired.Count == 0) return;
 
@@ -483,7 +461,7 @@ public sealed class SampleStorageView : LocalizedView
             return;
 
         var note = _dialogs.PromptForReason(T("Sample.PurgePrompt", expired.Count),
-                                             T("Sample.PurgeExpired"), maxLength: Sample.EventDetailMaxLength);
+                                             T("Sample.PurgeExpired"), maxLength: SampleStorageScreenRules.DiscardNoteMaxLength);
 
         if (note is null) return;
 
@@ -498,11 +476,9 @@ public sealed class SampleStorageView : LocalizedView
             else failures.Add(row.Barcode);
         }
 
-        _status.ForeColor = failures.Count == 0 ? UiTheme.Normal : UiTheme.Abnormal;
-
-        _status.Text = failures.Count == 0
-            ? T("Sample.PurgeDone", discarded)
-            : T("Sample.PurgePartial", discarded, string.Join(", ", failures.Take(5)));
+        var (outcome, partial) = SampleStorageScreenRules.PurgeOutcome(discarded, failures, T);
+        _status.ForeColor = partial ? UiTheme.Abnormal : UiTheme.Normal;
+        _status.Text = outcome;
 
         await ActivateAsync();
     }
@@ -519,7 +495,7 @@ internal sealed class SampleStorageDialog : Form
     private readonly TextBox _position = UiTheme.Input(180);
     private readonly DateTimePicker _keepUntil = new();
     private readonly CheckBox _hasKeepUntil = new();
-    private readonly DateOnly? _keptUntil;
+    private readonly StoredSampleRow _row;
 
     /// <summary>
     /// Where the tube went. <c>StorageLocation</c>, not <c>Location</c>: that name belongs to
@@ -539,9 +515,9 @@ internal sealed class SampleStorageDialog : Form
         _localizer = localizer;
         _dialogs = dialogs;
         _places = places;
-        _keptUntil = row.KeepUntil;
+        _row = row;
 
-        Text = $"{localizer["Sample.Shelve"]} — {row.Barcode}";
+        Text = SampleStorageScreenRules.ShelveTitle(row, localizer.Format);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
@@ -550,8 +526,8 @@ internal sealed class SampleStorageDialog : Form
         Font = UiTheme.Body;
 
         // The tube in the head, so the shelf is typed against the right one.
-        var head = DialogFrame.Head($"{localizer["Sample.Shelve"]} — {row.Barcode}",
-                                    $"{row.PatientName}   ·   {row.AccessionNumber}   ·   {row.SpecimenTypeName}", 480);
+        var head = DialogFrame.Head(SampleStorageScreenRules.ShelveTitle(row, localizer.Format),
+                                    SampleStorageScreenRules.ShelveSubtitle(row), 480);
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
 
@@ -568,7 +544,7 @@ internal sealed class SampleStorageDialog : Form
         positionLabel.Location = new Point(276, 14);
         _position.Bounds = new Rectangle(276, 34, 184, UiTheme.InputHeight);
         _position.Text = row.StoragePosition ?? string.Empty;
-        _position.MaxLength = 40;
+        _position.MaxLength = SampleStorageScreenRules.PositionMaxLength;
         _position.Tag = UiTags.LatinValue;
 
         _hasKeepUntil.Text = localizer["Sample.KeepUntil"];
@@ -581,8 +557,8 @@ internal sealed class SampleStorageDialog : Form
         _keepUntil.Bounds = new Rectangle(20, 100, 200, UiTheme.InputHeight);
         _keepUntil.Format = DateTimePickerFormat.Short;
         _keepUntil.Enabled = _hasKeepUntil.Checked;
-        _keepUntil.Value = row.KeepUntil?.ToDateTime(TimeOnly.MinValue)
-                           ?? DateTime.Today.AddDays(7);
+        _keepUntil.Value = SampleStorageScreenRules.ShelveFormFor(row, DateOnly.FromDateTime(DateTime.Today))
+                                                   .KeepUntil.ToDateTime(TimeOnly.MinValue);
 
         _hasKeepUntil.CheckedChanged += (_, _) => _keepUntil.Enabled = _hasKeepUntil.Checked;
 
@@ -616,24 +592,28 @@ internal sealed class SampleStorageDialog : Form
         RtlLayout.Apply(this, localizer.CurrentLanguage);
     }
 
+    /// <summary>
+    /// A place is required — with none in the list, the operator is told where places are created —
+    /// and a date already over is refused unless the tube already carries it
+    /// (SampleStorageScreenRules.CheckShelve, the web's check).
+    /// </summary>
     private void Accept()
     {
-        if (StoragePlacePicker.Selected(_location) is null)
+        var form = new ShelveForm
         {
-            // With no place in the list, the operator is told where places are created.
-            _dialogs.Warn(_places.Count == 0 && _location.Items.Count <= 1
-                ? _localizer["Sample.StorageListEmpty"]
-                : _localizer["Sample_StorageLocationRequired"]);
-            _location.Focus();
-            return;
-        }
+            Location = StorageLocation,
+            Position = Position,
+            HasKeepUntil = _hasKeepUntil.Checked,
+            KeepUntil = DateOnly.FromDateTime(_keepUntil.Value.Date)
+        };
 
-        // A date already over would put the tube straight into the purge list; the service refuses
-        // it too. The date the tube already carries may stay as it is.
-        if (KeepUntil is { } until && until < DateOnly.FromDateTime(DateTime.Today) && until != _keptUntil)
+        var (refusal, _) = SampleStorageScreenRules.CheckShelve(form, _row, _places.Count, DateOnly.FromDateTime(DateTime.Today));
+
+        if (refusal is not null)
         {
-            _dialogs.Warn(_localizer["Sample_KeepUntilInPast"]);
-            _keepUntil.Focus();
+            _dialogs.Warn(_localizer[refusal.Key]);
+            if (refusal.Field == SampleStorageScreenRules.KeepUntilField) _keepUntil.Focus();
+            else _location.Focus();
             return;
         }
 
@@ -669,7 +649,7 @@ internal sealed class SampleAliquotDialog : Form
     {
         _localizer = localizer;
         _dialogs = dialogs;
-        Text = $"{localizer["Sample.CreateAliquot"]} — {row.Barcode}";
+        Text = SampleStorageScreenRules.AliquotTitle(row, localizer.Format);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
@@ -677,9 +657,8 @@ internal sealed class SampleAliquotDialog : Form
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
-        var head = DialogFrame.Head($"{localizer["Sample.CreateAliquot"]} — {row.Barcode}",
-                                    $"{row.PatientName}   ·   {row.SpecimenTypeName}"
-                                    + (row.VolumeMl is { } volume ? $"   ·   {volume:0.#} mL" : string.Empty), 480);
+        var head = DialogFrame.Head(SampleStorageScreenRules.AliquotTitle(row, localizer.Format),
+                                    SampleStorageScreenRules.AliquotSubtitle(row, localizer.Format), 480);
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
 
@@ -697,12 +676,12 @@ internal sealed class SampleAliquotDialog : Form
         _volume.Bounds = new Rectangle(20, 72, 120, UiTheme.InputHeight);
         _volume.Tag = UiTags.LatinValue;
         _volume.TextAlign = HorizontalAlignment.Right;
-        _volume.MaxLength = EditorValues.MeasureMaxLength;
+        _volume.MaxLength = SampleStorageScreenRules.VolumeMaxLength;
 
         var purposeLabel = Pilotage.Caption(localizer["Sample.AliquotPurpose"]);
         purposeLabel.Location = new Point(160, 52);
         _purpose.Bounds = new Rectangle(160, 72, 300, UiTheme.InputHeight);
-        _purpose.MaxLength = 200;
+        _purpose.MaxLength = SampleStorageScreenRules.PurposeMaxLength;
 
         var locationLabel = Pilotage.Caption(localizer["Sample.Storage"]);
         locationLabel.Location = new Point(20, 110);
@@ -738,7 +717,7 @@ internal sealed class SampleAliquotDialog : Form
     /// </summary>
     private void Accept()
     {
-        if (!string.IsNullOrWhiteSpace(_volume.Text) && VolumeMl is not (> 0m and < 1_000_000m))
+        if (SampleStorageScreenRules.CheckAliquot(new AliquotForm { Volume = _volume.Text }).Refusal is not null)
         {
             _dialogs.Warn(_localizer["Sample_AliquotVolumeInvalid"]);
             _volume.Focus();

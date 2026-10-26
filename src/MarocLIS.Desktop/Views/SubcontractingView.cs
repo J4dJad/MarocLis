@@ -92,9 +92,12 @@ public sealed class SubcontractingView : LocalizedView
 
         // The stage as a pill: to send in accent, awaiting return in grey, late in red.
         Pilotage.Pills(_grid, "stage", row => row.Tag is not SubcontractRow r ? null
-            : IsLate(r) ? (UiTheme.CriticalBackground, UiTheme.CriticalInk, "!")
-            : r.Stage == SubcontractStage.ToSend ? (UiTheme.InfoBackground, UiTheme.Info, "→")
-            : (UiTheme.SurfaceSunken, UiTheme.TextPrimary, "◐"));
+            : SubcontractingScreenRules.StageTone(r, DateTimeOffset.Now) switch
+            {
+                "Critical" => (UiTheme.CriticalBackground, UiTheme.CriticalInk, SubcontractingScreenRules.StageGlyph(r, DateTimeOffset.Now)),
+                "Info" => (UiTheme.InfoBackground, UiTheme.Info, SubcontractingScreenRules.StageGlyph(r, DateTimeOffset.Now)),
+                _ => (UiTheme.SurfaceSunken, UiTheme.TextPrimary, SubcontractingScreenRules.StageGlyph(r, DateTimeOffset.Now))
+            });
 
         Controls.Add(_card);
         Controls.Add(Pilotage.Gap(14));
@@ -185,36 +188,37 @@ public sealed class SubcontractingView : LocalizedView
             .Where(r => r.Cells[ColSelected].Value is true)
             .Select(r => r.Tag).OfType<SubcontractRow>().ToList();
 
-        if (ticked.Count == 0 && _grid.CurrentRow?.Tag is SubcontractRow current) ticked.Add(current);
+        // By act and by right (SubcontractingScreenRules.Actions). A menu entry is not a control the
+        // gate can hold: the rule checks the right for it.
+        var actions = SubcontractingScreenRules.Actions(
+            SubcontractingScreenRules.Targets(ticked, _grid.CurrentRow?.Tag as SubcontractRow),
+            p => PermissionGate.Allows(p));
 
-        _send.Enabled = ticked.Any(r => r.Stage == SubcontractStage.ToSend);
-        _reprint.Enabled = ticked.Any(r => r.DispatchNumber is not null);
-        // A menu entry is not a control the gate can hold: the right is checked here instead.
-        _reference.Enabled = PermissionGate.Allows(Permissions.Samples.Subcontract)
-                             && ticked.Any(r => r.Stage == SubcontractStage.AwaitingReturn);
+        _send.Enabled = actions.Send;
+        _reprint.Enabled = actions.Reprint;
+        _reference.Enabled = actions.Reference;
     }
-
-    private bool IsLate(SubcontractRow row) =>
-        row.Stage == SubcontractStage.AwaitingReturn && row.DueAt is { } due && due < DateTimeOffset.Now;
 
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
         if (_grid.Rows[e.RowIndex].Tag is not SubcontractRow row) return;
 
-        if (IsLate(row))
+        switch (SubcontractingScreenRules.Ink(row, DateTimeOffset.Now))
         {
-            e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-            e.CellStyle.ForeColor = UiTheme.Critical;
-        }
-        else if (row.Stage == SubcontractStage.ToSend)
-        {
-            if (_grid.Columns[e.ColumnIndex].Name == "stage") e.CellStyle!.ForeColor = UiTheme.Accent;
-            if (row.Priority != OrderPriority.Routine) e.CellStyle!.ForeColor = UiTheme.Critical;
-        }
-        else
-        {
-            e.CellStyle!.ForeColor = UiTheme.TextSecondary;
+            case SubcontractInk.Late:
+                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                e.CellStyle.ForeColor = UiTheme.Critical;
+                break;
+            case SubcontractInk.UrgentToSend:
+                e.CellStyle!.ForeColor = UiTheme.Critical;
+                break;
+            case SubcontractInk.ToSend:
+                if (_grid.Columns[e.ColumnIndex].Name == "stage") e.CellStyle!.ForeColor = UiTheme.Accent;
+                break;
+            default:
+                e.CellStyle!.ForeColor = UiTheme.TextSecondary;
+                break;
         }
     }
 
@@ -276,27 +280,8 @@ public sealed class SubcontractingView : LocalizedView
         }
     }
 
-    private IEnumerable<SubcontractRow> ShownRows()
-    {
-        var rows = _stage switch
-        {
-            1 => _rows.Where(r => r.Stage == SubcontractStage.ToSend),
-            2 => _rows.Where(r => r.Stage == SubcontractStage.AwaitingReturn),
-            3 => _rows.Where(IsLate),
-            _ => _rows
-        };
-
-        var term = _search.Text.Trim();
-
-        if (term.Length > 0)
-            rows = rows.Where(r => r.AccessionNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
-                                   || r.PatientName.Contains(term, StringComparison.OrdinalIgnoreCase)
-                                   || (r.Barcode?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
-                                   || (r.DispatchNumber?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
-                                   || (r.PartnerReference?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
-
-        return rows;
-    }
+    private IEnumerable<SubcontractRow> ShownRows() =>
+        SubcontractingScreenRules.Shown(_rows, (SubcontractFilter)_stage, _search.Text, DateTimeOffset.Now);
 
     private void Render()
     {
@@ -310,19 +295,15 @@ public sealed class SubcontractingView : LocalizedView
         {
             var index = _grid.Rows.Add(
                 false,
-                IsLate(row)
-                    ? T("Subcontract.Late")
-                    : T($"Subcontract.Stage{row.Stage}"),
+                SubcontractingScreenRules.StageText(row, DateTimeOffset.Now, T),
                 row.AccessionNumber,
                 row.PatientName,
-                $"{row.AnalysisCode}  {row.AnalysisName.For(language)}",
+                SubcontractingScreenRules.Analysis(row, language),
                 row.Barcode ?? string.Empty,
-                row.PartnerName?.For(language) ?? T("Subcontract.NoPartner"),
-                row.SentAt is { } sentAt ? $"{row.DispatchNumber}  {sentAt:dd/MM HH:mm}" : string.Empty,
+                SubcontractingScreenRules.Partner(row, language, T),
+                SubcontractingScreenRules.Sent(row),
                 row.PartnerReference ?? string.Empty,
-                row.Stage == SubcontractStage.AwaitingReturn
-                    ? row.DueAt?.ToString("dd/MM HH:mm") ?? string.Empty
-                    : string.Empty);
+                SubcontractingScreenRules.Due(row));
 
             _grid.Rows[index].Tag = row;
         }
@@ -337,17 +318,12 @@ public sealed class SubcontractingView : LocalizedView
 
         RefreshActions();
 
-        var toSend = _rows.Count(r => r.Stage == SubcontractStage.ToSend);
-        var awaiting = _rows.Count(r => r.Stage == SubcontractStage.AwaitingReturn);
-        var late = _rows.Count(IsLate);
+        _head.Count.Text = SubcontractingScreenRules.Count(_rows, DateTimeOffset.Now, T);
 
-        _head.Count.Text = T("Subcontract.Count", toSend, awaiting, late);
-
-        var counts = new[] { _rows.Count, toSend, awaiting, late };
-        var captions = new[] { "Subcontract.StageAll", "Subcontract.StageToSend", "Subcontract.StageAwaitingReturn", "Subcontract.Late" };
+        var chips = SubcontractingScreenRules.Chips(_rows, DateTimeOffset.Now, T);
         for (var i = 0; i < _stageChips.Length; i++)
         {
-            _stageChips[i].Text = $"{T(captions[i])} · {counts[i]}";
+            _stageChips[i].Text = chips[i].Caption;
             _stageChips[i].Selected = i == _stage;
         }
         _filters.PerformLayout();
@@ -372,7 +348,7 @@ public sealed class SubcontractingView : LocalizedView
 
     private async Task SendAsync()
     {
-        var selected = Ticked().Where(r => r.Stage == SubcontractStage.ToSend).ToList();
+        var selected = SubcontractingScreenRules.ToSend(Ticked());
 
         if (selected.Count == 0)
         {
@@ -408,7 +384,7 @@ public sealed class SubcontractingView : LocalizedView
             }
 
             _status.ForeColor = UiTheme.Normal;
-            _status.Text = T("Subcontract.Sent", string.Join(", ", result.Value.Select(d => d.Number)));
+            _status.Text = SubcontractingScreenRules.SentMessage(result.Value, T);
 
             foreach (var dispatch in result.Value) await PrintSlipAsync(dispatch.Number);
 
@@ -423,7 +399,7 @@ public sealed class SubcontractingView : LocalizedView
 
     private async Task ReprintAsync()
     {
-        var slips = Ticked().Select(r => r.DispatchNumber).OfType<string>().Distinct().ToList();
+        var slips = SubcontractingScreenRules.Slips(Ticked());
 
         if (slips.Count == 0)
         {
@@ -462,38 +438,17 @@ public sealed class SubcontractingView : LocalizedView
     {
         var language = Localizer.CurrentLanguage;
 
-        var rows = slip.Items.Select(i => (IReadOnlyList<string>)
-        [
-            i.AccessionNumber,
-            i.PatientName,
-            $"{T($"Gender.{i.Gender}")} {i.DateOfBirth?.ToString("dd/MM/yyyy") ?? string.Empty}".Trim(),
-            i.Barcode ?? string.Empty,
-            $"{i.AnalysisCode}  {i.AnalysisName.For(language)}",
-            i.ContainerName?.For(language) ?? string.Empty,
-            i.CollectedAt?.ToString("dd/MM/yyyy HH:mm") ?? string.Empty,
-            i.Priority == OrderPriority.Routine ? string.Empty : T($"Priority.{i.Priority}")
-        ]).ToList();
-
-        rows.Add(["", "", "", "", "", "", "", ""]);
-        rows.Add([T("Subcontract.SignatureCourier"), "", "", "", T("Subcontract.SignaturePartner"), "", "", ""]);
-
         return new ListDocument(
-            $"{T("Subcontract.SlipTitle")} {slip.Number}",
-            T("Subcontract.SlipCaption", _currentUser.SiteCode,
-              $"{slip.Partner.Code}  {slip.Partner.Name.For(language)}",
-              slip.SentAt.ToString("dd/MM/yyyy HH:mm"), slip.SentByName, slip.Items.Count),
-            [
-                T("Order.AccessionNumber"), T("Patient.Title"), T("Subcontract.SexBirth"),
-                T("Sample.Barcode"), T("Catalog.Analysis"), T("Subcontract.Container"),
-                T("Sample.CollectedAt"), T("Subcontract.Priority")
-            ],
-            rows,
+            SubcontractingScreenRules.SlipTitle(slip, T),
+            SubcontractingScreenRules.SlipCaption(slip, _currentUser.SiteCode, language, T),
+            SubcontractingScreenRules.SlipHeaders(T),
+            SubcontractingScreenRules.SlipRows(slip, language, T),
             language.IsRightToLeft());
     }
 
     private async Task SetReferenceAsync()
     {
-        var row = Ticked().FirstOrDefault(r => r.Stage == SubcontractStage.AwaitingReturn);
+        var row = SubcontractingScreenRules.AwaitingReturn(Ticked());
 
         if (row is null)
         {
@@ -503,8 +458,8 @@ public sealed class SubcontractingView : LocalizedView
         }
 
         var value = _dialogs.PromptForText(
-            T("Subcontract.PartnerReferencePrompt", row.AccessionNumber, row.PartnerName?.For(Localizer.CurrentLanguage)),
-            T("Subcontract.PartnerReference"), row.PartnerReference, maxLength: 60);
+            SubcontractingScreenRules.ReferencePrompt(row, Localizer.CurrentLanguage, T),
+            T("Subcontract.PartnerReference"), row.PartnerReference, maxLength: SubcontractingScreenRules.ReferenceMaxLength);
 
         if (value is null) return;
 
@@ -548,8 +503,7 @@ internal sealed class SubcontractDispatchDialog : Form
         Font = UiTheme.Body;
 
         var head = DialogFrame.Head(localizer["Subcontract.Send"],
-                                    localizer.Format("Subcontract.SendSummary", rows.Count,
-                                                     rows.Select(r => r.LabOrderId).Distinct().Count()), 520);
+                                    SubcontractingScreenRules.SendSummary(rows, localizer.Format), 520);
 
         var body = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.SurfaceRaised };
 
@@ -562,8 +516,7 @@ internal sealed class SubcontractDispatchDialog : Form
         };
 
         foreach (var row in rows)
-            list.Items.Add($"{row.AccessionNumber}  ·  {row.AnalysisCode}  ·  {row.Barcode}  →  " +
-                           (row.PartnerCode ?? localizer["Subcontract.NoPartner"]));
+            list.Items.Add(SubcontractingScreenRules.DispatchLine(row, localizer.Format));
 
         var partnerLabel = Pilotage.Caption(localizer["Catalog.SubcontractorSite"]);
         partnerLabel.Location = new Point(20, 176);
@@ -571,10 +524,8 @@ internal sealed class SubcontractDispatchDialog : Form
         _partner.DropDownStyle = ComboBoxStyle.DropDownList;
         _partner.FlatStyle = FlatStyle.Flat;
         _partner.Bounds = new Rectangle(20, 196, 480, UiTheme.InputHeight);
-        _partner.Items.Add(new PartnerChoice(null, localizer["Subcontract.PartnerFromCatalogue"]));
-
-        foreach (var partner in partners)
-            _partner.Items.Add(new PartnerChoice(partner.Id, $"{partner.Code}  {partner.Name.For(language)}"));
+        foreach (var choice in SubcontractingScreenRules.PartnerChoices(partners, language, localizer.Format))
+            _partner.Items.Add(new PartnerChoice(choice.Id, choice.Display));
 
         _partner.SelectedIndex = 0;
 
