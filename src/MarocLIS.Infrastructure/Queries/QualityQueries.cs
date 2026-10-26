@@ -363,6 +363,12 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
                 n.DueDate,
                 n.ClosedAt,
                 n.IsRecurrence,
+                SampleBarcode = n.SampleId == null
+                    ? null
+                    : db.Samples.IgnoreQueryFilters().Where(s => s.Id == n.SampleId).Select(s => s.Barcode).FirstOrDefault(),
+                AccessionNumber = n.LabOrderId == null
+                    ? null
+                    : db.LabOrders.IgnoreQueryFilters().Where(o => o.Id == n.LabOrderId).Select(o => o.AccessionNumber).FirstOrDefault(),
                 ActionCount = n.Actions.Count,
                 OpenActionCount = n.Actions.Count(a => a.Status == CorrectiveActionStatus.Planned
                                                        || a.Status == CorrectiveActionStatus.InProgress),
@@ -394,7 +400,7 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
                     r.DueDate,
                     isOpen && r.DueDate is { } due && due < today,
                     daysOpen,
-                    r.ActionCount, r.OpenActionCount, r.IsRecurrence);
+                    r.ActionCount, r.OpenActionCount, r.IsRecurrence, r.SampleBarcode, r.AccessionNumber);
             })
         ];
     }
@@ -435,4 +441,36 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
             .Select(n => (Guid?)n.Id)
             .FirstOrDefaultAsync(ct);
     }
+
+    /// <summary>
+    /// A tube by its barcode, else the tubes of a file by its number, on the site: what a
+    /// non-conformity can be linked to. The barcode first, as a tube is labelled with it.
+    /// </summary>
+    public async Task<IReadOnlyList<NonConformitySampleChoice>> FindSamplesForNonConformityAsync(
+        Guid siteId, string term, CancellationToken ct = default)
+    {
+        var tubes = db.Samples.AsNoTracking().Where(s => s.SiteId == siteId);
+
+        var orderIds = await tubes.Where(s => s.Barcode == term).Select(s => s.LabOrderId).ToListAsync(ct);
+        var byBarcode = orderIds.Count > 0;
+        if (!byBarcode)
+            orderIds = await db.LabOrders.AsNoTracking()
+                .Where(o => o.SiteId == siteId && o.AccessionNumber == term)
+                .Select(o => o.Id)
+                .ToListAsync(ct);
+        if (orderIds.Count == 0) return [];
+
+        var rows = await tubes
+            .Where(s => byBarcode ? s.Barcode == term : orderIds.Contains(s.LabOrderId))
+            .Join(db.LabOrders.AsNoTracking(), s => s.LabOrderId, o => o.Id, (s, o) => new { Sample = s, o.AccessionNumber })
+            .Join(db.SpecimenTypes.AsNoTracking().IgnoreQueryFilters(), x => x.Sample.SpecimenTypeId, t => t.Id,
+                  (x, t) => new { x.Sample.Id, x.Sample.LabOrderId, x.Sample.Barcode, x.AccessionNumber, t.Name, x.Sample.Status,
+                                  x.Sample.SequenceInOrder })
+            .OrderBy(x => x.AccessionNumber).ThenBy(x => x.SequenceInOrder).ThenBy(x => x.Barcode)
+            .Take(50)
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r => new NonConformitySampleChoice(r.Id, r.LabOrderId, r.Barcode, r.AccessionNumber, r.Name, r.Status))];
+    }
 }
+

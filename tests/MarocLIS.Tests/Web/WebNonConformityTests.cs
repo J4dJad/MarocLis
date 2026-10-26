@@ -119,6 +119,47 @@ public sealed class WebNonConformityTests : WebScreenContext
         page.Find("[data-state=status]").TextContent.Should().Contain("NC-2026-0013");
     }
 
+    /// <summary>
+    /// A file is linked to the tube it is about, found by its file's number: the refused tube is
+    /// picked first, another can be chosen, and the file is saved with the tube and its file — the
+    /// domain held the link, but no screen offered it.
+    /// </summary>
+    [Fact]
+    public void AFile_IsLinkedToTheTube_FoundByItsFileNumber()
+    {
+        SignIn(AppLanguage.French, Reporter);
+        Register();
+        _sequences.On(nameof(ISequenceAllocator.NextAsync), _ => Result.Success("NC-2026-0013"));
+        var order = Guid.NewGuid();
+        var serum = new NonConformitySampleChoice(Guid.NewGuid(), order, "0000000038", "2610-000014", new MultilingualText("Sérum"),
+                                                  MarocLIS.Domain.Samples.SampleStatus.Received);
+        var edta = new NonConformitySampleChoice(Guid.NewGuid(), order, "0000000036", "2610-000014", new MultilingualText("Sang total (EDTA)"),
+                                                 MarocLIS.Domain.Samples.SampleStatus.Rejected);
+        _queries.On(nameof(IQualityQueries.FindSamplesForNonConformityAsync),
+                    args => (string)args[1]! == "2610-000014" ? new[] { serum, edta } : Array.Empty<NonConformitySampleChoice>());
+
+        var page = Render<NonConformities>();
+        page.Find("[data-action='NonConformity.OpenNew']").Click();
+
+        page.Find("[data-field=sample-term]").Input("INCONNU");
+        page.Find("[data-modal=nc-editor] [data-action='Action.Search']").Click();
+        page.Find("[data-state=sample-not-found]").TextContent.Should().Contain("INCONNU");
+
+        page.Find("[data-field=sample-term]").Input("2610-000014");
+        page.Find("[data-modal=nc-editor] [data-action='Action.Search']").Click();
+        page.FindAll("[data-field=sample] option").Should().HaveCount(3, "no tube, then the file's two tubes");
+        page.Find("[data-field=sample]").QuerySelector("option[selected]")!.GetAttribute("value").Should().Be(edta.SampleId.ToString(),
+            "the refused tube is the one a file is commonly about");
+        page.Find("[data-field=sample] option:nth-child(3)").TextContent.Should().Contain("0000000036").And.Contain("Refusé");
+
+        page.Find($"[data-field={NonConformityScreenRules.DescriptionField}]").Input("Tube EDTA hémolysé");
+        page.Find("[data-modal=nc-editor] [data-action='Action.Save']").Click();
+
+        var saved = (NonConformity)_files.Calls.Single(c => c.Method == nameof(IRepository<NonConformity>.AddAsync)).Arguments[0]!;
+        saved.SampleId.Should().Be(edta.SampleId);
+        saved.LabOrderId.Should().Be(order);
+    }
+
     [Fact]
     public void AClosureRefused_IsSaidInFull_EachObligationTheFileMisses()
     {

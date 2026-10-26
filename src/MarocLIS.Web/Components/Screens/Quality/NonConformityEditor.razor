@@ -2,6 +2,8 @@
 @using MarocLIS.Application.Quality
 @using MarocLIS.Domain.Quality
 @inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<NonConformityEditor> Logger
 
 @*
     Opening a non-conformity, the workstation's NonConformityDialog: what happened, how bad, where
@@ -39,6 +41,32 @@
                     }
                 </select>
             </label>
+            @* The tube the file is about — a refused or haemolysed tube is the commonest case —, found by
+               its barcode or its file's number, as on the workstation. *@
+            <div class="field field-span-2" data-state="@NonConformityScreenRules.SampleField">
+                <span class="field-label">@Texts["NonConformity.Sample"]</span>
+                <span class="input-with-button">
+                    <input class="input mono" dir="ltr" type="text" autocomplete="off" data-field="sample-term"
+                           maxlength="@NonConformityScreenRules.SampleTermMaxLength" placeholder="@Texts["NonConformity.SamplePlaceholder"]"
+                           aria-label="@Texts["NonConformity.SamplePlaceholder"]"
+                           @bind="_form.SampleTerm" @bind:event="oninput" @onkeydown="SampleKeyAsync" />
+                    <ActionButton Key="Action.Search" Disabled="@(_searching || string.IsNullOrWhiteSpace(_form.SampleTerm))" OnClick="FindSamplesAsync" />
+                </span>
+                @if (_form.SampleChoices.Count > 0)
+                {
+                    <select class="input mono" dir="ltr" data-field="sample" aria-label="@Texts["NonConformity.Sample"]" @onchange="SampleChanged">
+                        <option value="" selected="@(_form.SampleId is null)">@Texts["NonConformity.NoSample"]</option>
+                        @foreach (var choice in _form.SampleChoices)
+                        {
+                            <option value="@choice.SampleId" selected="@(choice.SampleId == _form.SampleId)">@NonConformityScreenRules.SampleText(choice, Texts.Language, Texts.T)</option>
+                        }
+                    </select>
+                }
+                else if (NonConformityScreenRules.SampleSearchOutcome(_form, Texts.T) is { } notFound && _searched)
+                {
+                    <p class="small abnormal" data-state="sample-not-found">@notFound</p>
+                }
+            </div>
             <label class="field field-span-2">
                 <span class="field-label">@Texts["Field.Description"]</span>
                 <textarea class="input @(_refusal?.Field == NonConformityScreenRules.DescriptionField ? "is-refused" : null)" rows="3"
@@ -88,7 +116,7 @@
 
     private NonConformityForm _form = new();
     private FieldRefusal? _refusal;
-    private bool _initialised;
+    private bool _initialised, _searching, _searched;
 
     protected override void OnParametersSet()
     {
@@ -96,6 +124,37 @@
         _initialised = true;
         _form = Prefilled ?? NonConformityScreenRules.NewForm(Today);
     }
+
+    private async Task SampleKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await FindSamplesAsync();
+    }
+
+    /// <summary>The tubes for what was typed: a barcode picks its tube, a file's number lists its tubes.</summary>
+    private async Task FindSamplesAsync()
+    {
+        if (_searching || string.IsNullOrWhiteSpace(_form.SampleTerm)) return;
+        _searching = true;
+        try
+        {
+            var found = await Scopes.RunAsync<NonConformityService, Result<IReadOnlyList<NonConformitySampleChoice>>>(
+                s => s.FindSamplesAsync(_form.SampleTerm));
+            NonConformityScreenRules.SamplesFound(_form, found.IsSuccess ? found.Value : []);
+            _searched = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Looking for the tube of a non-conformity failed.");
+            NonConformityScreenRules.SamplesFound(_form, []);
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private void SampleChanged(ChangeEventArgs e) =>
+        NonConformityScreenRules.PickSample(_form, Guid.TryParse(e.Value?.ToString(), out var id) ? id : null);
 
     private Task SaveAsync()
     {

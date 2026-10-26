@@ -204,6 +204,41 @@ public sealed class ResultEntryContextDatabaseTests(ResultEntryContextScratchDat
             .Which.Should().Be(new Application.Results.ResultEntryProgress(order.AccessionNumber, 0, 1));
     }
 
+    /// <summary>
+    /// The tubes a non-conformity can be linked to (QualityQueries, read here on this scratch base):
+    /// a barcode finds its tube, a file's number its tubes in order, another site's tube nothing.
+    /// </summary>
+    [SqlServerFact]
+    public async Task ANonConformity_FindsItsTube_ByBarcodeOrByFileNumber_OnTheSiteOnly()
+    {
+        var siteId = Guid.NewGuid();
+        var specimen = new SpecimenType(Unique("S"), new MultilingualText("Sang total (EDTA)"));
+        var order = new LabOrder(Unique("A"), Guid.NewGuid(), siteId, Now, Guid.NewGuid());
+        var first = new MarocLIS.Domain.Samples.Sample(Unique("T"), order.Id, specimen.Id, siteId) { SequenceInOrder = 1 };
+        var second = new MarocLIS.Domain.Samples.Sample(Unique("T"), order.Id, specimen.Id, siteId) { SequenceInOrder = 2 };
+        var elsewhere = new MarocLIS.Domain.Samples.Sample(Unique("T"), order.Id, specimen.Id, Guid.NewGuid());
+
+        await using (var context = database.Context())
+        {
+            context.SpecimenTypes.Add(specimen);
+            context.LabOrders.Add(order);
+            context.Samples.AddRange(first, second, elsewhere);
+            await context.SaveChangesAsync();
+        }
+
+        await using var read = database.Context();
+        var queries = new QualityQueries(read);
+
+        (await queries.FindSamplesForNonConformityAsync(siteId, second.Barcode)).Should().ContainSingle()
+            .Which.Should().Match<Application.Quality.NonConformitySampleChoice>(c => c.SampleId == second.Id && c.LabOrderId == order.Id
+                                                                                  && c.AccessionNumber == order.AccessionNumber
+                                                                                  && c.Specimen.Fr == "Sang total (EDTA)");
+        (await queries.FindSamplesForNonConformityAsync(siteId, order.AccessionNumber)).Select(c => c.SampleId)
+            .Should().Equal(first.Id, second.Id);
+        (await queries.FindSamplesForNonConformityAsync(siteId, elsewhere.Barcode)).Should().BeEmpty();
+        (await queries.FindSamplesForNonConformityAsync(siteId, "INCONNU")).Should().BeEmpty();
+    }
+
     [SqlServerFact]
     public async Task Sectors_AreNamed_InDisplayOrder_UnknownCodesAbsent()
     {

@@ -4086,6 +4086,10 @@
   },
 
   "NonConformity": {
+    "SampleNotFound": "No tube or file “{0}” on this site.",
+    "NoSample": "— No tube —",
+    "SamplePlaceholder": "Tube barcode or file number",
+    "Sample": "Tube concerned",
     "RootCauseCategory": "Root cause category",
     "ActionKind": "Action type",
     "AllCategories": "All categories",

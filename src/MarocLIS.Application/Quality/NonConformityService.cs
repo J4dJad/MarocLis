@@ -25,7 +25,21 @@ public sealed record NonConformityRow(
     int? DaysOpen,
     int ActionCount,
     int OpenActionCount,
-    bool IsRecurrence);
+    bool IsRecurrence,
+    string? SampleBarcode = null,
+    string? AccessionNumber = null);
+
+/// <summary>
+/// A tube a non-conformity can be about, found by its barcode or its file's number: the tube, its
+/// file and what it holds, and where it stands (a refused tube is the commonest case).
+/// </summary>
+public sealed record NonConformitySampleChoice(
+    Guid SampleId,
+    Guid LabOrderId,
+    string Barcode,
+    string AccessionNumber,
+    MultilingualText Specimen,
+    MarocLIS.Domain.Samples.SampleStatus Status);
 
 public sealed record CorrectiveActionRow(
     Guid Id,
@@ -145,6 +159,23 @@ public sealed class NonConformityService(
     /// to remember is asking the wrong person.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The tubes a file can be linked to: the tube with that barcode, or every tube of the file with
+    /// that number, on the user's site. Open to whoever may declare, like the declaration itself.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<NonConformitySampleChoice>>> FindSamplesAsync(string? term,
+                                                                                         CancellationToken ct = default)
+    {
+        var permitted = guard.RequireAny(Permissions.Quality.ReportNonConformity,
+                                         Permissions.Quality.ManageNonConformity);
+        if (permitted.IsFailure) return Result.Failure<IReadOnlyList<NonConformitySampleChoice>>(permitted.FirstError);
+
+        var wanted = term?.Trim() ?? string.Empty;
+        if (wanted.Length == 0) return Result.Success<IReadOnlyList<NonConformitySampleChoice>>([]);
+
+        return Result.Success(await queries.FindSamplesForNonConformityAsync(currentUser.SiteId, wanted, ct));
+    }
+
     public async Task<Result<string>> OpenAsync(CreateNonConformityRequest request,
                                                  CancellationToken ct = default)
     {
@@ -549,4 +580,8 @@ public interface IQualityQueries
     Task<Guid?> FindPreviousOccurrenceAsync(Guid siteId, NonConformityCategory category,
                                              Guid? departmentId, DateOnly since,
                                              CancellationToken ct = default);
+
+    /// <summary>The tube with this barcode, or the tubes of the file with this number, on the site; none when neither.</summary>
+    Task<IReadOnlyList<NonConformitySampleChoice>> FindSamplesForNonConformityAsync(Guid siteId, string term,
+                                                                                   CancellationToken ct = default);
 }

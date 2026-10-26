@@ -4086,6 +4086,10 @@
   },
 
   "NonConformity": {
+    "SampleNotFound": "لا يوجد أنبوب أو ملف « {0} » في هذا الموقع.",
+    "NoSample": "— بدون أنبوب —",
+    "SamplePlaceholder": "رمز الأنبوب أو رقم الملف",
+    "Sample": "الأنبوب المعني",
     "RootCauseCategory": "صنف السبب",
     "ActionKind": "نوع الإجراء",
     "AllCategories": "كل الأصناف",

@@ -46,6 +46,16 @@ public sealed class NonConformityForm
 
     /// <summary>The instrument the file is about, when another screen opens it (a failed maintenance check).</summary>
     public Guid? InstrumentId { get; set; }
+
+    /// <summary>What was typed to find the tube: its barcode or its file's number.</summary>
+    public string? SampleTerm { get; set; }
+
+    /// <summary>The tubes found for <see cref="SampleTerm"/>, to pick from.</summary>
+    public IReadOnlyList<NonConformitySampleChoice> SampleChoices { get; set; } = [];
+
+    /// <summary>The tube the file is about, and its file; none when the file is about no tube.</summary>
+    public Guid? SampleId { get; set; }
+    public Guid? LabOrderId { get; set; }
 }
 
 /// <summary>An action added to a file: the workstation's CorrectiveActionDialog.</summary>
@@ -293,6 +303,9 @@ public static class NonConformityScreenRules
             new(text("NonConformity.DaysOpen"), row.DaysOpen?.ToString(CultureInfo.InvariantCulture) ?? string.Empty, true)
         };
 
+        if (row.SampleBarcode is { } tube)
+            facts.Add(new(text("NonConformity.Sample"), $"{tube} · {row.AccessionNumber}", true));
+
         if (row.IsRecurrence) facts.Add(new(text("NonConformity.Recurrence"), RecurrenceMarker, false));
 
         if (row.AffectedReleasedResults)
@@ -350,6 +363,57 @@ public static class NonConformityScreenRules
         return form;
     }
 
+    // ---- The tube concerned ------------------------------------------------------------------------
+
+    public const string SampleField = "nc-sample";
+
+    /// <summary>The longest barcode or file number the search box takes.</summary>
+    public const int SampleTermMaxLength = 40;
+
+    /// <summary>
+    /// The tubes found, offered to pick: a barcode found picks its tube at once; a file's number lists
+    /// its tubes, the one refused first picked (the commonest reason to open a file about a tube),
+    /// otherwise none until one is chosen. Nothing found leaves the file about no tube.
+    /// </summary>
+    public static void SamplesFound(NonConformityForm form, IReadOnlyList<NonConformitySampleChoice> choices)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(choices);
+        form.SampleChoices = choices;
+        var term = form.SampleTerm?.Trim() ?? string.Empty;
+        var picked = choices.FirstOrDefault(c => string.Equals(c.Barcode, term, StringComparison.OrdinalIgnoreCase))
+                     ?? (choices.Count == 1 ? choices[0] : null)
+                     ?? choices.FirstOrDefault(c => c.Status == Domain.Samples.SampleStatus.Rejected);
+        PickSample(form, picked?.SampleId);
+    }
+
+    /// <summary>The tube chosen in the list, with its file; null for none.</summary>
+    public static void PickSample(NonConformityForm form, Guid? sampleId)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        var choice = form.SampleChoices.FirstOrDefault(c => c.SampleId == sampleId);
+        form.SampleId = choice?.SampleId;
+        form.LabOrderId = choice?.LabOrderId;
+    }
+
+    /// <summary>« 0000000036 · Sang total (EDTA) · 2610-000014 · Refusé »: a tube as the list offers it.</summary>
+    public static string SampleText(NonConformitySampleChoice choice, AppLanguage language, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+        ArgumentNullException.ThrowIfNull(text);
+        return $"{choice.Barcode} · {choice.Specimen.For(language)} · {choice.AccessionNumber} · {text($"SampleStatus.{choice.Status}")}";
+    }
+
+    /// <summary>What is said when nothing matches what was typed: the search is for a barcode or a file's number, whole.</summary>
+    public static string? SampleSearchOutcome(NonConformityForm form, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(text);
+        return string.IsNullOrWhiteSpace(form.SampleTerm) || form.SampleChoices.Count > 0
+            ? null
+            : text("NonConformity.SampleNotFound", form.SampleTerm.Trim());
+    }
+
     /// <summary>The description is what a file is: refused empty, on its box.</summary>
     public static FieldRefusal? Check(NonConformityForm form)
     {
@@ -375,7 +439,9 @@ public static class NonConformityScreenRules
             AffectedReleasedResults = form.AffectedResults,
             AffectedPatientCount = form.AffectedResults ? Math.Clamp(form.PatientCount, 0, PatientCountMax) : null,
             DueDate = form.DueDate,
-            InstrumentId = form.InstrumentId
+            InstrumentId = form.InstrumentId,
+            SampleId = form.SampleId,
+            LabOrderId = form.LabOrderId
         };
     }
 

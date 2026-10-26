@@ -155,6 +155,43 @@ public sealed class NonConformityScreenRulesTests
         NonConformityScreenRules.Facts(File(), Text).Should().HaveCount(6);
     }
 
+    /// <summary>
+    /// The tube a file is about, workstation and web alike: a barcode picks its tube, a file's number
+    /// its refused tube first, nothing found says so; the request carries the tube and its file, and
+    /// the register names them.
+    /// </summary>
+    [Fact]
+    public void A_file_is_linked_to_its_tube_by_barcode_or_by_file_number_and_shows_it()
+    {
+        var order = Guid.NewGuid();
+        var serum = new NonConformitySampleChoice(Guid.NewGuid(), order, "0000000038", "2610-000014", new MultilingualText("Sérum"),
+                                                  MarocLIS.Domain.Samples.SampleStatus.Received);
+        var edta = new NonConformitySampleChoice(Guid.NewGuid(), order, "0000000036", "2610-000014", new MultilingualText("Sang total (EDTA)"),
+                                                 MarocLIS.Domain.Samples.SampleStatus.Rejected);
+
+        var form = NonConformityScreenRules.NewForm(new DateOnly(2026, 10, 26));
+        form.SampleTerm = "0000000038";
+        NonConformityScreenRules.SamplesFound(form, [serum]);
+        form.SampleId.Should().Be(serum.SampleId);
+
+        form.SampleTerm = "2610-000014";
+        NonConformityScreenRules.SamplesFound(form, [serum, edta]);
+        form.SampleId.Should().Be(edta.SampleId, "the refused tube first");
+        NonConformityScreenRules.PickSample(form, serum.SampleId);
+        form.Description = "Étiquette illisible";
+        NonConformityScreenRules.ToRequest(form).Should().Match<CreateNonConformityRequest>(r => r.SampleId == serum.SampleId && r.LabOrderId == order);
+        NonConformityScreenRules.PickSample(form, null);
+        NonConformityScreenRules.ToRequest(form).SampleId.Should().BeNull();
+
+        NonConformityScreenRules.SampleText(edta, AppLanguage.French, Text).Should().Be("0000000036 · Sang total (EDTA) · 2610-000014 · SampleStatus.Rejected");
+        form.SampleTerm = "INCONNU";
+        NonConformityScreenRules.SamplesFound(form, []);
+        NonConformityScreenRules.SampleSearchOutcome(form, Text).Should().Be("NonConformity.SampleNotFound(INCONNU)");
+
+        var facts = NonConformityScreenRules.Facts(File() with { SampleBarcode = "0000000036", AccessionNumber = "2610-000014" }, Text);
+        facts.Should().Contain(f => f.Label == "NonConformity.Sample" && f.Value == "0000000036 · 2610-000014");
+    }
+
     [Fact]
     public void The_file_worked_on_stays_selected_after_a_reload()
     {

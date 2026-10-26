@@ -482,7 +482,10 @@ public sealed class NonConformityView : LocalizedView
 
     private async Task OpenNewAsync()
     {
-        using var dialog = new NonConformityDialog(Localizer, _dialogs);
+        using var dialog = new NonConformityDialog(Localizer, _dialogs)
+        {
+            FindSamples = term => _service.FindSamplesAsync(term)
+        };
 
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Request is null) return;
 
@@ -746,8 +749,18 @@ internal sealed class NonConformityDialog : Form
     private readonly CheckBox _affectedResults = new();
     private readonly NumericUpDown _patientCount = new();
     private readonly DateTimePicker _dueDate = new();
+    private readonly TextBox _sampleTerm = UiTheme.Input(200);
+    private readonly Button _findSample = UiTheme.SecondaryButton(string.Empty);
+    private readonly ComboBox _sample = new();
+    private readonly NonConformityForm _sampleForm = new();
 
     internal CreateNonConformityRequest? Request { get; private set; }
+
+    /// <summary>
+    /// Finds the tubes for a barcode or a file's number (NonConformityService.FindSamplesAsync); the
+    /// tube box stays off when the calling screen gives none.
+    /// </summary>
+    internal Func<string, Task<Result<IReadOnlyList<NonConformitySampleChoice>>>>? FindSamples { get; init; }
 
     /// <summary>The instrument the file is about, when another screen opens it (a failed maintenance check).</summary>
     private Guid? _instrumentId;
@@ -762,7 +775,7 @@ internal sealed class NonConformityDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(580, 470);
+        ClientSize = new Size(580, 524);
         BackColor = UiTheme.SurfaceRaised;
         Font = UiTheme.Body;
 
@@ -821,6 +834,29 @@ internal sealed class NonConformityDialog : Form
 
         _source.SelectedIndex = 0;
 
+        // The tube the file is about, found by its barcode or its file's number, as on the web.
+        y += 54;
+        Field("NonConformity.Sample", y);
+        _sampleTerm.Bounds = new Rectangle(20, y + 18, 150, UiTheme.InputHeight);
+        _sampleTerm.MaxLength = NonConformityScreenRules.SampleTermMaxLength;
+        _sampleTerm.Tag = UiTags.LatinValue;
+        _sampleTerm.PlaceholderText = _localizer["NonConformity.SamplePlaceholder"];
+        _findSample.Text = _localizer["Action.Search"];
+        _findSample.Bounds = new Rectangle(176, y + 18, 110, UiTheme.InputHeight);
+        _findSample.Click += async (_, _) => await FindSamplesAsync();
+        _sampleTerm.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            await FindSamplesAsync();
+        };
+        _sample.DropDownStyle = ComboBoxStyle.DropDownList;
+        _sample.FlatStyle = FlatStyle.Flat;
+        _sample.Bounds = new Rectangle(292, y + 18, 248, UiTheme.InputHeight);
+        _sample.Enabled = false;
+        _sample.SelectedIndexChanged += (_, _) =>
+            NonConformityScreenRules.PickSample(_sampleForm, (_sample.SelectedItem as Choice<Guid?>)?.Value);
+
         y += 54;
         Field("Field.Description", y);
         _description.Bounds = new Rectangle(20, y + 18, 520, 66);
@@ -851,20 +887,21 @@ internal sealed class NonConformityDialog : Form
         _dueDate.Value = NonConformityScreenRules.NewForm(DateOnly.FromDateTime(DateTime.Today)).DueDate.ToDateTime(TimeOnly.MinValue);
 
         var ok = UiTheme.PrimaryButton(_localizer["Action.Save"]);
-        ok.Bounds = new Rectangle(20, 420, 260, UiTheme.ButtonHeight);
+        ok.Bounds = new Rectangle(20, 474, 260, UiTheme.ButtonHeight);
         ok.Click += (_, _) => Accept();
 
         var cancel = UiTheme.SecondaryButton(_localizer["Action.Cancel"]);
-        cancel.Bounds = new Rectangle(300, 420, 240, UiTheme.ButtonHeight);
+        cancel.Bounds = new Rectangle(300, 474, 240, UiTheme.ButtonHeight);
         cancel.DialogResult = DialogResult.Cancel;
 
-        Controls.AddRange([_category, _severity, _source, _description, _immediateAction,
+        Controls.AddRange([_category, _severity, _source, _sampleTerm, _findSample, _sample, _description, _immediateAction,
                            _affectedResults, _patientCount, _dueDate, ok, cancel]);
 
         AcceptButton = ok;
         CancelButton = cancel;
 
         QhDialog.Dress(this, _localizer, "QualityHr.Hint.NonConformity");
+        Shown += (_, _) => _findSample.Enabled = FindSamples is not null;
     }
 
     /// <summary>Opens on what the calling screen already knows; every field stays editable.</summary>
@@ -888,6 +925,38 @@ internal sealed class NonConformityDialog : Form
         _instrumentId = instrumentId;
     }
 
+    /// <summary>The tubes for what was typed, picked as the rules pick them (NonConformityScreenRules.SamplesFound).</summary>
+    private async Task FindSamplesAsync()
+    {
+        if (FindSamples is null || string.IsNullOrWhiteSpace(_sampleTerm.Text)) return;
+
+        _findSample.Enabled = false;
+        try
+        {
+            _sampleForm.SampleTerm = _sampleTerm.Text;
+            var found = await FindSamples(_sampleTerm.Text.Trim());
+            if (found.IsFailure) { _dialogs.ShowFailure(found); return; }
+
+            NonConformityScreenRules.SamplesFound(_sampleForm, found.Value);
+            var picked = _sampleForm.SampleId;
+
+            _sample.Items.Clear();
+            _sample.Items.Add(new Choice<Guid?>(null, _localizer["NonConformity.NoSample"]));
+            foreach (var choice in _sampleForm.SampleChoices)
+                _sample.Items.Add(new Choice<Guid?>(choice.SampleId,
+                    NonConformityScreenRules.SampleText(choice, _localizer.CurrentLanguage, _localizer.Format)));
+            _sample.SelectedIndex = Math.Max(0, _sampleForm.SampleChoices.ToList().FindIndex(c => c.SampleId == picked) + 1);
+            _sample.Enabled = _sampleForm.SampleChoices.Count > 0;
+
+            if (NonConformityScreenRules.SampleSearchOutcome(_sampleForm, _localizer.Format) is { } notFound)
+                _dialogs.Warn(notFound);
+        }
+        finally
+        {
+            _findSample.Enabled = FindSamples is not null;
+        }
+    }
+
     private void Accept()
     {
         var form = new NonConformityForm
@@ -900,7 +969,9 @@ internal sealed class NonConformityDialog : Form
             AffectedResults = _affectedResults.Checked,
             PatientCount = (int)_patientCount.Value,
             DueDate = DateOnly.FromDateTime(_dueDate.Value.Date),
-            InstrumentId = _instrumentId
+            InstrumentId = _instrumentId,
+            SampleId = _sampleForm.SampleId,
+            LabOrderId = _sampleForm.LabOrderId
         };
 
         if (NonConformityScreenRules.Check(form) is { } refusal)

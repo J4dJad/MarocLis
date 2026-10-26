@@ -4087,6 +4087,10 @@
   },
 
   "NonConformity": {
+    "SampleNotFound": "Aucun tube ni dossier « {0} » sur ce site.",
+    "NoSample": "— Aucun tube —",
+    "SamplePlaceholder": "Code-barres du tube ou n° de dossier",
+    "Sample": "Tube concerné",
     "RootCauseCategory": "Catégorie de cause",
     "ActionKind": "Type d'action",
     "AllCategories": "Toutes les catégories",
