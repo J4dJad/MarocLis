@@ -3,7 +3,7 @@
 
 @*
     The key figures of a period report, the workstation's KpiTile: the caption in small muted type,
-    the figure large under it, the line that goes with it smaller under that; a figure to watch
+    the figure large under it (a sentence in its stead, smaller), the line that goes with it smaller under that; a figure to watch
     (receivables overdue) in its ink. Four to a row, large enough to read across a meeting room.
 *@
 <div class="report-tiles" data-state="tiles">
@@ -11,7 +11,7 @@
     {
         <div class="tile report-tile" data-tile="@tile.Key" data-ink="@tile.Ink">
             <span class="field-label report-tile-caption" title="@tile.Caption">@tile.Caption</span>
-            <span class="tile-value report-tile-value @StockTones.Ink(tile.Ink)" title="@tile.Value">@tile.Value</span>
+            <span class="tile-value report-tile-value @StockTones.Ink(tile.Ink) @(tile.Value.Any(char.IsDigit) ? null : "is-sentence")" title="@tile.Value">@tile.Value</span>
             @if (tile.Sub is { Length: > 0 } sub)
             {
                 <span class="small muted report-tile-sub" title="@sub">@sub</span>
