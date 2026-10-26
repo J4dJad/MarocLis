@@ -760,6 +760,7 @@ internal sealed class NonConformityDialog : Form
     /// Finds the tubes for a barcode or a file's number (NonConformityService.FindSamplesAsync); the
     /// tube box stays off when the calling screen gives none.
     /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<string, Task<Result<IReadOnlyList<NonConformitySampleChoice>>>>? FindSamples { get; init; }
 
     /// <summary>The instrument the file is about, when another screen opens it (a failed maintenance check).</summary>
