@@ -960,6 +960,8 @@
   },
 
   "OrderEntry": {
+    "SampleCount": "عدد العينات: {0}",
+    "RegisteredTitle": "تم تسجيل الملف",
     "LabelsFromWorkstation": "تُطبع الملصقات من حاسوب ويندوز بالمختبر (المتصفح لا يصل إلى طابعة الملصقات)",
     "MissingPrescriber": "الطبيب الواصف",
     "MissingAnalyses": "تحليل واحد على الأقل",
@@ -3422,6 +3424,8 @@
   },
 
   "Collection": {
+    "InTransitCount": "عدد الأنابيب قيد النقل: {0}",
+    "CollectedCount": "عدد الأنابيب المسحوبة: {0}",
     "Location.BroughtByPatient": "أحضرها المريض",
     "Location.Workplace": "مكان العمل",
     "Location.HospitalWard": "مصلحة استشفائية",
@@ -3613,6 +3617,7 @@
   },
 
   "Validation": {
+    "TechnicalConfirm": "هل تريد المصادقة التقنية على النتائج المُدخلة ({0})؟ تنتقل بعدها إلى المصادقة البيولوجية.",
     "Prescriber": "الطبيب الواصف",
     "PrescriberCriticalLine": "خط القيم الحرجة",
     "PrescriberPhone": "الهاتف",

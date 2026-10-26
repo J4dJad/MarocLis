@@ -586,7 +586,7 @@
                     return;
                 }
 
-                _status = ($"{requests.Count} {Texts["SampleStatus.Collected"].ToLower(Texts.Culture)}", "normal");
+                _status = (Texts.T("Collection.CollectedCount", requests.Count), "normal");
                 _comment = string.Empty;
             }
 
@@ -594,7 +594,7 @@
             {
                 var sent = await Scopes.RunAsync<SampleWorkflowService, Result>(s => s.DispatchAsync(pending.Ticked));
                 if (sent.IsFailure) Show(Texts["Collection.DispatchToBench"], Texts.Describe(sent.Errors));
-                else _status = ($"{pending.Ticked.Count} {Texts["SampleStatus.InTransit"].ToLower(Texts.Culture)}", "normal");
+                else _status = (Texts.T("Collection.InTransitCount", pending.Ticked.Count), "normal");
             }
 
             await ActivateAsync();

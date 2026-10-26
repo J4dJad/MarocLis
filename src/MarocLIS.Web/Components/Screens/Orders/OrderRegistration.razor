@@ -1081,7 +1081,7 @@
             ResetForm();
 
             var message = $"{Texts["Order.AccessionNumber"]} {registered.AccessionNumber} — " +
-                          $"{registered.Labels.Count} {Texts["Sample.Plural"].ToLower(Texts.Culture)}";
+                          Texts.T("OrderEntry.SampleCount", registered.Labels.Count);
 
             // The browser cannot reach the counter's label printer: the labels are printed from the
             // Windows workstation (the file's « Imprimer étiquettes »), whichever button was used.
@@ -1089,7 +1089,7 @@
                 message += " — " + (printLabels ? Texts["OrderEntry.LabelsFromWorkstation"] : Texts["OrderEntry.LabelsNotPrinted"]);
             Notice(message, "normal");
 
-            _info = new Info("registered", Texts["Billing.Invoice"], PricingLines(registered, printLabels), registered.OrderId);
+            _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId);
         }
         catch (Exception ex)
         {

@@ -2473,7 +2473,7 @@ public sealed class OrderRegistrationView : LocalizedView
             ResetForm();
 
             var message = $"{T("Order.AccessionNumber")} {registered.AccessionNumber} — " +
-                          $"{registered.Labels.Count} {T("Sample.Plural").ToLowerInvariant()}";
+                          T("OrderEntry.SampleCount", registered.Labels.Count);
             if (!printLabels && registered.Labels.Count > 0) message += " — " + T("OrderEntry.LabelsNotPrinted");
             Notice(message, UiTheme.Normal);
         }
@@ -2526,7 +2526,7 @@ public sealed class OrderRegistrationView : LocalizedView
         lines.Add(string.Empty);
         lines.Add($"{T("Payment.Title")} : {pricing.DueAtCounter.Format(language)}");
 
-        _dialogs.Info(string.Join(Environment.NewLine, lines), T("Billing.Invoice"));
+        _dialogs.Info(string.Join(Environment.NewLine, lines), T("OrderEntry.RegisteredTitle"));
     }
 
     /// <summary>

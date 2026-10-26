@@ -116,6 +116,41 @@ public sealed class ResultScreenRulesTests
         ResultEntryRules.AwaitingNotice([tsh, crp], (key, _) => key).Should().BeNull();
     }
 
+    /// <summary>
+    /// The day's wording, workstation and web alike: the technical validation asks a question instead
+    /// of repeating its title; the counts agree in number (« 1 tube prélevé », « 3 tubes prélevés »,
+    /// not « 3 prélevé »); the summary after registering an order is titled as what it is, not
+    /// « Facture »; and the labels line starts with a capital.
+    /// </summary>
+    [Fact]
+    public void The_day_s_messages_ask_agree_in_number_and_name_what_they_show()
+    {
+        var localizer = new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions { MarkMissingKeys = true });
+        string Fr(string key, params object?[] args) => localizer.Format(AppLanguage.French, key, args);
+
+        ResultEntryRow[] rows = [Row(TestResultStatus.Entered, value: "1"), Row(TestResultStatus.Entered, value: "2"), Row()];
+        ResultEntryRules.TechnicalConfirmation(rows, Fr)
+            .Should().Be("Valider techniquement 2 résultats saisis ? Ils passent ensuite à la validation biologique.");
+        ResultEntryRules.TechnicalConfirmation([rows[0]], Fr)
+            .Should().Be("Valider techniquement 1 résultat saisi ? Il passe ensuite à la validation biologique.");
+        localizer.Format(AppLanguage.English, "Validation.TechnicalConfirm", 1).Should().Be("Technically validate 1 entered result? It goes on to biological validation.");
+
+        Fr("Collection.CollectedCount", 3).Should().Be("3 tubes prélevés");
+        Fr("Collection.CollectedCount", 1).Should().Be("1 tube prélevé");
+        Fr("Collection.InTransitCount", 2).Should().Be("2 tubes en transit");
+        Fr("OrderEntry.SampleCount", 1).Should().Be("1 échantillon");
+        Fr("OrderEntry.RegisteredTitle").Should().Be("Dossier enregistré");
+        foreach (var language in new[] { AppLanguage.French, AppLanguage.English, AppLanguage.Arabic })
+        {
+            foreach (var key in new[] { "Collection.CollectedCount", "Collection.InTransitCount", "Validation.TechnicalConfirm",
+                                        "OrderEntry.RegisteredTitle", "OrderEntry.SampleCount", "Result.AwaitingRecollection",
+                                        "Result.RecollectionPending", "Result_AwaitingRecollection" })
+                localizer.Has(key, language).Should().BeTrue($"{key} in {language}");
+            var labels = localizer.Format(language, "OrderEntry.LabelsFromWorkstation");
+            labels.Should().Be(labels[..1].ToUpperInvariant() + labels[1..], "the labels line starts a sentence");
+        }
+    }
+
     [Fact]
     public void A_line_refuses_a_value_while_its_tube_is_missing_or_once_released()
     {

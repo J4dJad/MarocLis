@@ -1481,7 +1481,7 @@ public sealed class CollectionView : LocalizedView
                 }
 
                 _status.ForeColor = UiTheme.Normal;
-                _status.Text = $"{requests.Count} {T("SampleStatus.Collected").ToLowerInvariant()}";
+                _status.Text = T("Collection.CollectedCount", requests.Count);
                 _comment.Clear();
             }
 
@@ -1496,7 +1496,7 @@ public sealed class CollectionView : LocalizedView
                 else
                 {
                     _status.ForeColor = UiTheme.Normal;
-                    _status.Text = $"{selected.Count} {T("SampleStatus.InTransit").ToLowerInvariant()}";
+                    _status.Text = T("Collection.InTransitCount", selected.Count);
                 }
             }
 

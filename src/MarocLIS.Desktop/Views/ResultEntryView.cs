@@ -2184,7 +2184,7 @@ public sealed class ResultEntryView : LocalizedView
     {
         if (_sheet is null) return;
 
-        if (!_dialogs.Confirm(T("Validation.Technical"))) return;
+        if (!_dialogs.Confirm(ResultEntryRules.TechnicalConfirmation(_sheet.Rows, T), T("Validation.Technical"))) return;
 
         _validate.Enabled = false;
         Cursor = Cursors.WaitCursor;

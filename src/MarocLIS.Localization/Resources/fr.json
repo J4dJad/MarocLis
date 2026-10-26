@@ -960,13 +960,15 @@
   },
 
   "OrderEntry": {
-    "LabelsFromWorkstation": "étiquettes à imprimer depuis le poste Windows du laboratoire (le navigateur n'accède pas à l'imprimante d'étiquettes)",
+    "SampleCount": "{0} {0:plural:échantillon|échantillons}",
+    "RegisteredTitle": "Dossier enregistré",
+    "LabelsFromWorkstation": "Étiquettes à imprimer depuis le poste Windows du laboratoire (le navigateur n'accède pas à l'imprimante d'étiquettes)",
     "MissingPrescriber": "le prescripteur",
     "MissingAnalyses": "au moins une analyse",
     "MissingPatient": "le patient",
     "Missing": "À compléter : {0}",
     "Ready": "Prêt à enregistrer · tous les champs obligatoires sont remplis",
-    "LabelsNotPrinted": "étiquettes non imprimées (réimpression depuis la consultation du dossier)",
+    "LabelsNotPrinted": "Étiquettes non imprimées (réimpression depuis la consultation du dossier)",
     "SaveWithoutLabels": "Enregistrer sans étiquettes",
     "ConfirmCancelEntry": "Abandonner la saisie en cours ? Le patient, les analyses et les renseignements saisis seront effacés.",
     "EscapeKey": "Échap",
@@ -3422,6 +3424,8 @@
   },
 
   "Collection": {
+    "InTransitCount": "{0} {0:plural:tube en transit|tubes en transit}",
+    "CollectedCount": "{0} {0:plural:tube prélevé|tubes prélevés}",
     "Location.BroughtByPatient": "Apporté par le patient",
     "Location.Workplace": "Lieu de travail",
     "Location.HospitalWard": "Service hospitalier",
@@ -3613,6 +3617,7 @@
   },
 
   "Validation": {
+    "TechnicalConfirm": "Valider techniquement {0} {0:plural:résultat saisi|résultats saisis} ? {0:plural:Il passe|Ils passent} ensuite à la validation biologique.",
     "Prescriber": "Prescripteur",
     "PrescriberCriticalLine": "Ligne valeurs critiques",
     "PrescriberPhone": "Tél.",

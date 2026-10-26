@@ -298,7 +298,7 @@
         break;
 
     case EntryDialog.Technical:
-        <ConfirmPrompt Title="@Texts["Validation.Technical"]" Message="@Texts["Validation.Technical"]" OnYes="TechnicallyValidateAsync" OnNo="CloseDialog" />
+        <ConfirmPrompt Title="@Texts["Validation.Technical"]" Message="@(_sheet is { } validated ? ResultEntryRules.TechnicalConfirmation(validated.Rows, Texts.T) : Texts["Validation.Technical"])" OnYes="TechnicallyValidateAsync" OnNo="CloseDialog" />
         break;
 
     case EntryDialog.History when _history is { } history:

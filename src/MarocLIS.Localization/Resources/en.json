@@ -960,13 +960,15 @@
   },
 
   "OrderEntry": {
-    "LabelsFromWorkstation": "labels to be printed from the laboratory's Windows workstation (the browser cannot reach the label printer)",
+    "SampleCount": "{0} {0:plural:sample|samples}",
+    "RegisteredTitle": "Order registered",
+    "LabelsFromWorkstation": "Labels to be printed from the laboratory's Windows workstation (the browser cannot reach the label printer)",
     "MissingPrescriber": "the prescriber",
     "MissingAnalyses": "at least one analysis",
     "MissingPatient": "the patient",
     "Missing": "Still needed: {0}",
     "Ready": "Ready to save · all required fields are filled in",
-    "LabelsNotPrinted": "labels not printed (reprint from the file consultation)",
+    "LabelsNotPrinted": "Labels not printed (reprint from the file consultation)",
     "SaveWithoutLabels": "Save without labels",
     "ConfirmCancelEntry": "Abandon the current entry? The patient, analyses and details typed will be cleared.",
     "EscapeKey": "Esc",
@@ -3422,6 +3424,8 @@
   },
 
   "Collection": {
+    "InTransitCount": "{0} {0:plural:tube in transit|tubes in transit}",
+    "CollectedCount": "{0} {0:plural:tube collected|tubes collected}",
     "Location.BroughtByPatient": "Brought by the patient",
     "Location.Workplace": "Workplace",
     "Location.HospitalWard": "Hospital ward",
@@ -3613,6 +3617,7 @@
   },
 
   "Validation": {
+    "TechnicalConfirm": "Technically validate {0} entered {0:plural:result|results}? {0:plural:It goes|They go} on to biological validation.",
     "Prescriber": "Prescriber",
     "PrescriberCriticalLine": "Critical-values line",
     "PrescriberPhone": "Tel.",

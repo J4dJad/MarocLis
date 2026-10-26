@@ -144,6 +144,17 @@ public static class ResultEntryRules
         rows.Count(r => !r.IsHeading && !r.IsCalculated && !r.IsAwaitingSample && r.Status == TestResultStatus.Awaited
                         && string.IsNullOrWhiteSpace(typedValue(r.TestResultId)));
 
+    /// <summary>
+    /// The question before the technical validation: how many values it sends on to the biologist.
+    /// It repeated its own title (« Validation technique ») and asked nothing.
+    /// </summary>
+    public static string TechnicalConfirmation(IEnumerable<ResultEntryRow> rows, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(text);
+        return text("Validation.TechnicalConfirm", rows.Count(r => r.Status == TestResultStatus.Entered));
+    }
+
     /// <summary>Technical validation only makes sense once something has been entered.</summary>
     public static bool CanTechnicallyValidate(IEnumerable<ResultEntryRow> rows) =>
         rows.Any(r => r.Status == TestResultStatus.Entered);
