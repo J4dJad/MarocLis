@@ -68,6 +68,34 @@ public sealed class WebPageTests : BunitContext
         source.Should().NotContain("Web.ScreenUnavailable", "no screen is left saying it is only on the workstation");
     }
 
+    /// <summary>
+    /// A text parameter given a field without its « @ » receives the field's name, not its value: the
+    /// invoice dialog showed « _approvalRefused » in red on every invoice issued.
+    /// </summary>
+    [Fact]
+    public void NoTextParameterOfAComponent_IsGivenAFieldsNameInsteadOfItsValue()
+    {
+        var components = Path.Combine(WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web", "Components");
+        var files = Directory.GetFiles(components, "*.razor", SearchOption.AllDirectories)
+            .Where(f => Path.GetFileName(f) != "_Imports.razor")
+            .ToDictionary(f => Path.GetFileNameWithoutExtension(f), File.ReadAllText);
+
+        var textParameters = files.ToDictionary(
+            f => f.Key,
+            f => Regex.Matches(f.Value, @"\[Parameter[^\]]*\]\s*public\s+string\??\s+(\w+)\s*\{")
+                      .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal));
+
+        var wrong = new List<string>();
+        foreach (var (name, source) in files)
+            foreach (Match tag in Regex.Matches(source, @"<([A-Z]\w*)\b((?:[^>""]|""[^""]*"")*)/?>"))
+                if (textParameters.TryGetValue(tag.Groups[1].Value, out var parameters))
+                    foreach (Match attribute in Regex.Matches(tag.Groups[2].Value, @"(\w+)=""(_\w+)"""))
+                        if (parameters.Contains(attribute.Groups[1].Value))
+                            wrong.Add($"{name}: <{tag.Groups[1].Value} {attribute.Value}>");
+
+        wrong.Should().BeEmpty("a field is passed as @_field, else the text shown is its name");
+    }
+
     [Fact]
     public void TheWorkstationOnlyText_IsGoneFromTheThreeCatalogues_NothingSayingItAnyMore()
     {

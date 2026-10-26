@@ -178,7 +178,7 @@
 
     case BillingDialog.Issue when _issueOrders is { Count: > 0 } orders:
         <InvoiceIssueDialog Orders="orders" Gross="BillingScreenRules.Gross(orders).Amount" CanDiscount="@Context.User.Has(Permissions.Billing.ApplyDiscount)"
-                            Cap="_cap" Busy="_busy" Refused="_approvalRefused" OnConfirm="IssueAsync" OnCancel="CloseDialog" />
+                            Cap="_cap" Busy="_busy" Refused="@_approvalRefused" OnConfirm="IssueAsync" OnCancel="CloseDialog" />
         break;
 
     case BillingDialog.Deposit when _order is { } order:
