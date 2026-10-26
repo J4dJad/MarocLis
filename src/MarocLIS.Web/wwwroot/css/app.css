@@ -1272,10 +1272,11 @@ html[dir=rtl] .report-tile > [dir=ltr] { text-align: right; }
 :is([data-screen=statistics], [data-screen=steering]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=statistics], [data-screen=steering]) .grid :is(th, td):last-child { padding-left: 22px; padding-right: 8px; }
 /* « Tableau de bord »: the banner before go-live, the greeting, the day's flow, then what needs attention beside what is at zero. */
-.dashboard-setup { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid #F2C9A8; border-radius: 6px; background: var(--abnormal-bg); color: var(--abnormal); }
+.dashboard-setup { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; gap: 12px; padding: 8px 14px; border: 1px solid #F2C9A8; border-radius: 6px; background: var(--abnormal-bg); color: var(--abnormal); }
 .dashboard-setup > .icon { flex: none; }
-.dashboard-setup-title { flex: none; max-inline-size: 45%; }
-.dashboard-setup-detail { flex: 1 1 auto; -webkit-line-clamp: 1; line-clamp: 1; }
+.dashboard-setup-title { flex: 0 1 auto; min-inline-size: 0; }
+/* The detail on the title's line when it fits, else wrapped beneath it on two lines at most: never cut at 1366 px. */
+.dashboard-setup-detail { flex: 1 1 320px; -webkit-line-clamp: 2; line-clamp: 2; }
 .dashboard-setup-review { flex: none; color: var(--abnormal); border-color: #E0B48F; background: var(--abnormal-bg); }
 .dashboard-greeting { display: flex; flex-direction: column; gap: 2px; }
 .dashboard-hello { font-size: 20px; }
@@ -1285,16 +1286,17 @@ html[dir=rtl] :is([data-screen=statistics], [data-screen=steering]) .grid :is(th
 .dashboard-card-head > .list-name { -webkit-line-clamp: 1; line-clamp: 1; text-align: end; }
 .dashboard-card-head-stack { flex-direction: column; align-items: flex-start; gap: 2px; }
 .dashboard-flow { display: flex; flex-direction: column; gap: 12px; }
-.dashboard-steps { display: flex; align-items: stretch; }
-.dashboard-steps > .dashboard-step { flex: 1 1 0; }
-.dashboard-steps > .dashboard-arrow { flex: none; }
+/* The steps share their rows (subgrid): a caption on two lines lowers every value with it, the figures stay in line. */
+.dashboard-steps { display: grid; grid-auto-flow: column; grid-template-rows: auto auto auto; }
+.dashboard-steps > .dashboard-step { grid-row: 1 / span 3; display: grid; grid-template-rows: subgrid; row-gap: 4px; }
+.dashboard-steps > .dashboard-arrow { grid-row: 1 / span 3; }
 .dashboard-step { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--text); text-decoration: none; }
 a.dashboard-step:hover { border-color: var(--accent); color: var(--text); }
 .dashboard-step.is-highlighted { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-pressed); }
-.dashboard-step-caption { color: var(--text-secondary); -webkit-line-clamp: 1; line-clamp: 1; }
+.dashboard-step-caption { color: var(--text-secondary); }
 .dashboard-step.is-highlighted .dashboard-step-caption { color: var(--accent-pressed); }
 .dashboard-step-value { font-size: 28px; font-weight: 700; line-height: 1.15; }
-.dashboard-step-link { margin-block-start: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+.dashboard-step-link { align-self: end; color: var(--accent); font-size: 12px; font-weight: 600; }
 .dashboard-step.is-highlighted .dashboard-step-link { color: var(--accent-pressed); }
 .dashboard-arrow { align-self: center; inline-size: 24px; block-size: 24px; fill: none; stroke: var(--border-strong); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .dashboard-cards { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }

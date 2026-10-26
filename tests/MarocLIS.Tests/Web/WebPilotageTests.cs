@@ -128,6 +128,30 @@ public sealed class WebPilotageTests : WebScreenContext
     }
 
     [Fact]
+    public void TheDashboardsLongCaptions_WrapOnTwoLines_TheirFiguresStayingInLine()
+    {
+        SignIn(AppLanguage.French, [.. Permissions.All]);
+
+        var page = Render<DashboardScreen>();
+
+        // Five steps, an arrow's column between two: the steps share their rows (subgrid in app.css).
+        page.Find(".dashboard-steps").GetAttribute("style").Should().Contain(
+            "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr)");
+
+        var css = File.ReadAllText(Path.Combine(WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web", "wwwroot", "css", "app.css"));
+        Rule(css, ".dashboard-step-caption").Should().NotContain("line-clamp: 1", "« Comptes rendus à émettre » is cut at 1366 px on one line");
+        Rule(css, ".dashboard-setup-detail").Should().Contain("line-clamp: 2", "the banner's detail wraps beneath its title");
+        Rule(css, ".dashboard-steps > .dashboard-step").Should().Contain("subgrid");
+    }
+
+    private static string Rule(string css, string selector)
+    {
+        var start = css.IndexOf("\n" + selector + " {", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, selector);
+        return css[start..css.IndexOf('}', start)];
+    }
+
+    [Fact]
     public void ACashier_SeesOnlyTheFiguresOfTheirRights_AndNoWayToTheCatalogue()
     {
         SignIn(AppLanguage.French, Permissions.Billing.View);

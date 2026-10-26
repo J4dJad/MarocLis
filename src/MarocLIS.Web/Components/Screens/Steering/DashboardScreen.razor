@@ -45,7 +45,7 @@
                     <h3 class="card-heading">@Texts["Dashboard.FlowHeading"]</h3>
                     <span class="muted small list-name" data-state="summary" title="@string.Join("  ·  ", board.Summary)">@string.Join("  ·  ", board.Summary)</span>
                 </div>
-                <div class="dashboard-steps">
+                <div class="dashboard-steps" style="grid-template-columns: @StepColumns(board.Steps.Count)">
                     @for (var i = 0; i < board.Steps.Count; i++)
                     {
                         var step = board.Steps[i];
@@ -142,6 +142,10 @@
     private DashboardSnapshot? _snapshot;
     private DashboardBoard? _board;
     private DashboardSetupBanner? _setup;
+
+    /// <summary>The flow's columns: each step a share of the width, an arrow's between two.</summary>
+    private static string StepColumns(int steps) =>
+        string.Join(" auto ", Enumerable.Repeat("minmax(0, 1fr)", Math.Max(steps, 1)));
     private bool _failed, _loading;
 
     private static string Tone(DashboardAlertKind kind) => kind switch
