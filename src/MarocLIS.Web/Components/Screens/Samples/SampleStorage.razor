@@ -1,0 +1,455 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<SampleStorage> Logger
+
+@*
+    « Sérothèque », the workstation's SampleStorageView: every received tube and where it is — the
+    tube past its retention in the alarm's colours, the one received and never shelved in the
+    warning's — with the highlighted tube's card beside the list. The search box takes a scanner's
+    input (it types the barcode and presses Enter): the tube is looked up and highlighted. A tube is
+    shelved in a place of the site's list and a position (rack and slot) with its retention, an
+    aliquot split off with its own barcode, a tube discarded with its reason, and the tubes past
+    their retention purged at once against one reason. What is shown, offered and refused is
+    SampleStorageScreenRules'; what is done, SampleWorkflowService's.
+*@
+<div class="screen serumbank" data-screen="serumbank">
+    @{ var shown = Shown; var actions = Actions; }
+    <div class="list-tools">
+        <div class="search-box search-box-wide scan-box" title="@Texts["Web.StorageScanHint"]">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Sample.StorageSearchPlaceholder"]" aria-label="@Texts["Sample.StorageSearchPlaceholder"]"
+                   data-field="storage-search" autocomplete="off" maxlength="100" @ref="_searchBox" @bind="_search" @bind:event="oninput" @onkeydown="SearchKey" />
+        </div>
+        <div class="chips" role="group">
+            @foreach (var (filter, caption) in SampleStorageScreenRules.Chips(_rows, _filter, Texts.T))
+            {
+                <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                        data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => FilterAsync(filter)">@caption</button>
+            }
+        </div>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split">
+        <div class="card card-flush split-main">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="serumbank">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Sample.Barcode"]</th>
+                            <th>@Texts["Order.AccessionNumber"]</th>
+                            <th>@Texts["Patient.Title"]</th>
+                            <th>@Texts["Sample.Storage"]</th>
+                            <th>@Texts["Sample.KeepUntil"]</th>
+                            <th class="num">@Texts["Sample.DaysLeft"]</th>
+                            <th class="col-flags" title="@Texts["Web.SampleFlags"]" aria-label="@Texts["Web.SampleFlags"]"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in shown)
+                        {
+                            <tr class="@(row.SampleId == Selected?.SampleId ? "is-selected" : null) @Tone(row)" data-row="@row.Barcode"
+                                @onclick="() => _selectedId = row.SampleId" @ondblclick="() => AskShelve(row)">
+                                <td class="mono strong nowrap" dir="ltr">@row.Barcode</td>
+                                <td class="mono nowrap" dir="ltr">@row.AccessionNumber</td>
+                                <td><span class="list-name" title="@row.PatientName">@row.PatientName</span></td>
+                                <td class="small"><span class="list-name" title="@SampleStorageScreenRules.Place(row, Texts.T)">@SampleStorageScreenRules.Place(row, Texts.T)</span></td>
+                                <td class="mono nowrap" dir="ltr">@SampleStorageScreenRules.KeepUntil(row)</td>
+                                <td class="num mono strong nowrap" dir="ltr">@SampleStorageScreenRules.DaysLeft(row)</td>
+                                <td class="small strong nowrap col-flags" dir="ltr" title="@SampleStorageScreenRules.FlagsMeaning(row, Texts.T)">@SampleStorageScreenRules.Flags(row)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && shown.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.SerumBankNone"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer muted" data-state="count">@SampleStorageScreenRules.Count(_rows, Texts.T)</p>
+        </div>
+
+        <aside class="card split-side" data-card="tube">
+            @if (Selected is not { } selected)
+            {
+                <p class="muted" data-state="no-row">@Texts["Sample.SelectTube"]</p>
+            }
+            else
+            {
+                <div class="identity">
+                    <span class="identity-name mono" dir="ltr">@selected.Barcode</span>
+                    <span class="muted text-full">@SampleStorageScreenRules.Subtitle(selected)</span>
+                </div>
+                <div class="pills">
+                    @foreach (var pill in SampleStorageScreenRules.Pills(selected, Texts.T))
+                    {
+                        <Pill Text="@pill.Text" Tone="@pill.Tone" />
+                    }
+                </div>
+                <dl class="facts" data-state="facts">
+                    @foreach (var (label, value) in SampleStorageScreenRules.Facts(selected, Texts.T))
+                    {
+                        <dt>@label</dt>
+                        <dd class="mono text-full">@value</dd>
+                    }
+                </dl>
+            }
+        </aside>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="@MayPurgeAtAll">
+        <Secondary>
+            <ActionButton Key="Sample.CreateAliquot" Hidden="@(!MayReceive)" Disabled="@(!actions.Aliquot || _busy)" OnClick="AskAliquot" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Sample.PurgeExpired" Danger="true" Hidden="@(!MayPurgeAtAll)" Disabled="@(!actions.Purge || _busy)" OnClick="AskPurge" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Sample.Discard" Danger="true" Hidden="@(!MayPurgeAtAll)" Disabled="@(!actions.Discard || _busy)" OnClick="AskDiscard" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Sample.Shelve" Primary="true" Hidden="@(!MayReceive)" Disabled="@(!actions.Shelve || _busy)"
+                          OnClick="() => Selected is { } s ? AskShelve(s) : Task.CompletedTask" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Shelve when _target is { } row:
+        <SampleShelveDialog Row="row" Places="_places" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                            OnSave="ShelveAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Aliquot when _target is { } row:
+        <SampleAliquotDialog Row="row" Places="_places" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                             OnSave="AliquotAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ConfirmDiscard when _target is { } row:
+        <ConfirmPrompt Title="@Texts["Sample.Discard"]" Message="@Texts.T("Sample.ConfirmDiscard", row.Barcode, row.PatientName)"
+                       OnYes="() => _prompt = Prompt.DiscardReason" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.DiscardReason when _target is { } row:
+        <ReasonPrompt Title="@Texts["Sample.Discard"]" Prompt="@Texts.T("Sample.DiscardPrompt", row.Barcode)"
+                      MaxLength="SampleStorageScreenRules.DiscardNoteMaxLength" OnConfirm="DiscardAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ConfirmPurge:
+        <ConfirmPrompt Title="@Texts["Sample.PurgeExpired"]" Message="@Texts.T("Sample.ConfirmPurge", _purge.Count)"
+                       OnYes="() => _prompt = Prompt.PurgeReason" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.PurgeReason:
+        <ReasonPrompt Title="@Texts["Sample.PurgeExpired"]" Prompt="@Texts.T("Sample.PurgePrompt", _purge.Count)"
+                      MaxLength="SampleStorageScreenRules.DiscardNoteMaxLength" OnConfirm="PurgeAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="serumbank-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="serumbank-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Shelve, Aliquot, ConfirmDiscard, DiscardReason, ConfirmPurge, PurgeReason, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<StoredSampleRow> _rows = [];
+    private IReadOnlyList<string> _places = [];
+    private IReadOnlyList<StoredSampleRow> _purge = [];
+    private StorageFilter _filter = StorageFilter.All;
+    private string _search = string.Empty;
+    private ElementReference _searchBox;
+    private Guid? _selectedId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private StoredSampleRow? _target;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<StoredSampleRow> Shown => SampleStorageScreenRules.Shown(_rows, _filter);
+
+    /// <summary>The tube highlighted: the one clicked or scanned, kept after a shelving, else the first listed.</summary>
+    private StoredSampleRow? Selected
+    {
+        get
+        {
+            var shown = Shown;
+            return shown.FirstOrDefault(r => r.SampleId == _selectedId) ?? shown.FirstOrDefault();
+        }
+    }
+
+    private StorageActions Actions => SampleStorageScreenRules.Actions(Selected, _rows, Context.User.Has);
+
+    private bool MayReceive => Context.User.Has(Permissions.Samples.Receive);
+
+    private bool MayPurgeAtAll => Context.User.Has(Permissions.Samples.Reject);
+
+    private static string? Tone(StoredSampleRow row) => SampleStorageScreenRules.Ink(row) switch
+    {
+        StorageInk.PastRetention => "is-tone-critical-fill",
+        StorageInk.Unshelved => "is-tone-abnormal-fill",
+        StorageInk.Soon => "is-tone-abnormal",
+        _ => null
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The search box holds the cursor, ready for the scanner.
+        if (!firstRender) return;
+        try { await _searchBox.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var (search, expired) = (SampleStorageScreenRules.Search(_search), SampleStorageScreenRules.AsksServer(_filter));
+            var rows = await Scopes.RunAsync<SampleWorkflowService, Result<IReadOnlyList<StoredSampleRow>>>(
+                s => s.GetStoredSamplesAsync(search, expired));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the serum bank failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    /// <summary>A chip: the server is asked again only when the past-retention filter changes.</summary>
+    private async Task FilterAsync(StorageFilter filter)
+    {
+        var again = SampleStorageScreenRules.AsksServer(filter) != SampleStorageScreenRules.AsksServer(_filter);
+        _filter = filter;
+        if (again) await LoadAsync();
+    }
+
+    /// <summary>
+    /// Enter — a scanner ends the barcode with it — searches the bank; the tube whose barcode was
+    /// typed is highlighted, and a barcode found nowhere is said.
+    /// </summary>
+    private async Task SearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || _busy) return;
+        await LoadAsync();
+
+        var typed = _search.Trim();
+        if (typed.Length == 0) return;
+
+        if (_rows.FirstOrDefault(r => string.Equals(r.Barcode, typed, StringComparison.OrdinalIgnoreCase)) is { } scanned)
+        {
+            if (_filter == StorageFilter.Unshelved && !scanned.IsUnshelved) _filter = StorageFilter.All;
+            _selectedId = scanned.SampleId;
+            _status = null;
+        }
+        else if (_rows.Count == 0)
+        {
+            _status = (Texts.T("Web.ScanNotFound", typed), "abnormal");
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> PlacesAsync()
+    {
+        try
+        {
+            var places = await Scopes.RunAsync<SampleWorkflowService, Result<IReadOnlyList<string>>>(s => s.GetStorageLocationsAsync());
+            return places.IsSuccess ? places.Value : [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the storage places failed.");
+            return [];
+        }
+    }
+
+    // ---- Actions -----------------------------------------------------------------------------------
+
+    private async Task AskShelve(StoredSampleRow row)
+    {
+        if (_busy || !SampleStorageScreenRules.Actions(row, _rows, Context.User.Has).Shelve) return;
+        _selectedId = row.SampleId;
+        // The site's places read when the dialog opens, so a place just created is offered.
+        _places = await PlacesAsync();
+        _target = row;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = Prompt.Shelve;
+    }
+
+    private async Task AskAliquot()
+    {
+        if (_busy || Selected is not { } row || !Actions.Aliquot) return;
+        _places = await PlacesAsync();
+        _target = row;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = Prompt.Aliquot;
+    }
+
+    private void AskDiscard()
+    {
+        if (_busy || Selected is not { } row || !Actions.Discard) return;
+        _target = row;
+        _prompt = Prompt.ConfirmDiscard;
+    }
+
+    private void AskPurge()
+    {
+        if (_busy || !Actions.Purge) return;
+        _purge = SampleStorageScreenRules.PurgeCandidates(_rows);
+        if (_purge.Count > 0) _prompt = Prompt.ConfirmPurge;
+    }
+
+    private Task ShelveAsync(ShelveRequest request) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result>(
+                s => s.MoveToStorageAsync(row.SampleId, request.Location, request.Position, request.KeepUntil));
+            if (result.IsFailure)
+            {
+                Refuse(result.FirstError, result.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            _status = (SampleStorageScreenRules.Shelved(row, request.Location), "normal");
+            await LoadAsync();
+        });
+
+    private Task AliquotAsync(AliquotRequest request) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result<string>>(
+                s => s.CreateAliquotAsync(row.SampleId, request.VolumeMl, request.Purpose, request.Location));
+            if (result.IsFailure)
+            {
+                Refuse(result.FirstError, result.Errors);
+                return;
+            }
+
+            // The new barcode is what the operator has to write on the tube: stated, not left to be found.
+            ClosePrompt();
+            await LoadAsync();
+            Say(Texts["Sample.CreateAliquot"], Texts.T("Sample.AliquotCreated", result.Value));
+        });
+
+    private Task DiscardAsync(string note) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var result = await Scopes.RunAsync<SampleWorkflowService, Result>(s => s.DiscardAsync(row.SampleId, note));
+            if (result.IsFailure)
+            {
+                Say(Texts["Sample.Discard"], Texts.Describe(result.Errors), true);
+                return;
+            }
+
+            ClosePrompt();
+            _status = (SampleStorageScreenRules.Discarded(row, Texts.T), "muted");
+            await LoadAsync();
+        });
+
+    /// <summary>Every tube past its retention discarded against one reason, each with its own entry in its history.</summary>
+    private Task PurgeAsync(string note) =>
+        RunAsync(async () =>
+        {
+            var expired = _purge;
+            var (discarded, failures) = await Scopes.RunAsync<SampleWorkflowService, (int, List<string>)>(async s =>
+            {
+                var done = 0;
+                var failed = new List<string>();
+                foreach (var row in expired)
+                {
+                    var result = await s.DiscardAsync(row.SampleId, note);
+                    if (result.IsSuccess) done++;
+                    else failed.Add(row.Barcode);
+                }
+
+                return (done, failed);
+            });
+
+            ClosePrompt();
+            var (text, partial) = SampleStorageScreenRules.PurgeOutcome(discarded, failures, Texts.T);
+            _status = (text, partial ? "abnormal" : "normal");
+            await LoadAsync();
+        });
+
+    /// <summary>A refusal the service names a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(Error first, IEnumerable<Error> errors)
+    {
+        if (SampleStorageScreenRules.FieldOf(first.ResourceKey) is { } field)
+        {
+            _fieldRefusal = FieldRefusal.Of(field, first);
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(errors);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A serum bank operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _target = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

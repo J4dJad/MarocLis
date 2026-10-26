@@ -1,0 +1,51 @@
+@using MarocLIS.Application.Samples
+@inject WebTexts Texts
+
+@*
+    Confirming a send-out, the workstation's SubcontractDispatchDialog: the acts leaving, each with
+    the partner the catalogue names for it, and one partner for the whole batch instead — for the day
+    the usual one cannot take samples. Sending numbers a slip per partner, downloaded at once.
+*@
+<Modal Name="dispatch" Title="@Texts["Subcontract.Send"]" Hint="@SubcontractingScreenRules.SendSummary(Rows, Texts.T)" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <ul class="dispatch-list mono small" data-state="dispatch-list" dir="ltr">
+            @foreach (var row in Rows)
+            {
+                var line = SubcontractingScreenRules.DispatchLine(row, Texts.T);
+                <li class="text-full" title="@line">@line</li>
+            }
+        </ul>
+        <label class="field">
+            <span class="field-label">@Texts["Catalog.SubcontractorSite"]</span>
+            <select class="input" data-field="dispatch-partner" @bind="_partner">
+                @foreach (var choice in SubcontractingScreenRules.PartnerChoices(Partners, Texts.Language, Texts.T))
+                {
+                    <option value="@(choice.Id?.ToString() ?? string.Empty)">@choice.Display</option>
+                }
+            </select>
+        </label>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Subcontract.SendAndPrint" Primary="true" Disabled="Busy" OnClick="SendAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SubcontractRow> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<SubcontractPartner> Partners { get; set; } = [];
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The partner chosen for the whole batch; none for the catalogue's.</summary>
+    [Parameter] public EventCallback<Guid?> OnSend { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _partner = string.Empty;
+
+    private Task SendAsync() => OnSend.InvokeAsync(Guid.TryParse(_partner, out var id) ? id : null);
+}

@@ -6755,7 +6755,7 @@
     "SubcontractTick": "Tick to send or reprint",
     "SampleFlags": "Flags",
     "ScanNotFound": "No tube matches “{0}”.",
-    "SubcontractScanHint": "The scanner types the barcode then presses Enter: the tube's analyses are highlighted.",
+    "SubcontractScanHint": "The scanner types the barcode then presses Enter: the tube's analyses are ticked, ready for the slip.",
     "StorageScanHint": "The scanner types the barcode then presses Enter: the tube is looked up in the serum bank and highlighted.",
     "SubcontractNone": "No subcontracted analysis to show.",
     "SerumBankNone": "No tube to show.",

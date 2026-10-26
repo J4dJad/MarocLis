@@ -1,0 +1,414 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Samples
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Reporting
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject ILogger<Subcontracting> Logger
+
+@*
+    « Sous-traitance », the workstation's SubcontractingView: the analyses sent to partner
+    laboratories, in the order the work is done — those to send first, then those sent, with the
+    late ones in red. An action applies to the acts ticked, or to the one highlighted. Sending
+    numbers a dispatch slip per partner and downloads it at once to be printed, because the slip is
+    what travels in the cool box and what the partner signs; a slip can be downloaded again. The
+    search box takes a scanner's input: a tube scanned is ticked, ready for the slip. The partner's
+    own reference is kept for chasing a result, and the return is the ordinary result entry, opened
+    here on the file. What is shown and offered is SubcontractingScreenRules'; what is done,
+    SubcontractingService's.
+*@
+<div class="screen subcontracting" data-screen="subcontracting">
+    @{ var shown = Shown; var actions = Actions; var now = Clock.Now; }
+    <div class="list-tools">
+        <div class="search-box search-box-wide scan-box" title="@Texts["Web.SubcontractScanHint"]">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Subcontract.SearchPlaceholder"]" aria-label="@Texts["Subcontract.SearchPlaceholder"]"
+                   data-field="subcontract-search" autocomplete="off" maxlength="100" @ref="_searchBox" @bind="_search" @bind:event="oninput" @onkeydown="SearchKey" />
+        </div>
+        <div class="chips" role="group">
+            @foreach (var (filter, caption) in SubcontractingScreenRules.Chips(_rows, now, Texts.T))
+            {
+                <button type="button" class="chip @(filter == _filter ? "is-pressed" : null)" aria-pressed="@((filter == _filter) ? "true" : "false")"
+                        data-filter="@filter.ToString().ToLowerInvariant()" @onclick="() => _filter = filter">@caption</button>
+            }
+        </div>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body">
+        <section class="card card-flush card-fill" data-card="subcontracting">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="subcontracting">
+                    <thead>
+                        <tr>
+                            <th class="col-check" title="@Texts["Web.SubcontractTick"]" aria-label="@Texts["Web.SubcontractTick"]"></th>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Order.AccessionNumber"]</th>
+                            <th>@Texts["Patient.Title"]</th>
+                            <th>@Texts["Catalog.Analysis"]</th>
+                            <th>@Texts["Sample.Barcode"]</th>
+                            <th>@Texts["Catalog.SubcontractorSite"]</th>
+                            <th>@Texts["Subcontract.Slip"]</th>
+                            <th title="@Texts["Subcontract.PartnerReference"]">@Texts["Subcontract.PartnerReferenceShort"]</th>
+                            <th>@Texts["Subcontract.DueAt"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in shown)
+                        {
+                            var itemId = row.ItemId;
+                            var analysis = SubcontractingScreenRules.Analysis(row, Texts.Language);
+                            var partner = SubcontractingScreenRules.Partner(row, Texts.Language, Texts.T);
+                            <tr class="@(row.ItemId == Current?.ItemId ? "is-selected" : null) @Tone(row, now)" data-row="@row.AccessionNumber-@row.AnalysisCode"
+                                @onclick="() => _currentId = itemId">
+                                <td class="col-check" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@_ticked.Contains(itemId)" aria-label="@($"{row.AccessionNumber} {row.AnalysisCode}")"
+                                           data-field="tick" @onchange="e => Tick(itemId, e.Value is true)" />
+                                </td>
+                                <td class="nowrap"><Pill Text="@($"{SubcontractingScreenRules.StageGlyph(row, now)} {SubcontractingScreenRules.StageText(row, now, Texts.T)}")" Tone="@SubcontractingScreenRules.StageTone(row, now)" /></td>
+                                <td class="mono nowrap" dir="ltr">@row.AccessionNumber</td>
+                                <td><span class="list-name" title="@row.PatientName">@row.PatientName</span></td>
+                                <td><span class="list-name" title="@analysis">@analysis</span></td>
+                                <td class="mono small nowrap" dir="ltr">@row.Barcode</td>
+                                <td class="small"><span class="list-name" title="@partner">@partner</span></td>
+                                <td class="mono small" dir="ltr"><span class="list-name" title="@SubcontractingScreenRules.Sent(row)">@SubcontractingScreenRules.Sent(row)</span></td>
+                                <td class="mono small" dir="ltr"><span class="list-name" title="@row.PartnerReference">@row.PartnerReference</span></td>
+                                <td class="mono small nowrap" dir="ltr">@SubcontractingScreenRules.Due(row)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && shown.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.SubcontractNone"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer muted" data-state="count">@SubcontractingScreenRules.Count(_rows, now, Texts.T)</p>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="@MaySubcontract">
+        <Secondary>
+            <ActionButton Key="Subcontract.ReprintSlip" Disabled="@(!actions.Reprint || _busy)" OnClick="ReprintAsync" />
+            <ActionButton Key="Subcontract.EnterResults" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Pencil" Hidden="@(!Context.User.Has(Permissions.Results.Enter))"
+                          Disabled="@(!actions.EnterResults || _busy)" OnClick="EnterResults" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Subcontract.PartnerReference" Hidden="@(!MaySubcontract)" Disabled="@(!actions.Reference || _busy)" OnClick="AskReference" />
+        </More>
+        <Primary>
+            <ActionButton Key="Subcontract.Send" Primary="true" Hidden="@(!MaySubcontract)" Disabled="@(!actions.Send || _busy)" OnClick="AskSendAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Send:
+        <SubcontractDispatchDialog Rows="_sending" Partners="_partners" Refusal="@_dialogRefusal" Busy="_busy" OnSend="SendAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Reference when _referenceRow is { } row:
+        <TextPrompt Name="partner-reference" Title="@Texts["Subcontract.PartnerReference"]" Initial="@row.PartnerReference"
+                    Prompt="@SubcontractingScreenRules.ReferencePrompt(row, Texts.Language, Texts.T)" MaxLength="SubcontractingScreenRules.ReferenceMaxLength"
+                    Refusal="@_dialogRefusal" OnConfirm="SaveReferenceAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="subcontract-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full @(message.Critical ? "critical" : null)" data-state="subcontract-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Send, Reference, Message }
+
+    private sealed record Message(string Title, string Text, bool Critical);
+
+    private IReadOnlyList<SubcontractRow> _rows = [];
+    private IReadOnlyList<SubcontractRow> _sending = [];
+    private IReadOnlyList<SubcontractPartner> _partners = [];
+    private readonly HashSet<Guid> _ticked = [];
+    private SubcontractFilter _filter = SubcontractFilter.All;
+    private string _search = string.Empty;
+    private ElementReference _searchBox;
+    private Guid? _currentId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private SubcontractRow? _referenceRow;
+    private Message? _message;
+    private string? _dialogRefusal;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<SubcontractRow> Shown => SubcontractingScreenRules.Shown(_rows, _filter, _search, Clock.Now);
+
+    /// <summary>The act highlighted: the one clicked, kept after an action, else the first listed.</summary>
+    private SubcontractRow? Current
+    {
+        get
+        {
+            var shown = Shown;
+            return shown.FirstOrDefault(r => r.ItemId == _currentId) ?? shown.FirstOrDefault();
+        }
+    }
+
+    /// <summary>The acts an action applies to: those ticked among the lines shown, or the one highlighted.</summary>
+    private IReadOnlyList<SubcontractRow> Targets =>
+        SubcontractingScreenRules.Targets([.. Shown.Where(r => _ticked.Contains(r.ItemId))], Current);
+
+    private SubcontractActions Actions => SubcontractingScreenRules.Actions(Targets, Context.User.Has);
+
+    private bool MaySubcontract => Context.User.Has(Permissions.Samples.Subcontract);
+
+    private static string? Tone(SubcontractRow row, DateTimeOffset now) => SubcontractingScreenRules.Ink(row, now) switch
+    {
+        SubcontractInk.Late => "is-tone-critical-fill",
+        SubcontractInk.UrgentToSend => "is-tone-critical",
+        SubcontractInk.Awaiting => "is-tone-secondary",
+        _ => null
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The search box holds the cursor, ready for the scanner.
+        if (!firstRender) return;
+        try { await _searchBox.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<SubcontractingService, Result<IReadOnlyList<SubcontractRow>>>(s => s.GetWorklistAsync());
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            // A tick on an act no longer listed (sent, returned) goes with it.
+            _ticked.IntersectWith(_rows.Select(r => r.ItemId));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the subcontracting list failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void Tick(Guid itemId, bool ticked)
+    {
+        if (ticked) _ticked.Add(itemId);
+        else _ticked.Remove(itemId);
+    }
+
+    /// <summary>
+    /// Enter — a scanner ends the barcode with it: the tube's acts are ticked and highlighted, and the
+    /// box emptied for the next tube. Any other text keeps filtering the list.
+    /// </summary>
+    private void SearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        var typed = _search.Trim();
+        if (typed.Length == 0) return;
+
+        var tube = _rows.Where(r => string.Equals(r.Barcode, typed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (tube.Count == 0)
+        {
+            if (Shown.Count == 0) _status = (Texts.T("Web.ScanNotFound", typed), "abnormal");
+            return;
+        }
+
+        foreach (var row in tube) _ticked.Add(row.ItemId);
+        _currentId = tube[0].ItemId;
+        if (!SubcontractingScreenRules.Matches(tube[0], _filter, null, Clock.Now)) _filter = SubcontractFilter.All;
+        _search = string.Empty;
+        _status = null;
+    }
+
+    // ---- Sending -----------------------------------------------------------------------------------
+
+    private Task AskSendAsync() =>
+        RunAsync(async () =>
+        {
+            var selected = SubcontractingScreenRules.ToSend(Targets);
+            if (selected.Count == 0 || !Actions.Send)
+            {
+                _status = (Texts["Subcontract_NothingSelected"], "muted");
+                return;
+            }
+
+            var partners = await Scopes.RunAsync<SubcontractingService, Result<IReadOnlyList<SubcontractPartner>>>(s => s.GetPartnersAsync());
+            if (partners.IsFailure)
+            {
+                Say(Texts["Subcontract.Send"], Texts.Describe(partners.Errors), true);
+                return;
+            }
+
+            if (partners.Value.Count == 0)
+            {
+                Say(Texts["Subcontract.Send"], Texts["Catalog_NoPartnerSiteConfigured"], true);
+                return;
+            }
+
+            _partners = partners.Value;
+            _sending = selected;
+            _dialogRefusal = null;
+            _prompt = Prompt.Send;
+        });
+
+    private Task SendAsync(Guid? partnerOverride) =>
+        RunAsync(async () =>
+        {
+            var ids = _sending.Select(r => r.ItemId).ToList();
+            var result = await Scopes.RunAsync<SubcontractingService, Result<IReadOnlyList<SubcontractDispatch>>>(
+                s => s.DispatchAsync(ids, partnerOverride));
+            if (result.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            foreach (var id in ids) _ticked.Remove(id);
+            _currentId = ids.FirstOrDefault();
+            _status = (SubcontractingScreenRules.SentMessage(result.Value, Texts.T), "normal");
+
+            // The slip travels in the cool box: each one downloaded at once, to be printed.
+            foreach (var dispatch in result.Value) await DownloadSlipAsync(dispatch.Number, announce: false);
+
+            await LoadAsync();
+        });
+
+    private Task ReprintAsync() =>
+        RunAsync(async () =>
+        {
+            var slips = SubcontractingScreenRules.Slips(Targets);
+            if (slips.Count == 0)
+            {
+                _status = (Texts["Subcontract.SelectSentRow"], "muted");
+                return;
+            }
+
+            foreach (var number in slips) await DownloadSlipAsync(number, announce: true);
+        });
+
+    /// <summary>The slip as the workstation prints it, downloaded as a PDF.</summary>
+    private async Task DownloadSlipAsync(string number, bool announce)
+    {
+        var slip = await Scopes.RunAsync<SubcontractingService, Result<SubcontractSlip>>(s => s.GetSlipAsync(number));
+        if (slip.IsFailure)
+        {
+            Say(Texts["Subcontract.ReprintSlip"], Texts.Describe(slip.Errors), true);
+            return;
+        }
+
+        var document = new ListDocument(
+            SubcontractingScreenRules.SlipTitle(slip.Value, Texts.T),
+            SubcontractingScreenRules.SlipCaption(slip.Value, Context.User.SiteCode, Texts.Language, Texts.T),
+            SubcontractingScreenRules.SlipHeaders(Texts.T),
+            SubcontractingScreenRules.SlipRows(slip.Value, Texts.Language, Texts.T),
+            Texts.IsRightToLeft);
+        var name = SubcontractingScreenRules.SlipFileName(number);
+        await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", Lists.Render(document));
+        if (announce) _status = (Texts.T("Web.DocDownloaded", name), "muted");
+    }
+
+    // ---- The partner's reference and the return -----------------------------------------------------
+
+    private void AskReference()
+    {
+        if (_busy || !Actions.Reference || SubcontractingScreenRules.AwaitingReturn(Targets) is not { } row)
+        {
+            _status = (Texts["Subcontract.SelectSentRow"], "muted");
+            return;
+        }
+
+        _referenceRow = row;
+        _dialogRefusal = null;
+        _prompt = Prompt.Reference;
+    }
+
+    private Task SaveReferenceAsync(string typed) =>
+        RunAsync(async () =>
+        {
+            if (_referenceRow is not { } row) return;
+            var (refusal, value) = SubcontractingScreenRules.CheckReference(typed);
+            if (refusal is not null)
+            {
+                _dialogRefusal = Texts[refusal.Key];
+                return;
+            }
+
+            var result = await Scopes.RunAsync<SubcontractingService, Result>(s => s.SetPartnerReferenceAsync(row.ItemId, value));
+            if (result.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            _currentId = row.ItemId;
+            _status = (Texts["Message.Saved"], "normal");
+            await LoadAsync();
+        });
+
+    /// <summary>The partner's results are entered on the ordinary entry screen, opened on the file: entering them takes the act off this list.</summary>
+    private void EnterResults()
+    {
+        if (!Actions.EnterResults || SubcontractingScreenRules.AwaitingReturn(Targets) is not { } row) return;
+        Navigation.NavigateTo($"{WebMenu.HrefOf("entry")}?dossier={row.LabOrderId}");
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A subcontracting operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text, bool critical = false)
+    {
+        _message = new Message(title, text, critical);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _referenceRow = null;
+        _dialogRefusal = null;
+    }
+}

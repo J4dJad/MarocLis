@@ -85,6 +85,9 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<IOrderFileQueries, OrderFileQueries>();
         services.AddScoped<IOrderQuotes, OrderQuoteService>();
         services.AddScoped<ISampleQueries, SampleQueries>();
+        // « Sous-traitance »: the acts to send and those awaiting their return, the partner
+        // laboratories and the dispatch slips. (« Sérothèque » reads ISampleQueries.)
+        services.AddScoped<ISubcontractQueries, SubcontractQueries>();
         services.AddScoped<IBillingQueries, BillingQueries>();
         // The invoice print settings and the discount ceiling of Paramètres › Factures.
         services.AddScoped<IInvoicePrintSettingsQueries, InvoicePrintSettingsQueries>();

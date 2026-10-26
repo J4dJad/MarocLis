@@ -6756,7 +6756,7 @@
     "SubcontractTick": "Cocher pour envoyer ou réimprimer",
     "SampleFlags": "Signalements",
     "ScanNotFound": "Aucun tube ne correspond à « {0} ».",
-    "SubcontractScanHint": "Le lecteur saisit le code-barres puis appuie sur Entrée : les analyses du tube sont mises en évidence.",
+    "SubcontractScanHint": "Le lecteur saisit le code-barres puis appuie sur Entrée : les analyses du tube sont cochées, prêtes à partir sur le bordereau.",
     "StorageScanHint": "Le lecteur saisit le code-barres puis appuie sur Entrée : le tube est cherché dans la sérothèque et mis en évidence.",
     "SubcontractNone": "Aucune analyse sous-traitée à afficher.",
     "SerumBankNone": "Aucun tube à afficher.",
