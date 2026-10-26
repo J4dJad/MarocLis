@@ -11,10 +11,11 @@
     {
         <div class="tile report-tile" data-tile="@tile.Key" data-ink="@tile.Ink">
             <span class="field-label report-tile-caption" title="@tile.Caption">@tile.Caption</span>
-            <span class="tile-value report-tile-value @StockTones.Ink(tile.Ink) @(tile.Value.Any(char.IsDigit) ? null : "is-sentence")" title="@tile.Value">@tile.Value</span>
+            <span class="tile-value report-tile-value @StockTones.Ink(tile.Ink) @(tile.Value.Any(char.IsDigit) ? null : "is-sentence")" title="@tile.Value"
+                  dir="@Figure(tile.Value)">@tile.Value</span>
             @if (tile.Sub is { Length: > 0 } sub)
             {
-                <span class="small muted report-tile-sub" title="@sub">@sub</span>
+                <span class="small muted report-tile-sub" title="@sub" dir="@Figure(sub)">@sub</span>
             }
         </div>
     }
@@ -22,4 +23,10 @@
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<ReportTile> Tiles { get; set; } = [];
+
+    /// <summary>
+    /// A figure without a word (« 4,50 / 5 », « +12,5 % », « 1★ 0  2★ 3 ») reads left to right in Arabic
+    /// too, as a number is written there; a figure with its unit in words keeps the page's direction.
+    /// </summary>
+    private static string? Figure(string value) => value.Any(char.IsDigit) && !value.Any(char.IsLetter) ? "ltr" : null;
 }
