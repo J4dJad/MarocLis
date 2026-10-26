@@ -70,7 +70,7 @@
                                 var row = p;
                                 <tr class="@(p.Id == _partnershipId ? "is-selected" : null) @(RelationsScreenRules.EndingSoon(p) ? "is-abnormal" : null) @(p.IsActive ? null : "is-tone-muted")"
                                     data-row="@p.Reference" data-state="@state" @onclick="() => SelectPartnershipAsync(row.Id)" @ondblclick="EditPartnershipOnDoubleClickAsync">
-                                    <td><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                    <td class="col-name"><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
                                     <td class="small"><span class="list-name" title="@cells[1]">@cells[1]</span></td>
                                     <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
                                     <td class="mono small nowrap" dir="ltr">@cells[3]</td>
@@ -109,11 +109,11 @@
                                 <tr class="@(v.Id == _visitId ? "is-selected" : null)" data-row="@v.PrescriberName" @onclick="() => SelectVisit(row.Id)"
                                     @ondblclick="EditVisitOnDoubleClickAsync">
                                     <td class="mono small nowrap" dir="ltr">@cells[0]</td>
-                                    <td><span class="list-name strong" title="@cells[1]">@cells[1]</span></td>
+                                    <td class="col-name"><span class="list-name strong" title="@cells[1]">@cells[1]</span></td>
                                     <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
                                     <td class="small"><span class="list-name" title="@cells[3]">@cells[3]</span></td>
-                                    <td class="small"><span class="list-name" title="@cells[4]">@cells[4]</span></td>
-                                    <td class="small"><span class="list-name" title="@cells[5]">@cells[5]</span></td>
+                                    <td class="small col-purpose"><span class="list-name" title="@cells[4]">@cells[4]</span></td>
+                                    <td class="small col-notes"><span class="list-name" title="@cells[5]">@cells[5]</span></td>
                                     <td class="mono small nowrap @(RelationsScreenRules.NextVisitDue(v) ? "abnormal strong" : null)" dir="ltr" data-state="next">@cells[6]</td>
                                 </tr>
                             }
