@@ -3515,7 +3515,7 @@
 
   "Result": {
     "RecollectionPending": "Re-prélèvement",
-    "AwaitingRecollection": "Tube refusé, re-prélèvement demandé pour : {0}. Ces analyses seront saisies à la réception du nouveau tube.",
+    "AwaitingRecollection": "Re-prélèvement : {0}",
     "HistoryInterval": "valeurs usuelles {0}",
     "HistoryCount": "{0} valeur(s) validée(s)",
     "HistoryValue": "Valeur",

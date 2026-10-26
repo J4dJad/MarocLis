@@ -67,7 +67,7 @@ public static class ResultEntryRules
         var parts = new List<string>(2);
         if (recollected.Count > 0) parts.Add(text("Result.AwaitingRecollection", string.Join(", ", recollected)));
         if (inTransit.Count > 0) parts.Add(text("Result.AwaitingSample", string.Join(", ", inTransit)));
-        return parts.Count == 0 ? null : string.Join(" ", parts);
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
     /// <summary>The sectors (department codes) of a file of the worklist, for the sector chips.</summary>

@@ -112,7 +112,9 @@ public sealed class ResultScreenRulesTests
         ResultEntryRules.EditRefusal(rows[4]).Should().Be("Result_SampleNotReceived");
 
         var notice = ResultEntryRules.AwaitingNotice(rows, (key, args) => $"{key}({string.Join("|", args)})");
-        notice.Should().Be("Result.AwaitingRecollection(NFS) Result.AwaitingSample(VS)");
+        notice.Should().Be("Result.AwaitingRecollection(NFS) · Result.AwaitingSample(VS)");
+        new MarocLIS.Localization.JsonLocalizer(new MarocLIS.Localization.LocalizationOptions()).Format(AppLanguage.French, "Result.AwaitingRecollection", "NFS")
+            .Should().Be("Re-prélèvement : NFS", "short enough for the action bar beside the buttons of the entry");
         ResultEntryRules.AwaitingNotice([tsh, crp], (key, _) => key).Should().BeNull();
     }
 

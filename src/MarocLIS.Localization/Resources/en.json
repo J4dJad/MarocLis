@@ -3515,7 +3515,7 @@
 
   "Result": {
     "RecollectionPending": "Recollection",
-    "AwaitingRecollection": "Tube rejected, recollection requested for: {0}. These analyses are entered once the new tube is received.",
+    "AwaitingRecollection": "Recollection: {0}",
     "HistoryInterval": "reference range {0}",
     "HistoryCount": "{0} validated value(s)",
     "HistoryValue": "Value",

@@ -777,6 +777,9 @@ html[dir="rtl"] .grid tr.is-priority td:first-child { box-shadow: inset -3px 0 0
 html[dir="rtl"] .input-value { text-align: start; }
 .input-value[readonly] { background: var(--surface-sunken); color: var(--text-secondary); border-color: var(--border); }
 .input-value.is-derived { font-style: italic; }
+/* « Re-prélèvement » in the box of a refused tube's analysis: read whole, in the text font, not as a value. */
+.input-value[data-state=awaiting-recollection] { padding-inline: 6px; }
+.input-value[data-state=awaiting-recollection]::placeholder { font-family: var(--font); font-size: 12px; font-style: italic; }
 .input-comment { inline-size: 100%; min-inline-size: 120px; padding-block: 3px; font-size: 12px; }
 .input-comment[readonly] { background: transparent; border-color: transparent; }
 .key-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 8px 12px; border-block-start: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
