@@ -104,6 +104,22 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheTreasuryAndMarginScreens_AreInTheMenu_ByTheirRights()
+    {
+        var reader = Keys(WebMenu.Build(new User(permissions: Permissions.Treasury.View), FullStatus())).ToList();
+        reader.Should().Contain(["bankreconciliation", "cashforecast"]).And.NotContain("costmargin");
+
+        var treasurer = Keys(WebMenu.Build(new User(permissions: Permissions.Treasury.Manage), FullStatus())).ToList();
+        treasurer.Should().Contain(["bankreconciliation", "cashforecast"]);
+
+        var director = Keys(WebMenu.Build(new User(permissions: Permissions.Steering.View), FullStatus())).ToList();
+        director.Should().Contain("costmargin").And.NotContain(["bankreconciliation", "cashforecast"]);
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["bankreconciliation", "cashforecast", "costmargin"]);
+    }
+
+    [Fact]
     public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
     {
         var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();

@@ -57,11 +57,11 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void AScreenOfTheMenu_SaysItIsNotYetInTheWebVersion()
     {
-        SignIn(AppLanguage.French, Permissions.Treasury.View);
+        SignIn(AppLanguage.French, Permissions.Steering.View);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "bankreconciliation"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "steering"));
 
-        page.Find("h1").TextContent.Should().Contain("Rapprochement bancaire");
+        page.Find("h1").TextContent.Should().Contain("Pilotage");
         page.Find("[data-state=unavailable]").TextContent.Should()
             .Contain("Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.");
         _auditor.Events.Should().BeEmpty();
@@ -132,6 +132,9 @@ public sealed class WebPageTests : BunitContext
     [InlineData("accountingexport", "Export comptable")]
     [InlineData("accountingsettings", "Comptes et journaux")]
     [InlineData("fixedassets", "Immobilisations")]
+    [InlineData("bankreconciliation", "Rapprochement bancaire")]
+    [InlineData("cashforecast", "Prévision de trésorerie")]
+    [InlineData("costmargin", "Coût de revient et marge")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);
@@ -172,9 +175,9 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void TheArabicPlaceholder_IsInArabic()
     {
-        SignIn(AppLanguage.Arabic, Permissions.Treasury.View);
+        SignIn(AppLanguage.Arabic, Permissions.Steering.View);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "bankreconciliation"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "steering"));
 
         page.Find("[data-state=unavailable]").TextContent.Should().Contain("نسخة الويب");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");
