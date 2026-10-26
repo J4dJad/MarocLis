@@ -1,0 +1,71 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    One date of a file, the workstation's AccidentDateDialog: the return to work, or the day a
+    serological check was done. A date outside its bounds is refused beside its box.
+*@
+<Modal Name="@Name" Title="@Texts[TitleKey]" Hint="@Subtitle" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts[LabelKey]</span>
+            <input class="input input-date @(Shown?.Field == AccidentScreenRules.DateField ? "is-refused" : null)" type="date" data-field="@AccidentScreenRules.DateField"
+                   min="@Min.ToString("yyyy-MM-dd")" max="@Max?.ToString("yyyy-MM-dd")" @bind="_date" @bind:format="yyyy-MM-dd" />
+            <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.DateField" />
+        </label>
+        @if (NoticeKey is { } notice)
+        {
+            <p class="message is-info small text-full" data-state="date-notice">@Texts[notice]</p>
+        }
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public string Name { get; set; } = "accident-date";
+    [Parameter, EditorRequired] public string TitleKey { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter, EditorRequired] public string LabelKey { get; set; } = string.Empty;
+    [Parameter] public DateOnly Value { get; set; }
+    [Parameter] public DateOnly Min { get; set; }
+    [Parameter] public DateOnly? Max { get; set; }
+    [Parameter] public string? NoticeKey { get; set; }
+
+    /// <summary>The refusals of a date before <see cref="Min"/> and after <see cref="Max"/>.</summary>
+    [Parameter, EditorRequired] public string BeforeKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string AfterKey { get; set; } = string.Empty;
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<DateOnly> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _date;
+    private FieldRefusal? _checked;
+
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    /// <summary>The date proposed, within its bounds.</summary>
+    protected override void OnInitialized() =>
+        _date = Value < Min ? Min : Max is { } max && Value > max ? max : Value;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private Task SaveAsync()
+    {
+        _checked = AccidentScreenRules.CheckDate(_date, Min, Max, BeforeKey, AfterKey);
+        return _checked is null ? OnSave.InvokeAsync(_date) : Task.CompletedTask;
+    }
+}

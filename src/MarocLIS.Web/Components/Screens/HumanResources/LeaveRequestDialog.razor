@@ -1,0 +1,178 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<LeaveRequestDialog> Logger
+
+@*
+    A leave asked for, the workstation's LeaveRequestDialog: for whom (oneself, or anyone for HR and
+    the approvers), the kind, the first and last days with their half days, a reason and whether the
+    certificate came with it. The days are counted as the service will count them while they are
+    typed, with the balance or the law's length beside them (LeaveScreenRules.Preview).
+*@
+<Modal Name="leave-request" Title="@Texts["Leave.New"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Leave.Employee"]</span>
+                <select class="input" data-field="leave-employee" disabled="@(People.Count < 2)" value="@_employee" @onchange="EmployeeChangedAsync">
+                    @foreach (var person in People)
+                    {
+                        <option value="@person.EmployeeId">@($"{person.Number} — {person.FullName}")</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Leave.Type"]</span>
+                <select class="input" data-field="leave-type" value="@_type" @onchange="TypeChangedAsync">
+                    @foreach (var type in LeaveScreenRules.Types(HrTypes))
+                    {
+                        <option value="@type">@Texts[$"LeaveType.{type}"]</option>
+                    }
+                </select>
+            </label>
+            <div class="field leave-preview" data-state="preview" aria-live="polite">
+                <span class="strong accent text-full" data-state="preview-count" title="@_preview?.Count">@_preview?.Count</span>
+                <span class="small text-full @(_preview?.Over == true ? "critical strong" : "muted")" data-state="preview-balance" title="@_preview?.Balance">@_preview?.Balance</span>
+            </div>
+            <div class="field">
+                <label class="field-label" for="leave-start">@Texts["Leave.From"]</label>
+                <input id="leave-start" class="input input-date @Refused(LeaveScreenRules.StartField)" type="date" data-field="@LeaveScreenRules.StartField"
+                       value="@_start.ToString("yyyy-MM-dd")" @onchange="StartChangedAsync" />
+                <label class="field-check small">
+                    <input type="checkbox" data-field="leave-starts-afternoon" checked="@_startsAfternoon" @onchange="StartsAfternoonChangedAsync" />
+                    <span>@Texts["Leave.StartsAfternoon"]</span>
+                </label>
+                <FieldMessage Refusal="FieldRefusal" Field="@LeaveScreenRules.StartField" />
+            </div>
+            <div class="field">
+                <label class="field-label" for="leave-end">@Texts["Leave.To"]</label>
+                <input id="leave-end" class="input input-date @Refused(LeaveScreenRules.EndField)" type="date" data-field="@LeaveScreenRules.EndField"
+                       value="@_end.ToString("yyyy-MM-dd")" @onchange="EndChangedAsync" />
+                <label class="field-check small">
+                    <input type="checkbox" data-field="leave-ends-morning" checked="@_endsMorning" @onchange="EndsMorningChangedAsync" />
+                    <span>@Texts["Leave.EndsMorning"]</span>
+                </label>
+                <FieldMessage Refusal="FieldRefusal" Field="@LeaveScreenRules.EndField" />
+            </div>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Leave.Reason"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@LeaveScreenRules.ReasonMaxLength"
+                       data-field="leave-reason" title="@_reason" @bind="_reason" @bind:event="oninput" />
+            </label>
+            <label class="field-check field-span-2">
+                <input type="checkbox" data-field="leave-proof" @bind="_proof" />
+                <span>@Texts["Leave.ProofProvided"]</span>
+            </label>
+            <p class="field-span-2 message is-info small text-full" data-state="rules-notice">@Texts["Leave.RulesNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Leave.Submit" Primary="true" Disabled="Busy" OnClick="SubmitAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>Whom the request can be made for (LeaveScreenRules.People), never empty.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<LeaveBalanceRow> People { get; set; } = [];
+
+    /// <summary>The personnel file linked to the account, which the form opens on.</summary>
+    [Parameter] public Guid? Own { get; set; }
+
+    /// <summary>HR may record the kinds only HR records (an unjustified absence).</summary>
+    [Parameter] public bool HrTypes { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<LeaveSubmission> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid _employee;
+    private LeaveType _type = LeaveType.Annual;
+    private DateOnly _start, _end;
+    private bool _startsAfternoon, _endsMorning, _proof;
+    private string? _reason;
+    private LeavePreview? _preview;
+    private int _previewVersion;
+
+    private string? Refused(string field) => FieldRefusal?.Field == field ? "is-refused" : null;
+
+    protected override Task OnInitializedAsync()
+    {
+        _employee = LeaveScreenRules.DefaultPerson(People, Own);
+        _start = _end = LeaveScreenRules.DefaultDay(Clock.Today);
+        return PreviewAsync();
+    }
+
+    private Task EmployeeChangedAsync(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value as string, out var id)) _employee = id;
+        return PreviewAsync();
+    }
+
+    private Task TypeChangedAsync(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<LeaveType>(e.Value as string, out var type)) _type = type;
+        return PreviewAsync();
+    }
+
+    /// <summary>The first day moved past the last: the last follows it (LeaveScreenRules.EndAfter).</summary>
+    private Task StartChangedAsync(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", out var day))
+        {
+            _start = day;
+            _end = LeaveScreenRules.EndAfter(_start, _end);
+        }
+
+        return PreviewAsync();
+    }
+
+    private Task EndChangedAsync(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", out var day)) _end = day;
+        return PreviewAsync();
+    }
+
+    private Task StartsAfternoonChangedAsync(ChangeEventArgs e)
+    {
+        _startsAfternoon = e.Value is true;
+        return PreviewAsync();
+    }
+
+    private Task EndsMorningChangedAsync(ChangeEventArgs e)
+    {
+        _endsMorning = e.Value is true;
+        return PreviewAsync();
+    }
+
+    /// <summary>The days counted as the service will; a slower answer to an older form is dropped.</summary>
+    private async Task PreviewAsync()
+    {
+        var version = ++_previewVersion;
+        var (type, start, end, afternoon, morning) = (_type, _start, _end, _startsAfternoon, _endsMorning);
+        try
+        {
+            var days = await Scopes.RunAsync<LeaveService, Result<decimal>>(s => s.PreviewDaysAsync(type, start, end, afternoon, morning));
+            if (version != _previewVersion) return;
+            var person = People.FirstOrDefault(p => p.EmployeeId == _employee);
+            _preview = LeaveScreenRules.Preview(type, days.IsSuccess ? days.Value : 0m, person, Texts.T, Texts.Culture);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Counting the days of a leave failed.");
+            _preview = null;
+        }
+    }
+
+    private Task SubmitAsync() =>
+        OnSave.InvokeAsync(LeaveScreenRules.Submission(_employee, _type, _start, _end, _startsAfternoon, _endsMorning, _reason, _proof));
+}

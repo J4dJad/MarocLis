@@ -54,6 +54,23 @@
             box.focus();
             if (typeof box.select === "function") box.select();
             return true;
+        },
+
+        // Brings the element a selector names into view within its own scrolling box: the day of
+        // the planning a point to check is about, when it is clicked.
+        reveal(selector) {
+            const element = document.querySelector(selector);
+            if (element) element.scrollIntoView({ block: "nearest", inline: "center" });
+        },
+
+        // A value this browser keeps for the operator, as the workstation keeps it for the
+        // Windows account: the Simpl-IR codes of the declaration, typed once.
+        store(key, value) {
+            try { localStorage.setItem(key, value); } catch { /* kept for this page only */ }
+        },
+
+        recall(key) {
+            try { return localStorage.getItem(key); } catch { return null; }
         }
     };
 

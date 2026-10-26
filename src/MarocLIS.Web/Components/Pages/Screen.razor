@@ -79,6 +79,22 @@
             <MarocLIS.Web.Components.Screens.HumanResources.PersonnelDeadlinesScreen />
             break;
 
+        case ScreenDecision.Open when Key == "leave":
+            <MarocLIS.Web.Components.Screens.HumanResources.LeaveScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "planning":
+            <MarocLIS.Web.Components.Screens.HumanResources.PlanningScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "payroll":
+            <MarocLIS.Web.Components.Screens.HumanResources.PayrollScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "accidents":
+            <MarocLIS.Web.Components.Screens.HumanResources.AccidentScreen />
+            break;
+
 
         case ScreenDecision.Open when Key == "recollections":
             <MarocLIS.Web.Components.Screens.Samples.Recollections />

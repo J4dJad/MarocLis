@@ -1,0 +1,187 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+
+@*
+    Declaring an accident, or completing its file once the insurer has answered: the workstation's
+    AccidentDialog. The person and the kind, the day and hour, the place, the circumstances, the
+    injuries and witnesses, first aid; for a blood exposure its type and whether the source is
+    known; the consultation, the insurer, its claim number and the day it was told; the
+    subrogation, the incapacity rate and a note. Checked as AccidentScreenRules.Check checks it.
+*@
+<Modal Name="accident" Title="@Texts[Detail is null ? "Accident.New" : "Accident.Edit"]" Hint="@Detail?.Number" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Employee"]</span>
+                <select class="input @Refused(AccidentScreenRules.EmployeeField)" data-field="@AccidentScreenRules.EmployeeField" disabled="@(Detail is not null)"
+                        value="@_form.EmployeeId" @onchange="EmployeeChanged">
+                    @foreach (var person in People)
+                    {
+                        <option value="@person.EmployeeId">@($"{person.Number} {person.FullName}")</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.EmployeeField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Kind"]</span>
+                <select class="input" data-field="accident-kind" value="@_form.Kind" @onchange="KindChanged">
+                    @foreach (var kind in Enum.GetValues<AccidentKind>())
+                    {
+                        <option value="@kind">@Texts[$"AccidentKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.OccurredAt"]</span>
+                <input class="input mono @Refused(AccidentScreenRules.OccurredField)" type="datetime-local" dir="ltr" data-field="@AccidentScreenRules.OccurredField"
+                       max="@BrowserDateTime.Write(Now.Date.AddDays(1).AddMinutes(-1))" value="@BrowserDateTime.Write(_form.OccurredAt)"
+                       @onchange="e => _form.OccurredAt = BrowserDateTime.Read(e, _form.OccurredAt)" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.OccurredField" />
+            </label>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Accident.Place"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@AccidentScreenRules.PlaceMaxLength" data-field="accident-place"
+                       title="@_form.Place" @bind="_form.Place" @bind:event="oninput" />
+            </label>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Accident.Circumstances"]</span>
+                <textarea class="input @Refused(AccidentScreenRules.CircumstancesField)" rows="3" maxlength="@AccidentScreenRules.CircumstancesMaxLength"
+                          data-field="@AccidentScreenRules.CircumstancesField" @bind="_form.Circumstances" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.CircumstancesField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Accident.Injuries"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@AccidentScreenRules.InjuriesMaxLength" data-field="accident-injuries"
+                       title="@_form.Injuries" @bind="_form.Injuries" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Witnesses"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@AccidentScreenRules.WitnessesMaxLength" data-field="accident-witnesses"
+                       title="@_form.Witnesses" @bind="_form.Witnesses" @bind:event="oninput" />
+            </label>
+            <label class="field-check field-span-all">
+                <input type="checkbox" data-field="accident-first-aid" @bind="_form.FirstAidGiven" />
+                <span>@Texts["Accident.FirstAid"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Exposure"]</span>
+                <select class="input @Refused(AccidentScreenRules.ExposureField)" data-field="@AccidentScreenRules.ExposureField" disabled="@(!Blood)" @bind="_form.Exposure">
+                    @foreach (var exposure in Enum.GetValues<ExposureType>())
+                    {
+                        <option value="@exposure">@Texts[$"ExposureType.{exposure}"]</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.ExposureField" />
+            </label>
+            <label class="field-check field-align-end @(Blood ? null : "is-disabled")">
+                <input type="checkbox" data-field="accident-source" disabled="@(!Blood)" @bind="_form.SourceIdentified" />
+                <span>@Texts["Accident.SourceIdentified"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.ConsultedAt"]</span>
+                <input class="input input-date @Refused(AccidentScreenRules.ConsultedField)" type="date" data-field="@AccidentScreenRules.ConsultedField"
+                       max="@Today.ToString("yyyy-MM-dd")" @bind="_form.ConsultedOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.ConsultedField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Insurer"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@AccidentScreenRules.InsurerMaxLength" data-field="accident-insurer"
+                       title="@_form.InsurerName" @bind="_form.InsurerName" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.ClaimNumber"]</span>
+                <input class="input mono" type="text" dir="ltr" autocomplete="off" maxlength="@AccidentScreenRules.ClaimMaxLength" data-field="accident-claim"
+                       title="@_form.ClaimNumber" @bind="_form.ClaimNumber" @bind:event="oninput" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.DeclaredOn"]</span>
+                <input class="input input-date @Refused(AccidentScreenRules.DeclaredField)" type="date" data-field="@AccidentScreenRules.DeclaredField"
+                       max="@Today.ToString("yyyy-MM-dd")" @bind="_form.DeclaredOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.DeclaredField" />
+            </label>
+            <label class="field-check field-span-2">
+                <input type="checkbox" data-field="accident-subrogation" @bind="_form.Subrogation" />
+                <span>@Texts["Accident.SubrogationAsk"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Accident.Incapacity"]</span>
+                <input class="input mono num @Refused(AccidentScreenRules.RateField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@AccidentScreenRules.RateMaxLength" data-field="@AccidentScreenRules.RateField" @bind="_form.IncapacityRate" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.RateField" />
+            </label>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@AccidentScreenRules.NoteMaxLength" data-field="accident-note"
+                       title="@_form.Note" @bind="_form.Note" @bind:event="oninput" />
+            </label>
+            <p class="field-span-all message is-info small text-full" data-state="accident-notice">@Texts["Accident.Notice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>Whom the accident can be declared for (AccidentScreenRules.Declarable), never empty.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<EmployeeRow> People { get; set; } = [];
+
+    /// <summary>The file being completed; none for a new declaration.</summary>
+    [Parameter] public AccidentDetail? Detail { get; set; }
+
+    /// <summary>The insurer of the last declaration, proposed for a new one.</summary>
+    [Parameter] public string? LastInsurer { get; set; }
+
+    [Parameter] public DateTime Now { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<AccidentRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private AccidentForm _form = new();
+    private FieldRefusal? _checked;
+
+    private DateOnly Today => DateOnly.FromDateTime(Now);
+
+    private bool Blood => AccidentScreenRules.IsBloodExposure(_form.Kind);
+
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized()
+    {
+        _form = AccidentScreenRules.FormFor(Detail, LastInsurer, Now, Texts.Culture);
+        _form.EmployeeId ??= People.Count > 0 ? People[0].EmployeeId : null;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private void EmployeeChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value as string, out var id)) _form.EmployeeId = id;
+    }
+
+    private void KindChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<AccidentKind>(e.Value as string, out var kind)) _form.Kind = kind;
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, request) = AccidentScreenRules.Check(_form, Detail?.Request.AccidentId, Now);
+        _checked = refused;
+        return refused is null ? OnSave.InvokeAsync(request!) : Task.CompletedTask;
+    }
+}

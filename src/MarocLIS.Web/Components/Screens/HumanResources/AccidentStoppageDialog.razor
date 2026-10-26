@@ -1,0 +1,70 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    A stoppage or its extension, from the medical certificate: the workstation's
+    AccidentStoppageDialog. It opens the day after the last one approved for a week; a closed file
+    reopens as a relapse.
+*@
+<Modal Name="accident-stoppage" Title="@Texts["Accident.Stoppage"]" Hint="@Accident.Number" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Leave.From"]</span>
+                <input class="input input-date @Refused(AccidentScreenRules.FromField)" type="date" data-field="@AccidentScreenRules.FromField"
+                       min="@_min.ToString("yyyy-MM-dd")" @bind="_from" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.FromField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Leave.To"]</span>
+                <input class="input input-date @Refused(AccidentScreenRules.ToField)" type="date" data-field="@AccidentScreenRules.ToField"
+                       @bind="_to" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.ToField" />
+            </label>
+            <label class="field-check field-span-2">
+                <input type="checkbox" data-field="stoppage-relapse" @bind="_relapse" />
+                <span>@Texts["Accident.Relapse"]</span>
+            </label>
+            <p class="field-span-2 message is-info small text-full" data-state="stoppage-notice">@Texts["Accident.StoppageNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public AccidentDetail Accident { get; set; } = null!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<(DateOnly From, DateOnly To, bool Relapse)> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _min, _from, _to;
+    private bool _relapse;
+    private FieldRefusal? _checked;
+
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized() => (_min, _from, _to, _relapse) = AccidentScreenRules.StoppageDefaults(Accident);
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private Task SaveAsync()
+    {
+        _checked = AccidentScreenRules.CheckStoppage(Accident, _from, _to);
+        return _checked is null ? OnSave.InvokeAsync((_from, _to, _relapse)) : Task.CompletedTask;
+    }
+}

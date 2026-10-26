@@ -1,0 +1,74 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject ILogger<BdsDialog> Logger
+
+@*
+    The month's BDS, the workstation's « Fichier BDS » action: the préétabli DAMANCOM issued for the
+    month is sent; the BDS built from it comes back under the name DAMANCOM expects.
+*@
+<Modal Name="payroll-bds" Title="@Texts["Payroll.BdsFile"]" Hint="@Month" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="field">
+            <label class="field-label" for="bds-preestablished">@Texts["Payroll.BdsPickPreestablished"]</label>
+            <InputFile id="bds-preestablished" class="@($"input file-input {(Refused ? "is-refused" : null)}")" accept="@PayrollScreenRules.PreestablishedAccept"
+                       data-field="@PayrollScreenRules.PreestablishedField" disabled="@Busy" OnChange="ReadAsync" />
+            @if (_name is { Length: > 0 } name)
+            {
+                <span class="small muted text-full" data-state="file">@name</span>
+            }
+            <FieldMessage Refusal="FieldRefusal" Field="@PayrollScreenRules.PreestablishedField" />
+        </div>
+        @if (_unreadable)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="unreadable">@Texts["Documents.FileUnreadable"]</p>
+        }
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Export" Glyph="ActionButton.IconOf(BdsKey)" Primary="true" Disabled="@(Busy || _content is null)" OnClick="() => OnSave.InvokeAsync(_content!)" />
+    </Footer>
+</Modal>
+
+@code {
+    private const string BdsKey = "Payroll.BdsFile";
+
+    /// <summary>« Octobre 2026 ».</summary>
+    [Parameter] public string? Month { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<byte[]> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private byte[]? _content;
+    private string? _name;
+    private bool _unreadable;
+
+    private bool Refused => FieldRefusal?.Field == PayrollScreenRules.PreestablishedField;
+
+    /// <summary>The préétabli read whole: a text file of a few hundred kilobytes.</summary>
+    private async Task ReadAsync(InputFileChangeEventArgs e)
+    {
+        _content = null;
+        _unreadable = false;
+        _name = e.File.Name;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: PayrollScreenRules.PreestablishedMaxBytes);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            _content = memory.ToArray();
+        }
+        catch (IOException ex)
+        {
+            Logger.LogWarning(ex, "Reading the préétabli failed.");
+            _unreadable = true;
+        }
+    }
+}

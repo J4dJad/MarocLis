@@ -1350,3 +1350,53 @@ html[dir=rtl] :is([data-screen=serumbank], [data-screen=subcontracting]) .grid :
 .modal-footer > .credential-actions > .action-bar-rule { block-size: 24px; }
 :is([data-screen=personnel], [data-screen=habilitations], [data-screen=hrdeadlines], [data-modal=employee-file]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=personnel], [data-screen=habilitations], [data-screen=hrdeadlines], [data-modal=employee-file]) .grid :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+/* « Congés », « Planning », « Paie » and « Accidents du travail »: the lists alone in their body, the last column
+   clear of the card's edge; the planning's month in a box of its own that scrolls sideways, the names and hours kept
+   in view, each day in its ink (leave, post, a post to check), the days selected framed; the points to check under
+   it; an accident's file under the list, its history beside its checks; a date overdue in the alarm's colours. */
+:is([data-screen=leave], [data-screen=payroll], [data-screen=accidents], [data-screen=planning], [data-modal=leave-balances], [data-modal=holidays]) .grid:not(.planning-grid) :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=leave], [data-screen=payroll], [data-screen=accidents], [data-screen=planning], [data-modal=leave-balances], [data-modal=holidays]) .grid:not(.planning-grid) :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+.grid td.is-alarm { background: var(--critical-bg); color: var(--critical-ink); font-weight: 600; }
+.field-align-end { align-self: end; min-block-size: var(--control-height); }
+.leave-preview { justify-content: flex-end; gap: 2px; }
+.modal .card-flush .table-scroll { border: 0; border-radius: 0; max-block-size: 360px; }
+.planning-month { min-inline-size: 150px; text-align: center; }
+.screen-body.split.planning-body { grid-template-rows: minmax(0, 1fr) minmax(0, 210px); }
+.screen-body.split.accident-body { grid-template-rows: minmax(0, 1fr) minmax(0, 290px); }
+.screen-body.split > .card-flush > .planning-scroll { flex: 1 1 auto; min-block-size: 0; overflow: auto; outline: none; }
+.screen-body.split > .card-flush > .planning-scroll:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.screen-body.split > .card-flush > .planning-legend { flex: none; border-block-start: 1px solid var(--border); padding-block: 6px; }
+.screen-body.split > .card-flush > .planning-refused { flex: none; margin: 8px 12px 0; }
+.planning-grid { inline-size: max-content; min-inline-size: 100%; border-collapse: separate; border-spacing: 0; }
+.planning-grid th, .planning-grid td { padding: 4px 2px; }
+.planning-grid .planning-name { position: sticky; inset-inline-start: 0; z-index: 2; inline-size: 210px; min-inline-size: 210px; max-inline-size: 210px;
+                                padding-inline: 10px 8px; background: var(--surface-raised); text-align: start; font-weight: 400; color: var(--text); }
+.planning-grid .planning-hours { position: sticky; inset-inline-start: 210px; z-index: 2; inline-size: 52px; min-inline-size: 52px; padding-inline: 6px;
+                                 background: var(--surface-raised); border-inline-end: 1px solid var(--border-strong); }
+.planning-grid thead :is(.planning-name, .planning-hours) { z-index: 3; background: var(--surface-sunken); color: var(--text-secondary); font-weight: 600; }
+.planning-grid .planning-name .list-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planning-grid .planning-day { min-inline-size: 34px; text-align: center; font-size: 11px; line-height: 1.25; }
+.planning-grid .planning-day-name { display: block; font-weight: 400; }
+.planning-grid :is(.planning-day, .planning-cell):last-child { padding-inline-end: 18px; }
+.planning-grid .planning-cell { min-inline-size: 34px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none;
+                                border-inline-start: 1px solid var(--border); white-space: nowrap; }
+.planning-grid .is-off { background: var(--surface-sunken); }
+.planning-grid .ink-out { color: var(--text-muted); background: repeating-linear-gradient(135deg, var(--surface-sunken) 0 4px, var(--surface) 4px 8px); }
+.planning-grid .ink-leave { background: var(--accent-subtle); color: var(--accent); font-weight: 700; }
+.planning-grid .ink-leave-pending { color: var(--accent); font-weight: 400; }
+.planning-grid .ink-flagged { background: var(--critical-bg); color: var(--critical); }
+.planning-grid .ink-unusual { color: var(--abnormal); }
+.planning-grid .ink-shift { color: var(--normal); }
+.planning-grid td.is-picked { box-shadow: inset 0 0 0 2px var(--accent); }
+.planning-grid tbody tr:hover > :is(.planning-name, .planning-hours) { background: var(--surface-sunken); }
+.planning-issues .card-heading { flex: none; margin: 0; padding-block: 8px; border-block-end: 1px solid var(--border); }
+.planning-issues .card-heading .card-title { font-size: 14px; margin: 0; }
+.planning-issues tr.critical td, .planning-issues tr.abnormal td { color: inherit; }
+.accident-file { display: flex; flex-direction: column; }
+.accident-summary { flex: none; display: flex; flex-direction: column; gap: 4px; padding-block: 10px; border-block-end: 1px solid var(--border); }
+.accident-summary > p { margin: 0; }
+.accident-summary > p:last-child { max-block-size: 3.2em; overflow-y: auto; }
+.accident-tables { flex: 1 1 auto; min-block-size: 0; display: grid; grid-template-columns: minmax(0, 62fr) minmax(0, 38fr); }
+.accident-tables > .table-scroll { min-block-size: 0; max-block-size: none; border: 0; border-radius: 0; overflow: auto; }
+.accident-tables > .table-scroll + .table-scroll { border-inline-start: 1px solid var(--border); }
+html[dir=rtl] .planning-grid .planning-name .list-name { text-align: right; }

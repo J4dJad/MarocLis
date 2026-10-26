@@ -323,24 +323,27 @@ public static class PayrollScreenRules
     /// <summary>
     /// The payslip as it stands, under the variables: gross, contributions, tax, net and the seniority
     /// rate, then the days the leave withheld, the prorated month, the departure indemnities and the
-    /// accident stoppage, when there are any. Amounts written by <paramref name="money"/>, without currency.
+    /// accident stoppage, when there are any. Amounts written by <paramref name="money"/>; the sentences
+    /// are those under <paramref name="keys"/> (« Payroll. », whose sentences carry the currency, or the
+    /// web's « Web.Payroll », whose amounts carry it).
     /// </summary>
-    public static string CurrentResult(PayslipRow row, ScreenText text, Func<decimal, string> money, IFormatProvider culture)
+    public static string CurrentResult(PayslipRow row, ScreenText text, Func<decimal, string> money, IFormatProvider culture,
+                                       string keys = "Payroll.")
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(money);
         var a = row.Amounts;
         var v = row.Variables;
-        var said = text("Payroll.CurrentResult", money(a.Gross), money(a.CnssEmployee), money(a.AmoEmployee), money(a.IncomeTax),
+        var said = text($"{keys}CurrentResult", money(a.Gross), money(a.CnssEmployee), money(a.AmoEmployee), money(a.IncomeTax),
                         money(a.NetPay), a.SeniorityRate.ToString("0.#", culture));
         if (v.AbsenceDays > 0) said += " " + text("Payroll.LeaveAbsenceIncluded", v.AbsenceDays.ToString("0.#", culture));
         if (v.IsProrated)
             said += " " + text("Payroll.ProratedMonth", v.ContractWorkingDays.ToString("0.#", culture), v.MonthWorkingDays.ToString("0.#", culture));
         var departure = v.LeaveIndemnity + v.NoticeIndemnity + v.SeverancePay;
-        if (departure > 0) said += " " + text("Payroll.DepartureIncluded", money(departure));
+        if (departure > 0) said += " " + text($"{keys}DepartureIncluded", money(departure));
         if (v.WorkAccidentDays > 0)
-            said += " " + text("Payroll.AccidentIncluded", v.WorkAccidentDays.ToString("0.#", culture), money(v.WorkAccidentAllowance));
+            said += " " + text($"{keys}AccidentIncluded", v.WorkAccidentDays.ToString("0.#", culture), money(v.WorkAccidentAllowance));
         return said;
     }
 

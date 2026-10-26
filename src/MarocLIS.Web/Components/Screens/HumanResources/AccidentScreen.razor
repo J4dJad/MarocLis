@@ -1,0 +1,479 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject IAccidentRenderer Renderer
+@inject ILogger<AccidentScreen> Logger
+
+@*
+    « Accidents du travail », the workstation's AccidentView: the year's work accidents and blood
+    exposures, a declaration not sent within 48 hours and a serological check overdue in the alarm's
+    colours; under the list, the selected file — what it is, its circumstances, its history and its
+    checks — with the steps on it: completing it, the stoppage from the certificate, the return to
+    work, the insurer's follow-up, a check done, the closing; the declaration and the year's register
+    in PDF. What is shown and offered is AccidentScreenRules'; what is done, AccidentService's.
+*@
+<div class="screen accidents" data-screen="accidents">
+    @{ var actions = Actions; var now = Now; }
+    <div class="list-tools">
+        <label class="field-inline">
+            <span class="small">@Texts["Eqa.Year"]</span>
+            <select class="input input-narrow" data-field="accident-year" value="@_year" @onchange="YearChangedAsync">
+                @foreach (var year in AccidentScreenRules.Years(Clock.Today))
+                {
+                    <option value="@year">@year</option>
+                }
+            </select>
+        </label>
+        <ActionButton Key="Accident.Register" Disabled="_busy" OnClick="RegisterAsync" />
+        <span class="list-tools-end">
+            <span class="muted small text-full" data-state="count">@AccidentScreenRules.Heading(_rows, _year, now, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => ReloadAsync(_selectedId)" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single accident-body">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="accidents">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Accident.Number"]</th>
+                            <th>@Texts["Accident.OccurredAt"]</th>
+                            <th>@Texts["Accident.Employee"]</th>
+                            <th>@Texts["Accident.Kind"]</th>
+                            <th>@Texts["Accident.DeclaredOn"]</th>
+                            <th class="num">@Texts["Accident.StoppageDays"]</th>
+                            <th>@Texts["Accident.ReturnedOn"]</th>
+                            <th>@Texts["Accident.NextCheck"]</th>
+                            <th>@Texts["Field.Status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var late = AccidentScreenRules.DeclarationLate(row, now);
+                            var state = AccidentScreenRules.State(row, Texts.T);
+                            var kind = Texts[$"AccidentKind.{row.Kind}"];
+                            <tr class="@(row.AccidentId == _selectedId ? "is-selected" : null) @(row.IsClosed ? "is-tone-muted" : null)" data-row="@row.Number"
+                                @onclick="() => SelectAsync(row.AccidentId)" @ondblclick="EditOnDoubleClickAsync">
+                                <td class="mono nowrap @(late ? "is-alarm" : null)" dir="ltr">@row.Number</td>
+                                <td class="mono nowrap" dir="ltr">@AccidentScreenRules.At(row.OccurredAt)</td>
+                                <td>
+                                    <span class="list-name" title="@($"{row.EmployeeNumber} {row.EmployeeName}")">@row.EmployeeName</span>
+                                    <span class="cell-sub cell-wrap"><span class="mono" dir="ltr">@row.EmployeeNumber</span> · @(row.DepartmentName ?? "—")</span>
+                                </td>
+                                <td class="small"><span class="list-name" title="@kind">@kind</span></td>
+                                <td class="small nowrap @(late ? "is-alarm" : null)" data-state="declared">@AccidentScreenRules.Declared(row, now, Texts.T)</td>
+                                <td class="num mono nowrap">@AccidentScreenRules.Days(row.StoppageDays, Texts.Culture)</td>
+                                <td class="mono nowrap" dir="ltr">@AccidentScreenRules.Date(row.ReturnedToWorkOn)</td>
+                                <td class="mono nowrap @(AccidentScreenRules.CheckOverdue(row, Clock.Today) ? "is-alarm" : null)" dir="ltr" data-state="check">@AccidentScreenRules.Date(row.NextCheckDue)</td>
+                                <td class="nowrap"><Pill Text="@state.Text" Tone="@state.Tone" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.AccidentNone"]</p>
+                }
+            </div>
+        </div>
+
+        <div class="card card-flush accident-file" data-state="file">
+            @if (_current is { } file)
+            {
+                var summary = AccidentScreenRules.Summary(file, Texts.T, Texts.Culture);
+                <div class="card-pad accident-summary">
+                    <p class="strong text-full" data-state="summary">@summary</p>
+                    <p class="small muted text-full" data-state="circumstances">@file.Request.Circumstances</p>
+                </div>
+                <div class="accident-tables">
+                    <div class="table-scroll">
+                        <table class="grid" data-grid="accident-events">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Field.Date"]</th>
+                                    <th>@Texts["Accident.Event"]</th>
+                                    <th>@Texts["Accident.EventText"]</th>
+                                    <th>@Texts["Accident.EventBy"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var e in file.Events)
+                                {
+                                    var what = AccidentScreenRules.EventKind(e, Texts.T);
+                                    <tr>
+                                        <td class="mono nowrap" dir="ltr">@AccidentScreenRules.Date(e.On)</td>
+                                        <td class="small"><span class="list-name" title="@what">@what</span></td>
+                                        <td class="small"><span class="text-full" title="@e.Text">@e.Text</span></td>
+                                        <td class="small"><span class="list-name" title="@e.By">@e.By</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="grid grid-select" data-grid="accident-checks">
+                            <thead>
+                                <tr>
+                                    <th>@Texts["Accident.Serology"]</th>
+                                    <th>@Texts["Deadline.DueOn"]</th>
+                                    <th>@Texts["Accident.DoneOn"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in file.Checks)
+                                {
+                                    <tr class="@(c.CheckId == _checkId ? "is-selected" : null)" data-row="@c.Label" @onclick="() => _checkId = c.CheckId">
+                                        <td><span class="list-name" title="@c.Label">@c.Label</span></td>
+                                        <td class="mono nowrap @(c.DoneOn is null && c.DueOn < Clock.Today ? "is-alarm" : null)" dir="ltr">@AccidentScreenRules.Date(c.DueOn)</td>
+                                        <td class="mono nowrap" dir="ltr">@PersonnelScreenRules.DateOrDash(c.DoneOn)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (file.Checks.Count == 0)
+                        {
+                            <p class="muted small card-pad" data-state="no-check">@Texts["Web.AccidentNoCheck"]</p>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="muted small card-pad" data-state="no-file">@Texts["Web.AccidentSelect"]</p>
+            }
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Accident.Edit" Hidden="@(!MayDeclare)" Disabled="@(!actions.Edit || _busy)" OnClick="() => AskEditAsync(_current)" />
+            <ActionButton Key="Accident.Declaration" Disabled="@(!actions.Declaration || _busy)" OnClick="DeclarationAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Accident.Stoppage" Disabled="@(!actions.Stoppage || _busy)" OnClick="() => Ask(Prompt.Stoppage)" />
+            <ActionButton Key="Accident.Return" Disabled="@(!actions.Return || _busy)" OnClick="() => Ask(Prompt.Return)" />
+            <ActionButton Key="Accident.Log" Disabled="@(!actions.Log || _busy)" OnClick="() => Ask(Prompt.Log)" />
+            <ActionButton Key="Accident.CheckDone" Disabled="@(!actions.CheckDone || _busy)" OnClick="AskCheckDone" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Accident.Close" Hidden="@(!MayDeclare)" Disabled="@(!actions.Close || _busy)" OnClick="() => Ask(Prompt.Close)" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Accident.New" Primary="true" Hidden="@(!MayDeclare)" Disabled="@(!actions.New || _busy)" OnClick="() => AskEditAsync(null)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Edit when _people is { } people:
+        <AccidentDialog People="people" Detail="_editing" LastInsurer="@_lastInsurer" Now="Now" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                        Busy="_busy" OnSave="SaveAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Stoppage when _current is { } shown:
+        <AccidentStoppageDialog Accident="shown" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                                OnSave="StoppageAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Return when _current is { } shown:
+        {
+            var (value, min) = AccidentScreenRules.ReturnDefaults(shown);
+            <AccidentDateDialog Name="accident-return" TitleKey="Accident.Return" Subtitle="@shown.Number" LabelKey="Accident.ReturnedOn"
+                                Value="value" Min="min" BeforeKey="Accident_ReturnBeforeAccident" AfterKey="Accident_ReturnInFuture"
+                                Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="ReturnAsync" OnCancel="ClosePrompt" />
+        }
+        break;
+
+    case Prompt.CheckDone when _current is { } shown && _marking is { } check:
+        <AccidentDateDialog Name="accident-check" TitleKey="Accident.CheckDone" Subtitle="@($"{shown.Number} — {check.Label}")" LabelKey="Accident.DoneOn"
+                            Value="Clock.Today" Min="DateOnly.FromDateTime(shown.Request.OccurredAt)" Max="Clock.Today" NoticeKey="Accident.CheckNotice"
+                            BeforeKey="Accident_CheckBeforeAccident" AfterKey="Accident_CheckInFuture"
+                            Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="CheckDoneAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Log when _current is { } shown:
+        <AccidentLogDialog Number="@shown.Number" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                           OnSave="LogAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Close when _current is { } shown:
+        <TextPrompt Name="accident-close" Title="@AccidentScreenRules.CloseTitle(shown, Texts.T)" Prompt="@Texts["Accident.ClosePrompt"]"
+                    MaxLength="AccidentScreenRules.NoteMaxLength" Multiline="true" Refusal="@_dialogRefusal" OnConfirm="CloseAsync" OnCancel="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, Edit, Stoppage, Return, CheckDone, Log, Close }
+
+    private IReadOnlyList<AccidentRow> _rows = [];
+    private int _year;
+    private Guid? _selectedId;
+    private AccidentDetail? _current;
+    private Guid? _checkId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private IReadOnlyList<EmployeeRow>? _people;
+    private AccidentDetail? _editing;
+    private string? _lastInsurer;
+    private SerologyCheckRow? _marking;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    /// <summary>The laboratory's time, as the 48 hours of the declaration are counted.</summary>
+    private DateTime Now => Clock.Now.LocalDateTime;
+
+    private bool MayDeclare => Context.User.Has(Permissions.HumanResources.Accidents);
+
+    private AccidentActions Actions => AccidentScreenRules.Actions(_current, Context.User.Has);
+
+    protected override Task OnInitializedAsync()
+    {
+        _year = Clock.Today.Year;
+        return ReloadAsync(null);
+    }
+
+    /// <summary>The year's accidents read again, the file asked for kept (else the one shown, else the first).</summary>
+    private async Task ReloadAsync(Guid? select)
+    {
+        try
+        {
+            var year = _year;
+            var rows = await Scopes.RunAsync<AccidentService, Result<IReadOnlyList<AccidentRow>>>(s => s.GetAccidentsAsync(year));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _selectedId = _rows.FirstOrDefault(r => r.AccidentId == select)?.AccidentId ?? _rows.FirstOrDefault()?.AccidentId;
+            await LoadFileAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the work accidents failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadFileAsync()
+    {
+        _current = null;
+        if (_selectedId is not { } id) return;
+        var detail = await Scopes.RunAsync<AccidentService, Result<AccidentDetail>>(s => s.GetAsync(id));
+        if (detail.IsFailure)
+        {
+            _status = (Texts.Describe(detail.Errors), "critical");
+            return;
+        }
+
+        _current = detail.Value;
+        if (_current.Checks.All(c => c.CheckId != _checkId)) _checkId = null;
+    }
+
+    private async Task YearChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var year)) _year = year;
+        await RunAsync(() => ReloadAsync(null));
+    }
+
+    private Task SelectAsync(Guid id)
+    {
+        if (id == _selectedId) return Task.CompletedTask;
+        _selectedId = id;
+        _checkId = null;
+        return RunAsync(LoadFileAsync);
+    }
+
+    private Task EditOnDoubleClickAsync() => Actions.Edit ? AskEditAsync(_current) : Task.CompletedTask;
+
+    // ---- Declaring and completing --------------------------------------------------------------------
+
+    /// <summary>Whoever serves a notice is still on the staff: a departure recorded ahead does not hide them.</summary>
+    private Task AskEditAsync(AccidentDetail? detail) =>
+        RunAsync(async () =>
+        {
+            if (detail is null ? !Actions.New : !Actions.Edit) return;
+            var people = await Scopes.RunAsync<AccidentService, Result<IReadOnlyList<EmployeeRow>>>(s => s.GetEmployeesAsync());
+            if (people.IsFailure)
+            {
+                _status = (Texts.Describe(people.Errors), "critical");
+                return;
+            }
+
+            var choices = AccidentScreenRules.Declarable(people.Value, Clock.Today, detail?.Request.EmployeeId);
+            if (choices.Count == 0)
+            {
+                _status = (Texts["Leave_NoEmployees"], "abnormal");
+                return;
+            }
+
+            _lastInsurer = detail is null ? await Scopes.RunAsync<AccidentService, string?>(s => s.LastInsurerAsync()) : null;
+            _people = choices;
+            _editing = detail;
+            Ask(Prompt.Edit);
+        });
+
+    private Task SaveAsync(AccidentRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<AccidentService, Result<Guid>>(s => s.SaveAsync(request));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.FirstError, saved.Errors);
+                return;
+            }
+
+            var created = request.AccidentId is null;
+            ClosePrompt();
+            await ReloadAsync(saved.Value);
+            _status = (Texts.T(created ? "Web.AccidentDeclared" : "Web.AccidentSaved", _current?.Number ?? string.Empty), "normal");
+        });
+
+    // ---- The steps of the file ------------------------------------------------------------------------
+
+    private Task StoppageAsync((DateOnly From, DateOnly To, bool Relapse) stoppage) =>
+        Step(id => s => s.AddStoppageAsync(id, stoppage.From, stoppage.To, stoppage.Relapse), "Web.AccidentStoppageRecorded");
+
+    private Task ReturnAsync(DateOnly on) =>
+        Step(id => s => s.RecordReturnAsync(id, on), "Web.AccidentReturnRecorded");
+
+    private Task LogAsync((AccidentEventKind Kind, string? Text) entry) =>
+        Step(id => s => s.LogAsync(id, entry.Kind, entry.Text), "Web.AccidentLogged");
+
+    private void AskCheckDone()
+    {
+        if (_busy || _current is not { } file || !Actions.CheckDone) return;
+        _marking = AccidentScreenRules.CheckToMark(file, _checkId);
+        if (_marking is null) return;
+        Ask(Prompt.CheckDone);
+    }
+
+    private Task CheckDoneAsync(DateOnly on)
+    {
+        var check = _marking;
+        return check is null ? Task.CompletedTask : Step(id => s => s.MarkCheckDoneAsync(id, check.CheckId, on), "Web.AccidentCheckRecorded");
+    }
+
+    private Task CloseAsync(string note) =>
+        Step(id => s => s.CloseAsync(id, string.IsNullOrWhiteSpace(note) ? null : note.Trim()), "Web.AccidentClosed");
+
+    /// <summary>A step on the file shown; its refusal beside its box, the file read again once done.</summary>
+    private Task Step(Func<Guid, Func<AccidentService, Task<Result>>> step, string doneKey) =>
+        RunAsync(async () =>
+        {
+            if (_current is not { Request.AccidentId: { } id } file) return;
+            var done = await Scopes.RunAsync(step(id));
+            if (done.IsFailure)
+            {
+                Refuse(done.FirstError, done.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await ReloadAsync(id);
+            _status = (Texts.T(doneKey, file.Number), "normal");
+        });
+
+    // ---- The documents -------------------------------------------------------------------------------
+
+    private Task DeclarationAsync() =>
+        RunAsync(async () =>
+        {
+            if (_current is not { Request.AccidentId: { } id } file || !Actions.Declaration) return;
+            var document = await Scopes.RunAsync<AccidentService, Result<AccidentDeclarationDocument>>(s => s.GetDeclarationAsync(id));
+            if (document.IsFailure)
+            {
+                _status = (Texts.Describe(document.Errors), "critical");
+                return;
+            }
+
+            await DownloadAsync(AccidentScreenRules.DeclarationFileName(file), Renderer.RenderDeclaration(document.Value));
+        });
+
+    private Task RegisterAsync() =>
+        RunAsync(async () =>
+        {
+            var year = _year;
+            var document = await Scopes.RunAsync<AccidentService, Result<AccidentReportDocument>>(s => s.GetReportAsync(year));
+            if (document.IsFailure)
+            {
+                _status = (Texts.Describe(document.Errors), "critical");
+                return;
+            }
+
+            await DownloadAsync(AccidentScreenRules.RegisterFileName(year), Renderer.RenderReport(document.Value));
+        });
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private async Task DownloadAsync(string fileName, byte[] pdf)
+    {
+        await JS.InvokeVoidAsync("marocLis.download", fileName, "application/pdf", pdf);
+        _status = (Texts.T("Web.DocDownloaded", fileName), "normal");
+    }
+
+    private void Ask(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(Error first, IEnumerable<Error> errors)
+    {
+        var field = _prompt == Prompt.Close ? null : AccidentScreenRules.FieldOf(first.ResourceKey);
+        _fieldRefusal = field is null ? null : FieldRefusal.Of(field, first);
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A work-accident operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _people = null;
+        _editing = null;
+        _marking = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

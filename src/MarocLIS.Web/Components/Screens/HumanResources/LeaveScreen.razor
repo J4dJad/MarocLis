@@ -1,0 +1,388 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<LeaveScreen> Logger
+
+@*
+    « Congés et absences », the workstation's LeaveView: the requests of the year, waiting ones first,
+    with who else in the same department is away on those days, and the decisions. An employee
+    without an HR right sees and asks for their own leave only (the service's filter). A request is
+    approved, refused with a reason the employee will read, cancelled, its certificate recorded as
+    received; the annual-leave balances and the public holidays open in their windows. What is shown
+    and offered is LeaveScreenRules'; what is done, LeaveService's.
+*@
+<div class="screen leave" data-screen="leave">
+    @{ var actions = Actions; var selected = Selected; }
+    <div class="list-tools">
+        <label class="field-inline">
+            <span class="small">@Texts["Eqa.Year"]</span>
+            <select class="input input-narrow" data-field="leave-year" value="@_year" @onchange="YearChangedAsync">
+                @foreach (var year in LeaveScreenRules.Years(Today))
+                {
+                    <option value="@year">@year</option>
+                }
+            </select>
+        </label>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_pendingOnly ? "is-pressed" : null)" aria-pressed="@(_pendingOnly ? "true" : "false")"
+                    data-filter="pending-only" @onclick="TogglePendingAsync">@Texts["Leave.PendingOnly"]</button>
+        </div>
+        <ActionButton Key="Leave.Balances" Disabled="_busy" OnClick="OpenBalances" />
+        <ActionButton Key="Leave.Holidays" Disabled="_busy" OnClick="OpenHolidays" />
+        <span class="list-tools-end">
+            <span class="muted small text-full" data-state="count">@LeaveScreenRules.Count(_rows, Texts.T)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select leave-grid" data-grid="leave">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Leave.Type"]</th>
+                            <th>@Texts["Leave.From"]</th>
+                            <th>@Texts["Leave.To"]</th>
+                            <th class="num">@Texts["Leave.Days"]</th>
+                            <th>@Texts["Leave.Proof"]</th>
+                            <th class="num">@Texts["Leave.ColleaguesAway"]</th>
+                            <th>@Texts["Leave.Decision"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var ink = LeaveScreenRules.Ink(row);
+                            var decision = LeaveScreenRules.Decision(row, Texts.T);
+                            <tr class="@(row.LeaveRequestId == selected?.LeaveRequestId ? "is-selected" : null) @(ink == LeaveInk.Closed ? "is-tone-muted" : null)"
+                                data-row="@row.EmployeeNumber" data-status="@row.Status" @onclick="() => _selectedId = row.LeaveRequestId">
+                                <td class="nowrap"><Pill Text="@Texts[$"LeaveStatus.{row.Status}"]" Tone="@LeaveScreenRules.Tone(row.Status)" /></td>
+                                <td>
+                                    <span class="list-name @(ink == LeaveInk.Pending ? "strong" : null)" title="@($"{row.EmployeeNumber} {row.EmployeeName}")">@row.EmployeeName</span>
+                                    <span class="cell-sub cell-wrap"><span class="mono" dir="ltr">@row.EmployeeNumber</span> · @(row.DepartmentName ?? "—")</span>
+                                </td>
+                                <td class="small"><span class="list-name" title="@Texts[$"LeaveType.{row.Type}"]">@Texts[$"LeaveType.{row.Type}"]</span></td>
+                                <td class="mono nowrap" dir="ltr">@LeaveScreenRules.From(row, Texts.T)</td>
+                                <td class="mono nowrap" dir="ltr">@LeaveScreenRules.To(row, Texts.T)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Days(row.Days, Texts.Culture)</td>
+                                <td class="small nowrap @(LeaveScreenRules.ProofMissing(row) ? "critical strong" : null)" data-state="proof">@LeaveScreenRules.Proof(row, Texts.T)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Away(row, Texts.Culture)</td>
+                                <td class="small"><span class="list-name" title="@decision" data-state="decision">@decision</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.LeaveNone"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer text-full @(selected is null ? "muted" : null)" data-state="detail">@(selected is null ? Texts["Web.LeaveSelect"] : LeaveScreenRules.Detail(selected, Texts.T, Texts.Culture))</p>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Leave.Approve" Hidden="@(!MayApprove)" Disabled="@(!actions.Approve || _busy)" OnClick="AskApprove" />
+            <ActionButton Key="Leave.ProofReceived" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Hidden="@(!MayManage)" Disabled="@(!actions.ProofReceived || _busy)" OnClick="AskProof" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="Leave.Refuse" Danger="true" Hidden="@(!MayApprove)" Disabled="@(!actions.Refuse || _busy)" OnClick="AskRefuse" />
+            <ActionButton Key="Leave.Cancel" Hidden="@(!MayRequest)" Disabled="@(!actions.Cancel || _busy)" OnClick="AskCancel" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Leave.New" Primary="true" Hidden="@(!MayRequest)" Disabled="@(!actions.New || _busy)" OnClick="AskNewAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.New when _people is { } people:
+        <LeaveRequestDialog People="people" Own="_own" HrTypes="MayManage" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                            Busy="_busy" OnSave="SubmitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Approve when _target is { } row:
+        <ConfirmPrompt Title="@Texts["Leave.Approve"]" Message="@LeaveScreenRules.ApprovePrompt(row, Texts.T, Texts.Culture)"
+                       OnYes="ApproveAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Proof when _target is { } row:
+        <ConfirmPrompt Title="@Texts["Leave.ProofReceived"]" Message="@LeaveScreenRules.ProofReceivedPrompt(row, Texts.T)"
+                       OnYes="ProofAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Refuse when _target is { } row:
+        <ReasonPrompt Title="@Texts["Leave.Refuse"]" Prompt="@LeaveScreenRules.RefusePrompt(row, Texts.T)"
+                      MaxLength="LeaveScreenRules.ReasonMaxLength" OnConfirm="RefuseAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Cancel when _target is { } row:
+        <TextPrompt Name="leave-cancel" Title="@Texts["Leave.Cancel"]" Prompt="@LeaveScreenRules.CancelPrompt(row, Texts.T)"
+                    MaxLength="LeaveScreenRules.ReasonMaxLength" Refusal="@_dialogRefusal" OnConfirm="CancelAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Balances:
+        <LeaveBalancesDialog OnClose="BalancesClosedAsync" />
+        break;
+
+    case Prompt.Holidays:
+        <HolidaysDialog Year="_year" OnClose="HolidaysClosedAsync" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, New, Approve, Proof, Refuse, Cancel, Balances, Holidays }
+
+    private IReadOnlyList<LeaveRow> _rows = [];
+    private int _year;
+    private bool _pendingOnly;
+    private Guid? _selectedId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private LeaveRow? _target;
+    private IReadOnlyList<LeaveBalanceRow>? _people;
+    private Guid? _own;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private DateOnly Today => Clock.Today;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.Manage);
+
+    private bool MayApprove => Context.User.Has(Permissions.HumanResources.ApproveLeave);
+
+    private bool MayRequest => MayManage || Context.User.Has(Permissions.HumanResources.RequestLeave);
+
+    /// <summary>The request highlighted: the one clicked, kept across a reload, else the first.</summary>
+    private LeaveRow? Selected => _rows.FirstOrDefault(r => r.LeaveRequestId == _selectedId) ?? _rows.FirstOrDefault();
+
+    private LeaveActions Actions => LeaveScreenRules.Actions(Selected, Today, Context.User.Has);
+
+    protected override Task OnInitializedAsync()
+    {
+        _year = Today.Year;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var (pending, year) = (_pendingOnly, _year);
+            var rows = await Scopes.RunAsync<LeaveService, Result<IReadOnlyList<LeaveRow>>>(s => s.GetRequestsAsync(pending, year));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the leave requests failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task YearChangedAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var year)) _year = year;
+        await LoadAsync();
+    }
+
+    private async Task TogglePendingAsync()
+    {
+        _pendingOnly = !_pendingOnly;
+        await LoadAsync();
+    }
+
+    // ---- A new request ----------------------------------------------------------------------------
+
+    private Task AskNewAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.New) return;
+            var balances = await Scopes.RunAsync<LeaveService, Result<IReadOnlyList<LeaveBalanceRow>>>(s => s.GetBalancesAsync());
+            if (balances.IsFailure)
+            {
+                _status = (Texts.Describe(balances.Errors), "critical");
+                return;
+            }
+
+            var (own, others) = await Scopes.RunAsync<LeaveService, (Guid?, bool)>(async s => (await s.OwnEmployeeIdAsync(), s.CanActForOthers));
+            var people = LeaveScreenRules.People(balances.Value, others, own);
+            if (people.Count == 0)
+            {
+                // HR acting for others with nobody on file needs another hint than an unlinked account.
+                _status = (Texts[LeaveScreenRules.NobodyKey(others)], "abnormal");
+                return;
+            }
+
+            _own = own;
+            _people = people;
+            Ask(Prompt.New, null);
+        });
+
+    private Task SubmitAsync(LeaveSubmission submission) =>
+        RunAsync(async () =>
+        {
+            var submitted = await Scopes.RunAsync<LeaveService, Result<Guid>>(s => s.SubmitAsync(submission));
+            if (submitted.IsFailure)
+            {
+                Refuse(LeaveScreenRules.FieldOf(submitted.FirstError.ResourceKey) is { } field ? FieldRefusal.Of(field, submitted.FirstError) : null,
+                       submitted.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            _selectedId = submitted.Value;
+            await LoadAsync();
+            _status = (Texts["Web.LeaveSubmitted"], "normal");
+        });
+
+    // ---- The decisions ----------------------------------------------------------------------------
+
+    private void AskApprove()
+    {
+        if (_busy || Selected is not { } row || !Actions.Approve) return;
+        Ask(Prompt.Approve, row);
+    }
+
+    private Task ApproveAsync() =>
+        Decide(s => s.ApproveAsync(_target!.LeaveRequestId, null), "Web.LeaveApproved");
+
+    private void AskProof()
+    {
+        if (_busy || Selected is not { } row || !Actions.ProofReceived) return;
+        Ask(Prompt.Proof, row);
+    }
+
+    private Task ProofAsync() =>
+        Decide(s => s.RecordJustificationReceivedAsync(_target!.LeaveRequestId), "Web.LeaveProofRecorded");
+
+    private void AskRefuse()
+    {
+        if (_busy || Selected is not { } row || !Actions.Refuse) return;
+        Ask(Prompt.Refuse, row);
+    }
+
+    private Task RefuseAsync(string reason) =>
+        Decide(s => s.RefuseAsync(_target!.LeaveRequestId, reason), "Web.LeaveRefused");
+
+    private void AskCancel()
+    {
+        if (_busy || Selected is not { } row || !Actions.Cancel) return;
+        Ask(Prompt.Cancel, row);
+    }
+
+    private Task CancelAsync(string comment) =>
+        Decide(s => s.CancelAsync(_target!.LeaveRequestId, string.IsNullOrWhiteSpace(comment) ? null : comment.Trim()), "Web.LeaveCancelled");
+
+    /// <summary>A decision on the request asked about; the list read again, the request kept selected.</summary>
+    private Task Decide(Func<LeaveService, Task<Result>> decide, string doneKey) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var done = await Scopes.RunAsync<LeaveService, Result>(decide);
+            ClosePrompt();
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            _selectedId = row.LeaveRequestId;
+            await LoadAsync();
+            _status = (Texts.T(doneKey, row.EmployeeName), "normal");
+        });
+
+    // ---- The balances and the holidays -----------------------------------------------------------
+
+    private void OpenBalances()
+    {
+        if (_busy) return;
+        Ask(Prompt.Balances, null);
+    }
+
+    private Task BalancesClosedAsync()
+    {
+        ClosePrompt();
+        return Task.CompletedTask;
+    }
+
+    private void OpenHolidays()
+    {
+        if (_busy) return;
+        Ask(Prompt.Holidays, null);
+    }
+
+    /// <summary>A holiday added or removed recounts the leaves it falls in: the list read again.</summary>
+    private async Task HolidaysClosedAsync(bool changed)
+    {
+        ClosePrompt();
+        if (changed) await LoadAsync();
+    }
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private void Ask(Prompt prompt, LeaveRow? row)
+    {
+        _target = row;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(FieldRefusal? field, IEnumerable<Error> errors)
+    {
+        _fieldRefusal = field;
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A leave operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _target = null;
+        _people = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

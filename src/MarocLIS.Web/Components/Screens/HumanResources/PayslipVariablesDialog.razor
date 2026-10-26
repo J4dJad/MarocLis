@@ -1,0 +1,117 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+
+@*
+    The month's variables of one payslip, the workstation's PayslipVariablesDialog: the unpaid days
+    typed by hand (those from the leave are taken again at each update), the overtime, the bonus and
+    allowances, the deductions and a note; the payslip as it stands is shown under them. A value that
+    is no number, or a negative one, is refused beside its box.
+*@
+<Modal Name="payroll-variables" Title="@Texts["Payroll.Variables"]" Hint="@PayrollScreenRules.Who(Row)" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            @foreach (var (key, field) in Boxes)
+            {
+                <label class="field">
+                    <span class="field-label text-full">@Texts[key]</span>
+                    <input class="input mono num @Refused(field)" type="text" inputmode="decimal" autocomplete="off" dir="ltr"
+                           maxlength="@PayrollScreenRules.AmountMaxLength" data-field="@field" value="@Get(field)" @onchange="e => Set(field, e.Value as string)" />
+                    <FieldMessage Refusal="Shown" Field="@field" />
+                </label>
+            }
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@PayrollScreenRules.NoteMaxLength"
+                       data-field="@PayrollScreenRules.NoteField" title="@_form.Note" @bind="_form.Note" @bind:event="oninput" />
+            </label>
+            <p class="field-span-all small muted text-full" data-state="current">@PayrollScreenRules.CurrentResult(Row, Texts.T, Dh, Texts.Culture, "Web.Payroll")</p>
+            <p class="field-span-all message is-info small text-full" data-state="variables-notice">@Texts["Payroll.VariablesNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public PayslipRow Row { get; set; } = null!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<PayslipVariables> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private static readonly (string Key, string Field)[] Boxes =
+    [
+        ("Payroll.ManualAbsenceDays", PayrollScreenRules.ManualAbsenceField),
+        ("Payroll.Overtime25", PayrollScreenRules.Overtime25Field),
+        ("Payroll.Overtime50", PayrollScreenRules.Overtime50Field),
+        ("Payroll.Overtime100", PayrollScreenRules.Overtime100Field),
+        ("Payroll.TaxableBonus", PayrollScreenRules.BonusField),
+        ("Payroll.Transport", PayrollScreenRules.TransportField),
+        ("Payroll.OtherExempt", PayrollScreenRules.ExemptField),
+        ("Payroll.Advance", PayrollScreenRules.AdvanceField),
+        ("Payroll.OtherDeduction", PayrollScreenRules.OtherDeductionField)
+    ];
+
+    private PayslipVariablesForm _form = new();
+    private FieldRefusal? _checked;
+
+    /// <summary>The refusal shown: this form's own check, else the service's.</summary>
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    private string Dh(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override void OnInitialized() => _form = PayrollScreenRules.FormFor(Row.Variables);
+
+    protected override void OnParametersSet()
+    {
+        // A new refusal from the service replaces the form's own.
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private string? Get(string field) => field switch
+    {
+        PayrollScreenRules.ManualAbsenceField => _form.ManualAbsenceDays,
+        PayrollScreenRules.Overtime25Field => _form.Overtime25,
+        PayrollScreenRules.Overtime50Field => _form.Overtime50,
+        PayrollScreenRules.Overtime100Field => _form.Overtime100,
+        PayrollScreenRules.BonusField => _form.TaxableBonus,
+        PayrollScreenRules.TransportField => _form.Transport,
+        PayrollScreenRules.ExemptField => _form.OtherExempt,
+        PayrollScreenRules.AdvanceField => _form.Advance,
+        _ => _form.OtherDeduction
+    };
+
+    private void Set(string field, string? value)
+    {
+        switch (field)
+        {
+            case PayrollScreenRules.ManualAbsenceField: _form.ManualAbsenceDays = value; break;
+            case PayrollScreenRules.Overtime25Field: _form.Overtime25 = value; break;
+            case PayrollScreenRules.Overtime50Field: _form.Overtime50 = value; break;
+            case PayrollScreenRules.Overtime100Field: _form.Overtime100 = value; break;
+            case PayrollScreenRules.BonusField: _form.TaxableBonus = value; break;
+            case PayrollScreenRules.TransportField: _form.Transport = value; break;
+            case PayrollScreenRules.ExemptField: _form.OtherExempt = value; break;
+            case PayrollScreenRules.AdvanceField: _form.Advance = value; break;
+            default: _form.OtherDeduction = value; break;
+        }
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, variables) = PayrollScreenRules.Check(_form, Row.Variables);
+        _checked = refused;
+        return refused is null ? OnSave.InvokeAsync(variables!) : Task.CompletedTask;
+    }
+}

@@ -1,0 +1,249 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<HolidaysDialog> Logger
+
+@*
+    The public holidays of a year, the workstation's HolidaysDialog. The civil ones are filled in;
+    the religious ones follow the moon and are entered by HR when announced: the leaves a new one
+    falls in are counted again and named, so HR knows whose balance moved.
+*@
+<Modal Name="holidays" Title="@LeaveScreenRules.HolidaysTitle(Year, Texts.T)" Wide="true" OnCancel="CloseAsync">
+    <ChildContent>
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="holidays">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Date"]</th>
+                            <th>@Texts["Holiday.Weekday"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Holiday.Kind"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr class="@(row.HolidayId == Selected?.HolidayId ? "is-selected" : null)" data-row="@row.Date.ToString("yyyy-MM-dd")"
+                                @onclick="() => _selectedId = row.HolidayId">
+                                <td class="mono nowrap" dir="ltr">@LeaveScreenRules.Date(row.Date)</td>
+                                <td class="small nowrap">@LeaveScreenRules.Weekday(row, Texts.T)</td>
+                                <td><span class="list-name" title="@row.Name">@row.Name</span></td>
+                                <td class="small nowrap">@LeaveScreenRules.Kind(row, Texts.T)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.HolidaysNone"]</p>
+                }
+            </div>
+        </div>
+        <p class="small muted text-full" data-state="notice">@Texts["Holiday.Notice"]</p>
+        @if (_status is { } status)
+        {
+            <p class="message @(status.Tone == "critical" ? "is-critical" : "is-info") small text-full" role="status" data-state="status">@status.Text</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Holiday.Remove" Hidden="@(!MayManage)" Disabled="@(Selected is null || _busy)" OnClick="AskRemove" />
+        <ActionButton Key="Holiday.Add" Hidden="@(!MayManage)" Disabled="_busy" OnClick="AskAdd" />
+        <ActionButton Key="Action.Close" OnClick="CloseAsync" />
+    </Footer>
+</Modal>
+
+@if (_adding)
+{
+    var (first, last, _) = LeaveScreenRules.HolidayDates(Year, Clock.Today);
+    <Modal Name="holiday-editor" Title="@Texts["Holiday.Add"]" Hint="@Year.ToString(System.Globalization.CultureInfo.InvariantCulture)" OnCancel="CloseAdd">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Date"]</span>
+                    <input class="input input-date @Refused(LeaveScreenRules.HolidayDateField)" type="date" data-field="@LeaveScreenRules.HolidayDateField"
+                           min="@first.ToString("yyyy-MM-dd")" max="@last.ToString("yyyy-MM-dd")" @bind="_date" @bind:format="yyyy-MM-dd" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@LeaveScreenRules.HolidayDateField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Field.Name"]</span>
+                    <input class="input @Refused(LeaveScreenRules.HolidayNameField)" type="text" autocomplete="off" maxlength="@LeaveScreenRules.HolidayNameMaxLength"
+                           data-field="@LeaveScreenRules.HolidayNameField" title="@_name" @bind="_name" @bind:event="oninput" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@LeaveScreenRules.HolidayNameField" />
+                </label>
+                <label class="field-check field-span-2">
+                    <input type="checkbox" data-field="holiday-religious" @bind="_religious" />
+                    <span>@Texts["Holiday.Religious"]</span>
+                </label>
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="CloseAdd" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="AddAsync" />
+        </Footer>
+    </Modal>
+}
+
+@if (_removing is { } holiday)
+{
+    <ConfirmPrompt Title="@Texts["Holiday.Remove"]" Message="@LeaveScreenRules.RemoveHolidayPrompt(holiday, Texts.T)"
+                   OnYes="RemoveAsync" OnNo="() => _removing = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public int Year { get; set; }
+
+    /// <summary>Closed; true when a holiday was added or removed, so the leaves are read again.</summary>
+    [Parameter] public EventCallback<bool> OnClose { get; set; }
+
+    private IReadOnlyList<HolidayRow> _rows = [];
+    private Guid? _selectedId;
+    private bool _loaded, _busy, _changed;
+    private (string Text, string Tone)? _status;
+
+    private bool _adding;
+    private DateOnly _date;
+    private string? _name, _refusal;
+    private bool _religious = true;
+    private FieldRefusal? _fieldRefusal;
+
+    private HolidayRow? _removing;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.Manage);
+
+    private HolidayRow? Selected => _rows.FirstOrDefault(r => r.HolidayId == _selectedId) ?? _rows.FirstOrDefault();
+
+    private string? Refused(string field) => _fieldRefusal?.Field == field ? "is-refused" : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task CloseAsync() => OnClose.InvokeAsync(_changed);
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var year = Year;
+            var rows = await Scopes.RunAsync<LeaveService, Result<IReadOnlyList<HolidayRow>>>(s => s.GetHolidaysAsync(year));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the public holidays failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void AskAdd()
+    {
+        if (_busy || !MayManage) return;
+        _date = LeaveScreenRules.HolidayDates(Year, Clock.Today).Initial;
+        _name = _refusal = null;
+        _religious = true;
+        _fieldRefusal = null;
+        _adding = true;
+    }
+
+    private void CloseAdd()
+    {
+        _adding = false;
+        _refusal = null;
+        _fieldRefusal = null;
+    }
+
+    private async Task AddAsync()
+    {
+        if (_busy || !_adding) return;
+        if (LeaveScreenRules.CheckHoliday(Year, _date, _name) is { } refused)
+        {
+            _fieldRefusal = refused;
+            _refusal = null;
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (date, name, religious) = (_date, _name!.Trim(), _religious);
+            var done = await Scopes.RunAsync<LeaveService, Result<IReadOnlyList<HolidayRecount>>>(s => s.AddHolidayAsync(date, name, religious));
+            if (done.IsFailure)
+            {
+                var field = LeaveScreenRules.FieldOf(done.FirstError.ResourceKey);
+                _fieldRefusal = field is null ? null : FieldRefusal.Of(field, done.FirstError);
+                _refusal = field is null ? Texts.Describe(done.Errors) : null;
+                return;
+            }
+
+            CloseAdd();
+            _changed = true;
+            await LoadAsync();
+            _selectedId = _rows.FirstOrDefault(r => r.Date == date)?.HolidayId;
+            _status = (LeaveScreenRules.Recounted(done.Value, Texts.T, Texts.Culture) ?? Texts.T("Web.HolidayAdded", name), "normal");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Adding a public holiday failed.");
+            CloseAdd();
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskRemove()
+    {
+        if (_busy || !MayManage || Selected is not { } row) return;
+        _removing = row;
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_busy || _removing is not { } row) return;
+        _busy = true;
+        try
+        {
+            var done = await Scopes.RunAsync<LeaveService, Result>(s => s.RemoveHolidayAsync(row.HolidayId));
+            _removing = null;
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            _changed = true;
+            _selectedId = null;
+            await LoadAsync();
+            _status = (Texts.T("Web.HolidayRemoved", row.Name), "normal");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Removing a public holiday failed.");
+            _removing = null;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

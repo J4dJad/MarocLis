@@ -1,0 +1,49 @@
+@using System.Globalization
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+
+@*
+    « Ouvrir un mois », the workstation's PayrollMonthDialog: the month after the last opened is
+    proposed; a payslip is prepared for each employee in post that month.
+*@
+<Modal Name="payroll-month" Title="@Texts["Payroll.OpenMonth"]" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Payroll.Month"]</span>
+            <input class="input input-date @(FieldRefusal?.Field == PayrollScreenRules.MonthField ? "is-refused" : null)" type="month" dir="ltr"
+                   data-field="@PayrollScreenRules.MonthField" value="@_month.ToString("yyyy-MM", CultureInfo.InvariantCulture)" @onchange="MonthChanged" />
+            <FieldMessage Refusal="FieldRefusal" Field="@PayrollScreenRules.MonthField" />
+        </label>
+        <p class="message is-info small text-full" data-state="open-notice">@Texts["Payroll.OpenNotice"]</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Payroll.OpenMonth" Primary="true" Disabled="Busy" OnClick="() => OnSave.InvokeAsync(_month)" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The month proposed (PayrollScreenRules.NextMonth).</summary>
+    [Parameter] public DateOnly Suggested { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<DateOnly> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _month;
+
+    protected override void OnInitialized() => _month = Suggested;
+
+    private void MonthChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact($"{e.Value}-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var month))
+            _month = month;
+    }
+}

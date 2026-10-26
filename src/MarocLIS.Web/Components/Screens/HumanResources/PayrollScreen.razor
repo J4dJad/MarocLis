@@ -1,0 +1,573 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Desktop.Infrastructure
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject IPayslipRenderer Payslips
+@inject IHrDocumentRenderer Letters
+@inject ILogger<PayrollScreen> Logger
+
+@*
+    « Paie », the workstation's PayrollView: the month's payslips with their days, gross,
+    contributions, tax, net and employer's cost, in dirhams, and what to check on each; the month's
+    variables of a payslip one double click away while the month is a draft; the payslips in PDF,
+    the journal and the CNSS summary; the closing and the reopening (with its reason); once closed,
+    the bank transfer and the month's BDS for DAMANCOM; the year's rates and the état 9421 for
+    Simpl-IR. The whole screen is the salary right's. What is shown and offered is
+    PayrollScreenRules'; what is computed and done, PayrollService's.
+*@
+<div class="screen payroll" data-screen="payroll">
+    @{ var actions = Actions; var selected = Selected; }
+    <div class="list-tools">
+        <label class="field-inline">
+            <span class="small">@Texts["Payroll.Month"]</span>
+            <select class="input input-narrow" data-field="payroll-period" value="@_periodId" disabled="@(_periods.Count == 0)" @onchange="PeriodChangedAsync">
+                @foreach (var period in _periods)
+                {
+                    <option value="@period.PeriodId">@PayrollScreenRules.PeriodCaption(period, Texts.T, Texts.Culture)</option>
+                }
+            </select>
+        </label>
+        @if (_detail is { } shown)
+        {
+            <Pill Text="@Texts[$"PayrollStatus.{shown.Period.Status}"]" Tone="@PayrollScreenRules.Tone(shown.Period.Status)" />
+        }
+        <ActionButton Key="Payroll.OpenMonth" Hidden="@(!actions.Open)" Disabled="_busy" OnClick="AskOpen" />
+        <span class="list-tools-end">
+            <span class="muted small text-full" data-state="count">@PayrollScreenRules.Heading(_detail, Texts.T, Texts.Culture)</span>
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => ReloadAsync(_periodId)" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select payroll-grid" data-grid="payroll">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Personnel.Number"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th class="num">@Texts["Payroll.Days"]</th>
+                            <th class="num">@Texts["Payroll.Base"]</th>
+                            <th class="num">@Texts["Payroll.Gross"]</th>
+                            <th class="num">@Texts["Payroll.Social"]</th>
+                            <th class="num">@Texts["Payroll.IncomeTax"]</th>
+                            <th class="num">@Texts["Payroll.Net"]</th>
+                            <th class="num">@Texts["Payroll.EmployerCost"]</th>
+                            <th>@Texts["Payroll.Alerts"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _detail?.Payslips ?? [])
+                        {
+                            var a = row.Amounts;
+                            var warnings = PayrollScreenRules.Warnings(row, Texts.T);
+                            <tr class="@(row.PayslipId == selected?.PayslipId ? "is-selected" : null)" data-row="@row.Number"
+                                @onclick="() => _payslipId = row.PayslipId" @ondblclick="() => AskVariables(row)">
+                                <td class="mono nowrap" dir="ltr">@row.Number</td>
+                                <td>
+                                    <span class="list-name" title="@row.FullName">@row.FullName</span>
+                                    @if (row.JobTitle is { Length: > 0 } job)
+                                    {
+                                        <span class="cell-sub cell-wrap">@job</span>
+                                    }
+                                </td>
+                                <td class="num mono nowrap">@PayrollScreenRules.Days(a.PaidDays, Texts.Culture)</td>
+                                <td class="num mono nowrap">@Dh(row.BaseSalary)</td>
+                                <td class="num mono nowrap">@Dh(a.Gross)</td>
+                                <td class="num mono nowrap">@Dh(PayrollScreenRules.Social(a))</td>
+                                <td class="num mono nowrap">@Dh(a.IncomeTax)</td>
+                                <td class="num mono nowrap strong" data-state="net">@Dh(a.NetPay)</td>
+                                <td class="num mono nowrap">@Dh(a.EmployerCost)</td>
+                                <td class="small @PayrollScreenRules.WarningTone(row)"><span class="text-full" title="@warnings" data-state="warnings">@warnings</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _detail is null)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Payroll.NoPeriod"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer text-full strong" data-state="totals">@PayrollScreenRules.Totals(_detail, "Web.PayrollTotals", Texts.T, Dh)</p>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Payroll.Payslip" Disabled="@(!actions.Payslip || _busy)" OnClick="() => PrintAsync(single: true)" />
+            <ActionButton Key="Payroll.UpdateFromFiles" Disabled="@(!actions.Update || _busy)" OnClick="UpdateAsync" />
+            <ActionButton Key="@actions.CloseKey" Disabled="@(!actions.Close || _busy)" OnClick="AskCloseOrReopen" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Payroll.AllPayslips" Disabled="@(!actions.AllPayslips || _busy)" OnClick="() => PrintAsync(single: false)" />
+            <ActionButton Key="Payroll.Journal" Disabled="@(!actions.Journal || _busy)" OnClick="() => ExportAsync(cnss: false)" />
+            <ActionButton Key="Payroll.CnssSummary" Disabled="@(!actions.Cnss || _busy)" OnClick="() => ExportAsync(cnss: true)" />
+            <hr class="more-rule" />
+            <ActionButton Key="Payroll.TransferOrder" Glyph="ActionButton.IconOf(TransferKey)" Disabled="@(!actions.Transfer || _busy)" OnClick="() => TransferAsync(file: false)" />
+            <ActionButton Key="Payroll.TransferFile" Glyph="ActionButton.IconOf(TransferKey)" Disabled="@(!actions.Transfer || _busy)" OnClick="() => TransferAsync(file: true)" />
+            <ActionButton Key="Payroll.BdsFile" Disabled="@(!actions.Bds || _busy)" OnClick="AskBds" />
+            <ActionButton Key="Payroll.SimplIr" Disabled="@(!actions.SimplIr || _busy)" OnClick="AskSimplIrAsync" />
+            <hr class="more-rule" />
+            <ActionButton Key="Payroll.Settings" Disabled="@(!actions.Settings || _busy)" OnClick="AskSettingsAsync" />
+        </More>
+        <Primary>
+            <ActionButton Key="Payroll.Variables" Primary="true" Disabled="@(!actions.Variables || _busy)" OnClick="() => AskVariables(Selected)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Open:
+        <PayrollMonthDialog Suggested="PayrollScreenRules.NextMonth(_periods, Clock.Today)" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                            Busy="_busy" OnSave="OpenAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Variables when _variablesOf is { } row:
+        <PayslipVariablesDialog Row="row" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                                OnSave="SaveVariablesAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Close when _detail is { } d:
+        <ConfirmPrompt Title="@Texts["Payroll.Close"]" Message="@PayrollScreenRules.ClosePrompt(d, Texts.T, Texts.Culture)"
+                       OnYes="CloseAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.ReopenReason when _detail is { } d:
+        <ReasonPrompt Title="@Texts["Payroll.Reopen"]" Prompt="@PayrollScreenRules.ReopenPrompt(d, Texts.T, Texts.Culture)"
+                      OnConfirm="AskReopenRates" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.ReopenRates when _detail is { } d:
+        <ConfirmPrompt Title="@Texts["Payroll.Reopen"]" Message="@PayrollScreenRules.ReopenRatesPrompt(d, Texts.T)"
+                       OnYes="() => ReopenAsync(true)" OnNo="() => ReopenAsync(false)" />
+        break;
+
+    case Prompt.Settings when _parameters is { } parameters:
+        <PayrollParametersDialog Parameters="parameters" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                                 OnSave="SaveSettingsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.SimplIr when _codes is { } codes:
+        <SimplIrDialog Year="PayrollScreenRules.SimplIrYear(Clock.Today)" Remembered="codes" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                       Busy="_busy" OnSave="SimplIrAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Bds when _detail is { } d:
+        <BdsDialog Month="@PayrollScreenRules.MonthName(d.Period.Year, d.Period.Month, Texts.Culture)" Refusal="@_dialogRefusal"
+                   FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="BdsAsync" OnCancel="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, Open, Variables, Close, ReopenReason, ReopenRates, Settings, SimplIr, Bds }
+
+    private const string TransferKey = "Payroll.Transfer";
+
+    /// <summary>The key under which this browser keeps the Simpl-IR codes typed last, as the workstation keeps them for its Windows account.</summary>
+    private const string SimplIrStoreKey = "maroclis.simplir-codes";
+
+    private IReadOnlyList<PayrollPeriodRow> _periods = [];
+    private Guid? _periodId;
+    private PayrollPeriodDetail? _detail;
+    private Guid? _payslipId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private PayslipRow? _variablesOf;
+    private string? _reopenReason;
+    private PayrollParameters? _parameters;
+    private int _parametersYear;
+    private SimplIrCodes? _codes;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private PayslipRow? Selected => _detail?.Payslips.FirstOrDefault(p => p.PayslipId == _payslipId) ?? _detail?.Payslips.FirstOrDefault();
+
+    private PayrollActions Actions => PayrollScreenRules.Actions(_detail, Selected is not null, Context.User.Has);
+
+    /// <summary>An amount in dirhams, as the other screens of the web write them.</summary>
+    private string Dh(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override Task OnInitializedAsync() => ReloadAsync(null);
+
+    /// <summary>The months read again, the one asked for shown (else the one shown, else the latest).</summary>
+    private async Task ReloadAsync(Guid? select)
+    {
+        try
+        {
+            var periods = await Scopes.RunAsync<PayrollService, Result<IReadOnlyList<PayrollPeriodRow>>>(s => s.GetPeriodsAsync());
+            if (periods.IsFailure)
+            {
+                _status = (Texts.Describe(periods.Errors), "critical");
+                return;
+            }
+
+            _periods = periods.Value;
+            _periodId = _periods.FirstOrDefault(p => p.PeriodId == select)?.PeriodId ?? _periods.FirstOrDefault()?.PeriodId;
+            await LoadPeriodAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the payroll failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadPeriodAsync()
+    {
+        _detail = null;
+        if (_periodId is not { } id) return;
+        var detail = await Scopes.RunAsync<PayrollService, Result<PayrollPeriodDetail>>(s => s.GetPeriodAsync(id));
+        if (detail.IsFailure)
+        {
+            _status = (Texts.Describe(detail.Errors), "critical");
+            return;
+        }
+
+        _detail = detail.Value;
+    }
+
+    private async Task PeriodChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value as string, out var id)) return;
+        _periodId = id;
+        _payslipId = null;
+        await RunAsync(LoadPeriodAsync);
+    }
+
+    // ---- The month ---------------------------------------------------------------------------------
+
+    private void AskOpen()
+    {
+        if (_busy || !Actions.Open) return;
+        Ask(Prompt.Open);
+    }
+
+    private Task OpenAsync(DateOnly month) =>
+        RunAsync(async () =>
+        {
+            var opened = await Scopes.RunAsync<PayrollService, Result<Guid>>(s => s.OpenAsync(month.Year, month.Month));
+            if (opened.IsFailure)
+            {
+                Refuse(opened.FirstError, opened.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await ReloadAsync(opened.Value);
+            _status = (Texts.T("Web.PayrollOpened", PayrollScreenRules.MonthName(month.Year, month.Month, Texts.Culture)), "normal");
+        });
+
+    private Task UpdateAsync() =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d || !Actions.Update) return;
+            var done = await Scopes.RunAsync<PayrollService, Result<int>>(s => s.RefreshAsync(d.Period.PeriodId));
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            await ReloadAsync(d.Period.PeriodId);
+            _status = (Texts.T("Payroll.Updated", done.Value), "normal");
+        });
+
+    private void AskCloseOrReopen()
+    {
+        if (_busy || _detail is not { } d || !Actions.Close) return;
+        Ask(d.Period.Status == PayrollStatus.Draft ? Prompt.Close : Prompt.ReopenReason);
+    }
+
+    private Task CloseAsync() =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d) return;
+            ClosePrompt();
+            var done = await Scopes.RunAsync<PayrollService, Result>(s => s.CloseAsync(d.Period.PeriodId));
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            await ReloadAsync(d.Period.PeriodId);
+            _status = (Texts.T("Web.PayrollClosed", PayrollScreenRules.MonthName(d.Period.Year, d.Period.Month, Texts.Culture)), "normal");
+        });
+
+    /// <summary>The reason given; then whether the year's current rates are taken (« Non » by default).</summary>
+    private void AskReopenRates(string reason)
+    {
+        _reopenReason = reason;
+        _prompt = Prompt.ReopenRates;
+    }
+
+    private Task ReopenAsync(bool currentRates) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d || _reopenReason is not { } reason) return;
+            ClosePrompt();
+            var done = await Scopes.RunAsync<PayrollService, Result>(s => s.ReopenAsync(d.Period.PeriodId, reason, currentRates));
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            await ReloadAsync(d.Period.PeriodId);
+            _status = (Texts.T("Web.PayrollReopened", PayrollScreenRules.MonthName(d.Period.Year, d.Period.Month, Texts.Culture)), "normal");
+        });
+
+    // ---- The variables -----------------------------------------------------------------------------
+
+    private void AskVariables(PayslipRow? row)
+    {
+        if (_busy || row is null) return;
+        _payslipId = row.PayslipId;
+        if (!Actions.Variables) return;
+        _variablesOf = row;
+        Ask(Prompt.Variables);
+    }
+
+    private Task SaveVariablesAsync(PayslipVariables variables) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d || _variablesOf is not { } row) return;
+            var saved = await Scopes.RunAsync<PayrollService, Result>(s => s.UpdateVariablesAsync(d.Period.PeriodId, row.PayslipId, variables));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.FirstError, saved.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadPeriodAsync();
+            _status = (Texts.T("Web.PayrollVariablesSaved", row.FullName), "normal");
+        });
+
+    // ---- The documents and the files -------------------------------------------------------------
+
+    private Task PrintAsync(bool single) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d) return;
+            var only = single ? Selected : null;
+            if (single && only is null) return;
+            var docs = await Scopes.RunAsync<PayrollService, Result<IReadOnlyList<PayslipDocument>>>(s => s.GetDocumentsAsync(d.Period.PeriodId, only?.PayslipId));
+            if (docs.IsFailure)
+            {
+                _status = (Texts.Describe(docs.Errors), "critical");
+                return;
+            }
+
+            await DownloadAsync(PayrollScreenRules.PayslipsFileName(d.Period, only), "application/pdf", Payslips.Render(docs.Value));
+        });
+
+    private Task ExportAsync(bool cnss) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d) return;
+            var id = d.Period.PeriodId;
+            var file = await Scopes.RunAsync<PayrollService, Result<byte[]>>(s => cnss ? s.ExportCnssAsync(id) : s.ExportJournalAsync(id));
+            if (file.IsFailure)
+            {
+                _status = (Texts.Describe(file.Errors), "critical");
+                return;
+            }
+
+            await DownloadAsync(cnss ? PayrollScreenRules.CnssFileName(d.Period) : PayrollScreenRules.JournalFileName(d.Period), "text/csv", file.Value);
+        });
+
+    /// <summary>Only a closed month goes to the bank: the order to sign (PDF) or the file for the bank (CSV).</summary>
+    private Task TransferAsync(bool file) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d || !Actions.Transfer) return;
+            var id = d.Period.PeriodId;
+            if (file)
+            {
+                var csv = await Scopes.RunAsync<PayrollService, Result<byte[]>>(s => s.ExportTransferAsync(id));
+                if (csv.IsFailure)
+                {
+                    _status = (Texts.Describe(csv.Errors), "critical");
+                    return;
+                }
+
+                await DownloadAsync(PayrollScreenRules.TransferFileName(d.Period), "text/csv", csv.Value);
+                return;
+            }
+
+            var order = await Scopes.RunAsync<PayrollService, Result<TransferOrder>>(s => s.GetTransferOrderAsync(id));
+            if (order.IsFailure)
+            {
+                _status = (Texts.Describe(order.Errors), "critical");
+                return;
+            }
+
+            await DownloadAsync(PayrollScreenRules.TransferOrderFileName(d.Period), "application/pdf", Letters.RenderTransferOrder(order.Value));
+        });
+
+    private void AskBds()
+    {
+        if (_busy || !Actions.Bds) return;
+        Ask(Prompt.Bds);
+    }
+
+    /// <summary>The month's BDS built from the préétabli DAMANCOM issued, handed under the name DAMANCOM expects.</summary>
+    private Task BdsAsync(byte[] preestablished) =>
+        RunAsync(async () =>
+        {
+            if (_detail is not { } d) return;
+            var built = await Scopes.RunAsync<PayrollService, Result<PayrollExportFile>>(s => s.ExportBdsAsync(d.Period.PeriodId, preestablished));
+            if (built.IsFailure)
+            {
+                Refuse(built.FirstError, built.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await DownloadAsync(built.Value.FileName, "text/plain", built.Value.Content);
+            _status = (PayrollScreenRules.BdsSaved(built.Value, Texts.T), "normal");
+        });
+
+    /// <summary>The year's état 9421: the codes typed last in this browser offered again.</summary>
+    private Task AskSimplIrAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.SimplIr) return;
+            SimplIrCodes? stored = null;
+            try
+            {
+                if (await JS.InvokeAsync<string?>("marocLis.recall", SimplIrStoreKey) is { Length: > 0 } json)
+                    stored = System.Text.Json.JsonSerializer.Deserialize<SimplIrCodes>(json);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // A damaged value only costs the codes typed last time.
+            }
+
+            _codes = PayrollScreenRules.Remembered(stored);
+            Ask(Prompt.SimplIr);
+        });
+
+    private Task SimplIrAsync((int Year, SimplIrCodes Codes) asked) =>
+        RunAsync(async () =>
+        {
+            await JS.InvokeVoidAsync("marocLis.store", SimplIrStoreKey, System.Text.Json.JsonSerializer.Serialize(asked.Codes));
+            var built = await Scopes.RunAsync<PayrollService, Result<PayrollExportFile>>(s => s.ExportSimplIrAsync(asked.Year, asked.Codes));
+            if (built.IsFailure)
+            {
+                Refuse(built.FirstError, built.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await DownloadAsync(built.Value.FileName, "application/xml", built.Value.Content);
+            _status = (PayrollScreenRules.SimplIrSaved(built.Value, Texts.T), "normal");
+        });
+
+    // ---- The year's rates --------------------------------------------------------------------------
+
+    private Task AskSettingsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Settings) return;
+            var year = _detail?.Period.Year ?? Clock.Today.Year;
+            var current = await Scopes.RunAsync<PayrollService, Result<PayrollParameters>>(s => s.GetParametersAsync(year));
+            if (current.IsFailure)
+            {
+                _status = (Texts.Describe(current.Errors), "critical");
+                return;
+            }
+
+            _parameters = current.Value;
+            _parametersYear = year;
+            Ask(Prompt.Settings);
+        });
+
+    private Task SaveSettingsAsync((decimal[] Values, string Scale) typed) =>
+        RunAsync(async () =>
+        {
+            var year = _parametersYear;
+            var saved = await Scopes.RunAsync<PayrollService, Result>(s => s.SaveParametersAsync(year, p => PayrollScreenRules.Apply(p, typed.Values, typed.Scale)));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.FirstError, saved.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadPeriodAsync();
+            _status = (Texts.T("Web.PayrollRatesSaved", year), "normal");
+        });
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private async Task DownloadAsync(string fileName, string contentType, byte[] bytes)
+    {
+        await JS.InvokeVoidAsync("marocLis.download", fileName, contentType, bytes);
+        _status = (Texts.T("Web.DocDownloaded", fileName), "normal");
+    }
+
+    private void Ask(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(Error first, IEnumerable<Error> errors)
+    {
+        var field = PayrollScreenRules.FieldOf(first.ResourceKey);
+        _fieldRefusal = field is null ? null : FieldRefusal.Of(field, first);
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A payroll operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _variablesOf = null;
+        _reopenReason = null;
+        _parameters = null;
+        _codes = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

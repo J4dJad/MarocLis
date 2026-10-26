@@ -1,0 +1,450 @@
+@using System.Globalization
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<PlanningScreen> Logger
+
+@*
+    « Planning », the workstation's PlanningView: the month's grid, one line per person and one
+    column per day, with the leave and the holidays where they fall and the posts in their ink; the
+    points the checks raise below it (a click takes the grid to the person and the day). Days are
+    selected as in the workstation's grid: a click, Ctrl+click to add one, Shift+click for a block;
+    a double click assigns a post, Delete clears the posts selected. The grid scrolls sideways in
+    its own box, the names staying in view. What is shown is PlanningScreenRules'; what is done,
+    PlanningService's.
+*@
+<div class="screen planning" data-screen="planning">
+    @{ var selected = SelectedDays; var actions = PlanningScreenRules.Actions(selected, Context.User.Has); }
+    <div class="list-tools">
+        <ActionButton Key="Planning.PreviousMonth" Disabled="_busy" OnClick="() => MoveAsync(-1)" />
+        <strong class="planning-month nowrap" data-state="month">@PlanningScreenRules.MonthLabel(_month, Texts.Culture)</strong>
+        <ActionButton Key="Planning.NextMonth" Disabled="_busy" OnClick="() => MoveAsync(1)" />
+        <span class="list-tools-end">
+            @if (_data is { } counted)
+            {
+                <span class="muted small text-full" data-state="count">@PlanningScreenRules.Count(counted, Texts.T)</span>
+            }
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single planning-body">
+        <div class="card card-flush planning-card">
+            @if (_refused is { Length: > 0 } refused)
+            {
+                <p class="message is-warning small text-full planning-refused" role="alert" data-state="refused">@refused</p>
+            }
+            <div class="planning-scroll" tabindex="0" data-grid-box="planning" @onkeydown="KeyAsync">
+                <table class="grid planning-grid" data-grid="planning">
+                    <thead>
+                        <tr>
+                            <th class="planning-name">@Texts["Field.Name"]</th>
+                            <th class="planning-hours num">@Texts["Planning.Hours"]</th>
+                            @foreach (var date in _dates)
+                            {
+                                var (day, number) = PlanningScreenRules.DayHeader(date, Texts.T);
+                                <th class="planning-day @(_data is { } m && PlanningScreenRules.IsDayOff(date, m.Holidays) ? "is-off" : null)"
+                                    title="@($"{Texts[$"Weekday.{date.DayOfWeek}"]} {LeaveScreenRules.Date(date)}")">
+                                    <span class="planning-day-name">@day</span>
+                                    <span class="mono">@number</span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr data-row="@line.Employee.Number">
+                                <th scope="row" class="planning-name"><span class="list-name" dir="auto" title="@line.Name">@line.Name</span></th>
+                                <td class="planning-hours num mono">@line.Hours</td>
+                                @foreach (var day in line.Days)
+                                {
+                                    var key = (day.Employee.EmployeeId, day.Date);
+                                    <td class="planning-cell @InkClass(day) @(PlanningScreenRules.Shaded(day) ? "is-off" : null) @(_selection.Contains(key) ? "is-picked" : null)"
+                                        data-cell="@($"{line.Employee.Number}-{day.Date.Day}")" data-ink="@PlanningScreenRules.Ink(day)"
+                                        title="@PlanningScreenRules.Detail([day], Texts.T)"
+                                        @onclick="e => Pick(day, e)" @ondblclick="() => AssignFrom(day)">@PlanningScreenRules.Code(day, Texts.T)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _lines.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.PlanningNone"]</p>
+                }
+            </div>
+            <p class="card-pad small muted text-full planning-legend" data-state="legend">@Texts["Planning.Legend"]</p>
+            <p class="card-pad small grid-footer text-full @(selected.Count == 0 ? "muted" : null)" data-state="detail">@PlanningScreenRules.Detail(selected, Texts.T)</p>
+        </div>
+
+        <div class="card card-flush planning-issues">
+            <div class="card-heading card-pad">
+                <h2 class="card-title">@Texts["Planning.Issue"]</h2>
+                <span class="muted small" data-state="issues-count">@((_data?.Issues.Count ?? 0).ToString(Texts.Culture))</span>
+            </div>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="planning-issues">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Date"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Planning.Issue"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var issue in _data?.Issues ?? [])
+                        {
+                            var text = PlanningScreenRules.IssueText(issue, Texts.T, Texts.Culture);
+                            <tr class="@(PlanningScreenRules.IsCritical(issue) ? "critical" : "abnormal")" data-issue="@issue.Kind" @onclick="() => LocateAsync(issue)">
+                                <td class="mono nowrap" dir="ltr">@LeaveScreenRules.Date(issue.Date)</td>
+                                <td class="nowrap"><span class="list-name" title="@(issue.EmployeeName ?? "—")">@(issue.EmployeeName ?? "—")</span></td>
+                                <td><span class="text-full" title="@text">@text</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_data is { Issues.Count: 0 })
+                {
+                    <p class="muted small card-pad" data-state="issues-empty">@Texts["Web.PlanningNoIssue"]</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Planning.CopyWeek" Hidden="@(!MayManage)" Disabled="@(!actions.CopyWeek || _busy)" OnClick="AskCopyWeek" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="Planning.Clear" Hidden="@(!MayManage)" Disabled="@(!actions.Clear || _busy)" OnClick="AskClear" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Planning.Assign" Primary="true" Hidden="@(!MayManage)" Disabled="@(!actions.Assign || _busy)" OnClick="AskAssign" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Assign when _assigning is { Count: > 0 } days:
+        <ShiftDialog Subtitle="@PlanningScreenRules.AssignSubtitle(days, Texts.T)" Current="PlanningScreenRules.Current(days)"
+                     Busy="_busy" OnSave="AssignAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Clear when _clearing is { Count: > 0 } shifts:
+        <ConfirmPrompt Title="@Texts["Planning.Clear"]" Message="@Texts.T("Planning.ClearPrompt", shifts.Count)"
+                       OnYes="ClearAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.CopyWeek when _copyDay is { } day:
+        <ConfirmPrompt Title="@Texts["Planning.CopyWeek"]" Message="@PlanningScreenRules.CopyWeekPrompt(day, Texts.T)"
+                       OnYes="CopyWeekAsync" OnNo="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, Assign, Clear, CopyWeek }
+
+    private DateOnly _month;
+    private PlanningMonth? _data;
+    private IReadOnlyList<PlanningLine> _lines = [];
+    private IReadOnlyList<DateOnly> _dates = [];
+    private readonly HashSet<(Guid Employee, DateOnly Date)> _selection = [];
+    private (Guid Employee, DateOnly Date)? _anchor;
+    private bool _loaded, _busy;
+
+    /// <summary>The day the month opens on, brought into view once drawn: today, past the grid's first fortnight.</summary>
+    private string? _reveal;
+
+    private Prompt _prompt;
+    private IReadOnlyList<PlanningDay>? _assigning;
+    private IReadOnlyList<ShiftCell>? _clearing;
+    private DateOnly? _copyDay;
+    private string? _refused;
+    private (string Text, string Tone)? _status;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.ManagePlanning);
+
+    /// <summary>The days selected, by person then by date, as the actions take them.</summary>
+    private IReadOnlyList<PlanningDay> SelectedDays =>
+        PlanningScreenRules.Ordered(_lines.SelectMany(l => l.Days).Where(d => _selection.Contains((d.Employee.EmployeeId, d.Date))));
+
+    protected override Task OnInitializedAsync()
+    {
+        _month = PlanningScreenRules.MonthOf(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var (year, month) = (_month.Year, _month.Month);
+            var result = await Scopes.RunAsync<PlanningService, Result<PlanningMonth>>(s => s.GetMonthAsync(year, month));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _data = result.Value;
+            _dates = PlanningScreenRules.Dates(year, month);
+            _lines = PlanningScreenRules.Lines(_data, Texts.T, Texts.Culture);
+
+            // The days kept selected across a reload; a new month opens on today, or on its first.
+            _selection.RemoveWhere(k => !_lines.Any(l => l.Employee.EmployeeId == k.Employee) || k.Date.Month != month || k.Date.Year != year);
+            if (_selection.Count == 0 && _lines.Count > 0)
+            {
+                var first = (_lines[0].Employee.EmployeeId, PlanningScreenRules.InitialDay(year, month, Clock.Today));
+                _selection.Add(first);
+                _anchor = first;
+                _reveal = $"[data-cell=\"{_lines[0].Employee.Number}-{first.Item2.Day}\"]";
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the planning failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_reveal is not { } selector) return;
+        _reveal = null;
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.reveal", selector);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to scroll.
+        }
+        catch (InvalidOperationException)
+        {
+            // Prerendering: the browser is not there yet.
+        }
+    }
+
+    private async Task MoveAsync(int months)
+    {
+        if (_busy) return;
+        _month = _month.AddMonths(months);
+        _selection.Clear();
+        _anchor = null;
+        _refused = null;
+        _status = null;
+        await LoadAsync();
+    }
+
+    // ---- The selection ---------------------------------------------------------------------------
+
+    /// <summary>A click selects the day; Ctrl adds or takes one away; Shift selects the block from the last one clicked.</summary>
+    private void Pick(PlanningDay day, MouseEventArgs e)
+    {
+        var key = (day.Employee.EmployeeId, day.Date);
+        if (e.ShiftKey && _anchor is { } anchor)
+        {
+            var rows = _lines.Select(l => l.Employee.EmployeeId).ToList();
+            var (r1, r2) = (rows.IndexOf(anchor.Employee), rows.IndexOf(key.EmployeeId));
+            if (r1 >= 0 && r2 >= 0)
+            {
+                if (!e.CtrlKey && !e.MetaKey) _selection.Clear();
+                var (fromDay, toDay) = anchor.Date <= key.Date ? (anchor.Date, key.Date) : (key.Date, anchor.Date);
+                for (var r = Math.Min(r1, r2); r <= Math.Max(r1, r2); r++)
+                    for (var d = fromDay; d <= toDay; d = d.AddDays(1))
+                        _selection.Add((rows[r], d));
+                return;
+            }
+        }
+
+        if (e.CtrlKey || e.MetaKey)
+        {
+            if (!_selection.Remove(key)) _selection.Add(key);
+        }
+        else
+        {
+            _selection.Clear();
+            _selection.Add(key);
+        }
+
+        _anchor = key;
+    }
+
+    /// <summary>A point to check clicked: the grid on that person and day, brought into view.</summary>
+    private async Task LocateAsync(PlanningIssue issue)
+    {
+        var line = _lines.FirstOrDefault(l => issue.EmployeeId is not { } id || l.Employee.EmployeeId == id);
+        if (line is null) return;
+        _selection.Clear();
+        var key = (line.Employee.EmployeeId, issue.Date);
+        _selection.Add(key);
+        _anchor = key;
+        StateHasChanged();
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.reveal", $"[data-cell=\"{line.Employee.Number}-{issue.Date.Day}\"]");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to scroll.
+        }
+    }
+
+    private Task KeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Delete") AskClear();
+        else if (e.Key == "Enter") AskAssign();
+        return Task.CompletedTask;
+    }
+
+    // ---- The posts --------------------------------------------------------------------------------
+
+    private void AssignFrom(PlanningDay day)
+    {
+        if (!MayManage) return;
+        _selection.Clear();
+        _selection.Add((day.Employee.EmployeeId, day.Date));
+        _anchor = (day.Employee.EmployeeId, day.Date);
+        AskAssign();
+    }
+
+    private void AskAssign()
+    {
+        if (_busy || !PlanningScreenRules.Actions(SelectedDays, Context.User.Has).Assign) return;
+        var days = PlanningScreenRules.Assignable(SelectedDays);
+        if (days.Count == 0) return;
+        _assigning = days;
+        _prompt = Prompt.Assign;
+    }
+
+    /// <summary>The post on each day selected; the days the service refuses are named, the others kept.</summary>
+    private Task AssignAsync(ShiftForm form) =>
+        RunAsync(async () =>
+        {
+            if (_assigning is not { } days) return;
+            var refused = new List<string>();
+            foreach (var day in days)
+            {
+                var request = PlanningScreenRules.Request(day, form.Kind, form.Start, form.End, form.Note);
+                var done = await Scopes.RunAsync<PlanningService, Result<Guid>>(s => s.AssignAsync(request));
+                if (done.IsFailure) refused.Add(PlanningScreenRules.RefusedLine(day, Texts.Describe(done.Errors)));
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            _refused = refused.Count > 0 ? PlanningScreenRules.SomeRefused(refused, Texts.T) : null;
+            _status = refused.Count > 0
+                ? (Texts.T("Planning.SomeRefused", refused.Count), "abnormal")
+                : (Texts.T("Web.PlanningAssigned", days.Count), "normal");
+        });
+
+    private void AskClear()
+    {
+        if (_busy || !PlanningScreenRules.Actions(SelectedDays, Context.User.Has).Clear) return;
+        var shifts = PlanningScreenRules.Removable(SelectedDays);
+        if (shifts.Count == 0) return;
+        _clearing = shifts;
+        _prompt = Prompt.Clear;
+    }
+
+    private Task ClearAsync() =>
+        RunAsync(async () =>
+        {
+            if (_clearing is not { } shifts) return;
+            ClosePrompt();
+            var removed = 0;
+            foreach (var shift in shifts)
+            {
+                var done = await Scopes.RunAsync<PlanningService, Result>(s => s.RemoveAsync(shift.ShiftId));
+                if (done.IsFailure)
+                {
+                    await LoadAsync();
+                    _status = (Texts.Describe(done.Errors), "critical");
+                    return;
+                }
+
+                removed++;
+            }
+
+            _refused = null;
+            await LoadAsync();
+            _status = (Texts.T("Web.PlanningCleared", removed), "normal");
+        });
+
+    private void AskCopyWeek()
+    {
+        if (_busy || SelectedDays is not { Count: > 0 } days || !PlanningScreenRules.Actions(days, Context.User.Has).CopyWeek) return;
+        _copyDay = days[0].Date;
+        _prompt = Prompt.CopyWeek;
+    }
+
+    private Task CopyWeekAsync() =>
+        RunAsync(async () =>
+        {
+            if (_copyDay is not { } day) return;
+            ClosePrompt();
+            var (source, target) = PlanningScreenRules.CopyWeek(day);
+            var done = await Scopes.RunAsync<PlanningService, Result<(int Copied, int Skipped)>>(s => s.CopyWeekAsync(source, target));
+            if (done.IsFailure)
+            {
+                _status = (Texts.Describe(done.Errors), "critical");
+                return;
+            }
+
+            _refused = null;
+            await LoadAsync();
+            _status = (Texts.T("Planning.CopyWeekDone", done.Value.Copied, done.Value.Skipped), "normal");
+        });
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private static string? InkClass(PlanningDay day) => PlanningScreenRules.Ink(day) switch
+    {
+        PlanningInk.NotEmployed => "ink-out",
+        PlanningInk.LeaveApproved => "ink-leave",
+        PlanningInk.LeavePending => "ink-leave-pending",
+        PlanningInk.ShiftFlagged => "ink-flagged",
+        PlanningInk.ShiftUnusual => "ink-unusual",
+        PlanningInk.Shift => "ink-shift",
+        _ => null
+    };
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A planning operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _assigning = null;
+        _clearing = null;
+        _copyDay = null;
+    }
+}

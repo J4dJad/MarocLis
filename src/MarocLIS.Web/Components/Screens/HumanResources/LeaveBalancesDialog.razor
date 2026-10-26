@@ -1,0 +1,197 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<LeaveBalancesDialog> Logger
+
+@*
+    The annual-leave accounts, the workstation's LeaveBalancesDialog: acquired, taken, waiting and
+    left for each employee the user may see, the available days in the alarm's ink when overdrawn.
+    HR corrects one with a signed number of days and a reason (LeaveAdjustmentDialog).
+*@
+<Modal Name="leave-balances" Title="@Texts["Leave.Balances"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="leave-balances">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Personnel.Number"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th class="num">@Texts["Leave.YearlyEntitlement"]</th>
+                            <th class="num">@Texts["Leave.Credited"]</th>
+                            <th class="num">@Texts["Leave.Taken"]</th>
+                            <th class="num">@Texts["Leave.PendingDays"]</th>
+                            <th class="num">@Texts["Leave.Balance"]</th>
+                            <th class="num">@Texts["Leave.Available"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr class="@(row.EmployeeId == Selected?.EmployeeId ? "is-selected" : null)" data-row="@row.Number"
+                                @onclick="() => _selectedId = row.EmployeeId">
+                                <td class="mono nowrap" dir="ltr">@row.Number</td>
+                                <td><span class="list-name" title="@row.FullName">@row.FullName</span></td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Days(row.AnnualEntitlement, Texts.Culture)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Balance(row.Credited, Texts.Culture)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Days(row.Taken, Texts.Culture)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Days(row.Pending, Texts.Culture)</td>
+                                <td class="num mono nowrap">@LeaveScreenRules.Balance(row.Balance, Texts.Culture)</td>
+                                <td class="num mono nowrap @(LeaveScreenRules.Overdrawn(row) ? "critical strong" : null)" data-state="available">@LeaveScreenRules.Balance(row.Available, Texts.Culture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.LeaveBalancesNone"]</p>
+                }
+            </div>
+        </div>
+        <p class="small muted text-full" data-state="notice">@Texts["Leave.BalancesNotice"]</p>
+        @if (_status is { } status)
+        {
+            <p class="message @(status.Tone == "critical" ? "is-critical" : "is-info") small text-full" role="status" data-state="status">@status.Text</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Leave.Adjust" Hidden="@(!MayManage)" Disabled="@(Selected is null || _busy)" OnClick="AskAdjust" />
+        <ActionButton Key="Action.Close" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@if (_adjusting is { } employee)
+{
+    <Modal Name="leave-adjust" Title="@Texts["Leave.Adjust"]" Hint="@LeaveScreenRules.Who(employee)" OnCancel="CloseAdjust">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Leave.AdjustDays"]</span>
+                    <input class="input mono num @Refused(LeaveScreenRules.AdjustDaysField)" type="text" inputmode="decimal" autocomplete="off" dir="ltr"
+                           maxlength="@TypedNumber.MeasureMaxLength" data-field="@LeaveScreenRules.AdjustDaysField" @bind="_days" @bind:event="oninput" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@LeaveScreenRules.AdjustDaysField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Leave.AdjustReason"]</span>
+                    <input class="input @Refused(LeaveScreenRules.AdjustReasonField)" type="text" autocomplete="off" maxlength="@LeaveScreenRules.ReasonMaxLength"
+                           data-field="@LeaveScreenRules.AdjustReasonField" title="@_reason" @bind="_reason" @bind:event="oninput" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@LeaveScreenRules.AdjustReasonField" />
+                </label>
+                <p class="field-span-2 message is-info small text-full" data-state="adjust-notice">@Texts["Leave.AdjustNotice"]</p>
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="CloseAdjust" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="AdjustAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<LeaveBalanceRow> _rows = [];
+    private Guid? _selectedId;
+    private bool _loaded, _busy;
+    private (string Text, string Tone)? _status;
+
+    private LeaveBalanceRow? _adjusting;
+    private string? _days, _reason, _refusal;
+    private FieldRefusal? _fieldRefusal;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.Manage);
+
+    private LeaveBalanceRow? Selected => _rows.FirstOrDefault(r => r.EmployeeId == _selectedId) ?? _rows.FirstOrDefault();
+
+    private string? Refused(string field) => _fieldRefusal?.Field == field ? "is-refused" : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<LeaveService, Result<IReadOnlyList<LeaveBalanceRow>>>(s => s.GetBalancesAsync());
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the leave balances failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void AskAdjust()
+    {
+        if (_busy || !MayManage || Selected is not { } row) return;
+        _adjusting = row;
+        _days = _reason = _refusal = null;
+        _fieldRefusal = null;
+    }
+
+    private void CloseAdjust()
+    {
+        _adjusting = null;
+        _refusal = null;
+        _fieldRefusal = null;
+    }
+
+    /// <summary>The correction checked as the workstation checks it, then the service's own refusals beside their box.</summary>
+    private async Task AdjustAsync()
+    {
+        if (_busy || _adjusting is not { } row) return;
+        var (refused, days) = LeaveScreenRules.CheckAdjustment(_days);
+        if (refused is not null)
+        {
+            _fieldRefusal = refused;
+            _refusal = null;
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var reason = _reason?.Trim() ?? string.Empty;
+            var done = await Scopes.RunAsync<LeaveService, Result>(s => s.AdjustAsync(row.EmployeeId, days, reason));
+            if (done.IsFailure)
+            {
+                var field = LeaveScreenRules.FieldOf(done.FirstError.ResourceKey);
+                _fieldRefusal = field is null ? null : FieldRefusal.Of(field, done.FirstError);
+                _refusal = field is null ? Texts.Describe(done.Errors) : null;
+                return;
+            }
+
+            CloseAdjust();
+            _selectedId = row.EmployeeId;
+            await LoadAsync();
+            _status = (Texts.T("Web.LeaveAdjusted", row.FullName), "normal");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Adjusting a leave balance failed.");
+            CloseAdjust();
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

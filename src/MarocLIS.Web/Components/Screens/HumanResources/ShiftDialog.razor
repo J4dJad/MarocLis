@@ -1,0 +1,84 @@
+@using System.Globalization
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+
+@*
+    A post on the planning, the workstation's ShiftDialog: the kind sets the usual hours, which can
+    be changed (not for an on-call, held at home); the hours worked are counted as they are typed.
+*@
+<Modal Name="planning-shift" Title="@Texts["Planning.Assign"]" Hint="@Subtitle" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Planning.Kind"]</span>
+                <select class="input" data-field="shift-kind" value="@_kind" @onchange="KindChanged">
+                    @foreach (var kind in Enum.GetValues<ShiftKind>())
+                    {
+                        <option value="@kind">@Texts[$"ShiftKind.{kind}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Planning.Start"]</span>
+                <input class="input input-time mono" type="time" dir="ltr" data-field="shift-start" disabled="@(!Editable)"
+                       value="@PlanningScreenRules.Time(_start)" @onchange="e => _start = Read(e, _start)" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Planning.End"]</span>
+                <input class="input input-time mono" type="time" dir="ltr" data-field="shift-end" disabled="@(!Editable)"
+                       value="@PlanningScreenRules.Time(_end)" @onchange="e => _end = Read(e, _end)" />
+            </label>
+            <p class="field-span-all small muted text-full" data-state="hours">@PlanningScreenRules.HoursCounted(_kind, _start, _end, Texts.T, Texts.Culture)</p>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@PlanningScreenRules.NoteMaxLength"
+                       data-field="shift-note" title="@_note" @bind="_note" @bind:event="oninput" />
+            </label>
+            <p class="field-span-all message is-info small text-full" data-state="shift-notice">@Texts["Planning.ShiftNotice"]</p>
+        </div>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The day first, then the person; or the number of days (PlanningScreenRules.AssignSubtitle).</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>The post already on the first day, which the form opens on.</summary>
+    [Parameter] public ShiftCell? Current { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<ShiftForm> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ShiftKind _kind;
+    private TimeOnly _start, _end;
+    private string? _note;
+
+    private bool Editable => PlanningScreenRules.TimesEditable(_kind);
+
+    protected override void OnInitialized()
+    {
+        _kind = Current?.Kind ?? ShiftKind.Day;
+        (_start, _end) = PlanningScreenRules.HoursOf(_kind, Current);
+        _note = Current?.Note;
+    }
+
+    /// <summary>Another kind: its usual hours.</summary>
+    private void KindChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ShiftKind>(e.Value as string, out var kind)) return;
+        _kind = kind;
+        (_start, _end) = PlanningScreenRules.HoursOf(kind, null);
+    }
+
+    private static TimeOnly Read(ChangeEventArgs e, TimeOnly current) =>
+        TimeOnly.TryParseExact(e.Value as string, ["HH:mm", "HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time : current;
+
+    private Task SaveAsync() =>
+        OnSave.InvokeAsync(new ShiftForm(_kind, _start, _end, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()));
+}

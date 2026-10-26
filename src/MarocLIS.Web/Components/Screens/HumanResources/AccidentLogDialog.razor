@@ -1,0 +1,63 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+
+@*
+    A line of the insurer follow-up, the workstation's AccidentLogDialog: a reminder (which can go
+    without a word), the insurer's answer, or a note.
+*@
+<Modal Name="accident-log" Title="@Texts["Accident.Log"]" Hint="@($"{Number} — {Texts["QualityHr.Hint.AccidentLog"]}")" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Accident.Event"]</span>
+            <select class="input" data-field="accident-event-kind" @bind="_kind">
+                @foreach (var kind in AccidentScreenRules.LogKinds)
+                {
+                    <option value="@kind">@Texts[$"AccidentEventKind.{kind}"]</option>
+                }
+            </select>
+        </label>
+        <label class="field">
+            <span class="field-label">@Texts["Accident.EventText"]</span>
+            <textarea class="input @(Shown?.Field == AccidentScreenRules.EventTextField ? "is-refused" : null)" rows="3" maxlength="@AccidentScreenRules.NoteMaxLength"
+                      data-field="@AccidentScreenRules.EventTextField" @bind="_text" @bind:event="oninput"></textarea>
+            <FieldMessage Refusal="Shown" Field="@AccidentScreenRules.EventTextField" />
+        </label>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Number { get; set; } = string.Empty;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<(AccidentEventKind Kind, string? Text)> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private AccidentEventKind _kind = AccidentEventKind.InsurerReminder;
+    private string? _text;
+    private FieldRefusal? _checked;
+
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private Task SaveAsync()
+    {
+        var text = string.IsNullOrWhiteSpace(_text) ? null : _text.Trim();
+        _checked = AccidentScreenRules.CheckLog(_kind, text);
+        return _checked is null ? OnSave.InvokeAsync((_kind, text)) : Task.CompletedTask;
+    }
+}
