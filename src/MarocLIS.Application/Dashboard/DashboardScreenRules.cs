@@ -47,7 +47,7 @@ public sealed record DashboardBoard(IReadOnlyList<string> Summary, IReadOnlyList
     public bool ShowsFlow => Steps.Count > 0 || Summary.Count > 0;
 
     /// <summary>« 3 sujet(s) » beside the alerts' heading.</summary>
-    public string CountKey => "Dashboard.SubjectCount";
+    public const string CountKey = "Dashboard.SubjectCount";
 
     /// <summary>The sentence under « Rien à signaler »: what the list is, or that nothing is at zero.</summary>
     public string QuietHintKey => QuietKeys.Count > 0 ? "Dashboard.NothingToReportHint" : "Dashboard.NothingAtZero";

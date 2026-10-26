@@ -77,7 +77,7 @@ public sealed class StatisticsView : LocalizedView
     }
 
     // The share of each column, in the rules' order of the columns.
-    private static readonly IReadOnlyDictionary<StatisticsTab, int[]> Weights = new Dictionary<StatisticsTab, int[]>
+    private static readonly Dictionary<StatisticsTab, int[]> Weights = new()
     {
         [StatisticsTab.ByDepartment] = [8, 24, 9, 9, 10, 10, 12],
         [StatisticsTab.ByTest] = [8, 30, 9, 10, 12],
