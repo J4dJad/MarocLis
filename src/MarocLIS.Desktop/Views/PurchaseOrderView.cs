@@ -829,7 +829,7 @@ internal sealed class PurchaseOrderLineDialog : MasterDataEditor
         // The discount was agreed with the preferred supplier: another supplier starts from none; a
         // captive reagent ordered from its contract's supplier is bought at the contracted price.
         var form = new PurchaseOrderLineForm();
-        PurchaseOrderScreenRules.Defaults(form, item, _supplierId);
+        PurchaseOrderScreenRules.Defaults(form, item, _supplierId, CultureInfo.CurrentCulture);
         _quantity.Text = form.Quantity;
         _price.Text = form.UnitPrice;
         _discount.Text = form.DiscountPercent;
@@ -898,7 +898,7 @@ internal sealed class PurchaseOrderReceiptDialog : MasterDataEditor
         _findByGtin = findByGtin;
 
         _quantity = TextField("Field.Quantity", 20, 14, 120,
-                              line.QuantityOutstanding.ToString("0.##", CultureInfo.InvariantCulture),
+                              PurchaseOrderScreenRules.NewReceipt(line, DateOnly.FromDateTime(DateTime.Today), CultureInfo.CurrentCulture).Quantity,
                               latin: true, mono: true, right: true);
         _lot = TextField("Inventory.LotNumber", 160, 14, 160, null, latin: true, mono: true);
 

@@ -332,10 +332,11 @@ public static class SupplierInvoiceScreenRules
     /// The supplier's order lines to tick: those received and not yet invoiced ticked, with that
     /// quantity — the rest of what was ordered otherwise —, at the ordered net price and VAT.
     /// </summary>
-    public static List<SupplierInvoiceLineForm> Lines(IEnumerable<InvoiceableOrderLine> lines)
+    public static List<SupplierInvoiceLineForm> Lines(IEnumerable<InvoiceableOrderLine> lines, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        static string N(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        culture ??= CultureInfo.InvariantCulture;
+        string N(decimal value) => TypedNumber.ForEditing(value, 0, culture);
         return
         [
             .. lines.Select(l => new SupplierInvoiceLineForm
@@ -343,7 +344,7 @@ public static class SupplierInvoiceScreenRules
                 Line = l,
                 Included = l.ReceivedNotInvoiced > 0m,
                 Quantity = N(l.ReceivedNotInvoiced > 0m ? l.ReceivedNotInvoiced : l.QuantityOrdered - l.QuantityInvoiced),
-                UnitPrice = l.NetUnitPriceMad.ToString("0.00", CultureInfo.InvariantCulture),
+                UnitPrice = TypedNumber.ForEditing(l.NetUnitPriceMad, 2, culture),
                 VatPercent = N(l.VatRate * 100m)
             })
         ];
@@ -454,14 +455,14 @@ public static class SupplierInvoiceScreenRules
     // ---- A payment ----------------------------------------------------------------------------------
 
     /// <summary>Paid today, the outstanding amount, by transfer.</summary>
-    public static SupplierPaymentForm NewPayment(SupplierInvoiceRow row, DateOnly today)
+    public static SupplierPaymentForm NewPayment(SupplierInvoiceRow row, DateOnly today, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         return new SupplierPaymentForm
         {
             PaidOn = today,
             MaturityDate = today,
-            Amount = row.AmountOutstanding.ToString("0.00", CultureInfo.InvariantCulture)
+            Amount = TypedNumber.ForEditing(row.AmountOutstanding, 2, culture ?? CultureInfo.InvariantCulture)
         };
     }
 
@@ -527,10 +528,11 @@ public static class SupplierInvoiceScreenRules
 
     // ---- The purchasing parameters ------------------------------------------------------------------
 
-    public static PurchasingSettingsForm SettingsForm(PurchasingSettings current)
+    public static PurchasingSettingsForm SettingsForm(PurchasingSettings current, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(current);
-        static string N(decimal v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+        culture ??= CultureInfo.InvariantCulture;
+        string N(decimal v) => TypedNumber.ForEditing(v, 0, culture);
         return new PurchasingSettingsForm
         {
             TolerancePercent = N(current.PriceTolerancePercent),

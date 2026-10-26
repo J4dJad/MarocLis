@@ -137,7 +137,7 @@ public sealed class WebSupplierInvoiceTests : WebScreenContext
 
         var page = Render<SupplierInvoices>();
         page.Find("[data-action='SupplierInvoices.RecordPayment']").Click();
-        page.Find($"[data-field={SupplierInvoiceScreenRules.AmountField}]").GetAttribute("value").Should().Be("1260.00");
+        page.Find($"[data-field={SupplierInvoiceScreenRules.AmountField}]").GetAttribute("value").Should().Be("1260,00", "pre-filled with the decimal comma, as the other boxes");
         page.Find($"[data-field={SupplierInvoiceScreenRules.MaturityField}]").HasAttribute("disabled").Should().BeTrue("a transfer has no due date");
 
         page.Find("[data-field=payment-method]").Change(nameof(SupplierPaymentMethod.BillOfExchange));

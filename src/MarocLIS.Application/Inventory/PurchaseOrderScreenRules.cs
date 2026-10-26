@@ -295,23 +295,24 @@ public static class PurchaseOrderScreenRules
     /// discount, as starting values; a captive reagent ordered from its contract's supplier at the
     /// contracted price, without discount.
     /// </summary>
-    public static void Defaults(PurchaseOrderLineForm form, OrderableItem item, Guid? supplierId)
+    public static void Defaults(PurchaseOrderLineForm form, OrderableItem item, Guid? supplierId, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(item);
         form.StockItemId = item.Id;
-        form.Quantity = item.ReorderQuantity > 0m ? item.ReorderQuantity.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
-        form.UnitPrice = item.LastUnitPriceMad?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
+        culture ??= CultureInfo.InvariantCulture;
+        form.Quantity = item.ReorderQuantity > 0m ? TypedNumber.ForEditing(item.ReorderQuantity, 0, culture) : string.Empty;
+        form.UnitPrice = item.LastUnitPriceMad is { } last ? TypedNumber.ForEditing(last, 2, culture) : string.Empty;
 
         // The discount was agreed with the preferred supplier: another supplier starts from none.
         var discount = supplierId is not null && item.PreferredSupplierId == supplierId ? item.LastDiscountRate : 0m;
         if (item.ContractPriceMad is { } contracted && supplierId is not null && item.ContractSupplierId == supplierId)
         {
-            form.UnitPrice = contracted.ToString("0.00", CultureInfo.InvariantCulture);
+            form.UnitPrice = TypedNumber.ForEditing(contracted, 2, culture);
             discount = 0m;
         }
 
-        form.DiscountPercent = (discount * 100m).ToString("0.##", CultureInfo.InvariantCulture);
+        form.DiscountPercent = TypedNumber.ForEditing(discount * 100m, 0, culture);
     }
 
     /// <summary>
@@ -376,12 +377,12 @@ public static class PurchaseOrderScreenRules
     // ---- A delivery ---------------------------------------------------------------------------------
 
     /// <summary>A delivery's form: what is still awaited on the line, expiring in a year, the checklist ticked.</summary>
-    public static ReceiveLotForm NewReceipt(PurchaseOrderLineRow line, DateOnly today)
+    public static ReceiveLotForm NewReceipt(PurchaseOrderLineRow line, DateOnly today, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(line);
         return new ReceiveLotForm
         {
-            Quantity = line.QuantityOutstanding.ToString("0.##", CultureInfo.InvariantCulture),
+            Quantity = TypedNumber.ForEditing(line.QuantityOutstanding, 0, culture ?? CultureInfo.InvariantCulture),
             ExpiryDate = today.AddMonths(12)
         };
     }

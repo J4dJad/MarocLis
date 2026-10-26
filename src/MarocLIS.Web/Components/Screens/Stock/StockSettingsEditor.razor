@@ -12,8 +12,9 @@
         <div class="form-grid form-grid-2">
             <label class="field">
                 <span class="field-label">@Texts["Stock.VarianceThreshold"]</span>
-                <input class="input num @Refused(ConsumptionScreenRules.ThresholdField)" type="number" min="0" max="@ConsumptionScreenRules.ThresholdMax" step="0.1"
-                       data-field="@ConsumptionScreenRules.ThresholdField" @bind="_form.VarianceThresholdPercent" />
+                <input class="input num @Refused(ConsumptionScreenRules.ThresholdField)" type="text" inputmode="decimal" maxlength="6" dir="ltr"
+                       data-field="@ConsumptionScreenRules.ThresholdField" value="@TypedNumber.ForEditing(_form.VarianceThresholdPercent, 0, Texts.Culture)"
+                       @onchange="ThresholdChanged" />
                 <FieldMessage Refusal="Shown" Field="@ConsumptionScreenRules.ThresholdField" />
             </label>
             <label class="field">
@@ -47,6 +48,12 @@
 </Modal>
 
 @code {
+    /// <summary>The threshold as typed, with a comma or a point for the decimals; one that is no number keeps the last read.</summary>
+    private void ThresholdChanged(ChangeEventArgs e)
+    {
+        if (TypedNumber.Parse(e.Value?.ToString()) is { } threshold) _form.VarianceThresholdPercent = threshold;
+    }
+
     /// <summary>The settings to save, with the form they were typed in: a refusal of the service names its box from it.</summary>
     public sealed record Saved(StockSettings Settings, StockSettingsForm Form);
 

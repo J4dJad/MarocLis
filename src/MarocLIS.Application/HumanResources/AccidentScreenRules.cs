@@ -193,7 +193,7 @@ public static class AccidentScreenRules
             Exposure = r.Exposure ?? ExposureType.Needlestick, SourceIdentified = r.SourceIdentified,
             ConsultedOn = r.ConsultedAt is { } c ? DateOnly.FromDateTime(c) : null,
             InsurerName = r.InsurerName, ClaimNumber = r.InsurerClaimNumber, DeclaredOn = r.DeclaredToInsurerOn,
-            Subrogation = r.Subrogation, IncapacityRate = r.IncapacityRate?.ToString("0.##", CultureInfo.InvariantCulture), Note = r.Note
+            Subrogation = r.Subrogation, IncapacityRate = r.IncapacityRate is { } rate ? TypedNumber.ForEditing(rate, 0, culture) : null, Note = r.Note
         };
     }
 

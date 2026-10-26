@@ -252,17 +252,17 @@ public static class PayrollScreenRules
 
     // ---- The month's variables -----------------------------------------------------------------------
 
-    private static string N(decimal d) => d == 0 ? string.Empty : d.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string N(decimal d, IFormatProvider? culture) => d == 0 ? string.Empty : TypedNumber.ForEditing(d, 0, culture ?? CultureInfo.InvariantCulture);
 
     /// <summary>The variables as entered, a zero left empty. Only the days typed by hand: those from the leave are taken again at each update.</summary>
-    public static PayslipVariablesForm FormFor(PayslipVariables v)
+    public static PayslipVariablesForm FormFor(PayslipVariables v, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(v);
         return new PayslipVariablesForm
         {
-            ManualAbsenceDays = N(v.ManualAbsenceDays), Overtime25 = N(v.OvertimeHours25), Overtime50 = N(v.OvertimeHours50),
-            Overtime100 = N(v.OvertimeHours100), TaxableBonus = N(v.TaxableBonus), Transport = N(v.TransportAllowance),
-            OtherExempt = N(v.OtherExemptAllowance), Advance = N(v.AdvanceDeduction), OtherDeduction = N(v.OtherDeduction),
+            ManualAbsenceDays = N(v.ManualAbsenceDays, culture), Overtime25 = N(v.OvertimeHours25, culture), Overtime50 = N(v.OvertimeHours50, culture),
+            Overtime100 = N(v.OvertimeHours100, culture), TaxableBonus = N(v.TaxableBonus, culture), Transport = N(v.TransportAllowance, culture),
+            OtherExempt = N(v.OtherExemptAllowance, culture), Advance = N(v.AdvanceDeduction, culture), OtherDeduction = N(v.OtherDeduction, culture),
             Note = v.Note
         };
     }
@@ -376,8 +376,9 @@ public static class PayrollScreenRules
         new("PayrollRate.Transport", "rate-transport", p => p.TransportExemptionCap, (p, v) => p.TransportExemptionCap = v)
     ];
 
-    /// <summary>A rate as the form shows it: « 4.48 », the dot whatever the language, as typed.</summary>
-    public static string Rate(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    /// <summary>A rate as the form shows it, with the decimal separator of the screen's language (« 4,48 » in French).</summary>
+    public static string Rate(decimal value, IFormatProvider? culture = null) =>
+        TypedNumber.ForEditing(value, 0, culture ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The rates typed, read: each a number, none negative; the scale rising ceilings

@@ -654,7 +654,7 @@
             var itemId = line.StockItemId;
             _condition = await Scopes.RunAsync<ReceptionService, StorageCondition>(s => s.StorageConditionOfAsync(itemId));
             _receiptLine = line;
-            _receiptForm = PurchaseOrderScreenRules.NewReceipt(line, Clock.Today);
+            _receiptForm = PurchaseOrderScreenRules.NewReceipt(line, Clock.Today, Texts.Culture);
             _verdict = null;
             Open(Prompt.Receive);
         });

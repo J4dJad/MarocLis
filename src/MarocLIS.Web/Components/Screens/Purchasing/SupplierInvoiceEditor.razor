@@ -198,7 +198,7 @@
                 return;
             }
 
-            Form.Lines = SupplierInvoiceScreenRules.Lines(lines.Value);
+            Form.Lines = SupplierInvoiceScreenRules.Lines(lines.Value, Texts.Culture);
         }
         catch (Exception ex)
         {

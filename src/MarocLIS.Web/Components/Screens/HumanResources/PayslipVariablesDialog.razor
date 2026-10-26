@@ -71,7 +71,7 @@
 
     private string Dh(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
 
-    protected override void OnInitialized() => _form = PayrollScreenRules.FormFor(Row.Variables);
+    protected override void OnInitialized() => _form = PayrollScreenRules.FormFor(Row.Variables, Texts.Culture);
 
     protected override void OnParametersSet()
     {

@@ -209,8 +209,8 @@
                             </label>
                             <label class="field">
                                 <span class="field-label">@Texts["Personnel.WeeklyHours"]</span>
-                                <input class="input num @Refused(EmployeeFileRules.WeeklyHoursField)" type="number" min="0" max="@EmployeeFileRules.MaxWeeklyHours" step="0.25" dir="ltr"
-                                       data-field="@EmployeeFileRules.WeeklyHoursField" value="@_form.WeeklyHours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                <input class="input num @Refused(EmployeeFileRules.WeeklyHoursField)" type="text" inputmode="decimal" maxlength="6" dir="ltr"
+                                       data-field="@EmployeeFileRules.WeeklyHoursField" value="@TypedNumber.ForEditing(_form.WeeklyHours, 0, Texts.Culture)"
                                        @onchange="WeeklyHoursChanged" />
                                 <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.WeeklyHoursField" />
                             </label>
@@ -420,7 +420,7 @@ else
                 _lookups = lookups.Value;
             }
 
-            _form = EmployeeFileRules.FormFor(_detail, Today);
+            _form = EmployeeFileRules.FormFor(_detail, Today, Texts.Culture);
             // The pay tab follows the file's own answer: a file read without the right comes without its pay.
             _tabs = [.. EmployeeFileRules.Tabs(Context.User.Has).Where(t => t != EmployeeFileTab.Pay || CanSeeSalary)];
             _tab = _tabs.Contains(StartTab) && (StartTab != EmployeeFileTab.Documents || _detail is not null)
@@ -442,10 +442,10 @@ else
         EmployeeFileRules.JobChanged(_form, isNew: _detail is null);
     }
 
-    /// <summary>The hours as typed in the number box (a point for the decimals, whatever the language); kept when unreadable.</summary>
+    /// <summary>The hours as typed, with a comma or a point for the decimals; kept when unreadable.</summary>
     private void WeeklyHoursChanged(ChangeEventArgs e)
     {
-        if (decimal.TryParse(e.Value as string, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var hours))
+        if (TypedNumber.Parse(e.Value as string) is { } hours)
             _form.WeeklyHours = hours;
     }
 

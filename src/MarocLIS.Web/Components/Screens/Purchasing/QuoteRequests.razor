@@ -431,7 +431,7 @@
             }
 
             _options = suppliers.Value;
-            _requestForm = QuoteScreenRules.NewRequest(items.Value, Clock.Today);
+            _requestForm = QuoteScreenRules.NewRequest(items.Value, Clock.Today, Texts.Culture);
             Open(Prompt.New);
         });
 

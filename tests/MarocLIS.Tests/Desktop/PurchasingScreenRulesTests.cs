@@ -413,6 +413,33 @@ public sealed class PurchasingScreenRulesTests
         SupplierInvoiceScreenRules.CheckPayment(form).Refusal!.Field.Should().Be(SupplierInvoiceScreenRules.AmountField);
     }
 
+    /// <summary>
+    /// The figures an order line, a delivery, an invoice, a payment and a quote start from are written
+    /// as the screen's language writes them — « 120,00 » in French — and read back unchanged: the web
+    /// showed « 120.00 » with a dot where every other box of the screen took the comma.
+    /// </summary>
+    [Fact]
+    public void The_purchasing_forms_are_prefilled_with_the_decimal_comma_of_the_screen()
+    {
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        var supplier = Guid.NewGuid();
+        var usual = new OrderableItem(Guid.NewGuid(), "BIO-GLU", new MultilingualText("Glucose"), "coffret", supplier, 2.5m, 120.5m, 0.125m);
+
+        var line = new PurchaseOrderLineForm();
+        PurchaseOrderScreenRules.Defaults(line, usual, supplier, fr);
+        line.Should().Match<PurchaseOrderLineForm>(f => f.Quantity == "2,5" && f.UnitPrice == "120,50" && f.DiscountPercent == "12,5");
+        var (refusal, request) = PurchaseOrderScreenRules.CheckLine(line);
+        refusal.Should().BeNull();
+        request!.Should().Match<AddPurchaseOrderLineRequest>(r => r.Quantity == 2.5m && r.UnitPriceMad == 120.5m && r.DiscountRate == 0.125m);
+
+        var received = new InvoiceableOrderLine(Guid.NewGuid(), "BC/2026/00012", Today.AddDays(-30), "BIO-GLU", "Glucose", "coffret",
+                                                10m, 6.5m, 0m, 114m, 0.2m);
+        SupplierInvoiceScreenRules.Lines([received], fr)[0]
+            .Should().Match<SupplierInvoiceLineForm>(l => l.Quantity == "6,5" && l.UnitPrice == "114,00" && l.VatPercent == "20");
+        SupplierInvoiceScreenRules.NewPayment(Invoice(SupplierInvoiceStatus.ApprovedForPayment, paid: 200.5m), Today, fr)
+            .Amount.Should().Be("999,50");
+    }
+
     [Fact]
     public void The_period_is_the_last_quarter_and_the_parameters_are_refused_out_of_range()
     {

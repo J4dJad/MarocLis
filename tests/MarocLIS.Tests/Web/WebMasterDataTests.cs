@@ -151,6 +151,27 @@ public sealed class WebMasterDataTests : WebReferenceContext
         page.Find("[data-state=status]").TextContent.Should().Contain("CNOPS");
     }
 
+    /// <summary>
+    /// The rate is written and read as the screen writes numbers: « 12,5 » in French, as the other
+    /// boxes, where it opened with « 12.5 » in a browser number box.
+    /// </summary>
+    [Fact]
+    public void ThePayerRate_IsShownAndTypedWithTheDecimalComma()
+    {
+        SignIn(AppLanguage.French, With(Permissions.Billing.ManageTariffs));
+
+        var page = Render<MasterDataScreen>();
+        page.Find("[data-tab=Payers]").Click();
+        page.Find("[data-action='Coverage.NewPayer']").Click();
+        page.Find("[data-field=kind]").Change(nameof(PayerKind.Mutuelle));
+
+        page.Find("[data-field=rate]").GetAttribute("type").Should().Be("text");
+        page.Find("[data-field=rate]").Change("12,5");
+        page.Find("[data-field=rate]").GetAttribute("value").Should().Be("12,5");
+        page.Find("[data-field=rate]").Change("80.25");
+        page.Find("[data-field=rate]").GetAttribute("value").Should().Be("80,25", "a point typed is read too, and shown back with the comma");
+    }
+
     [Fact]
     public void TheWestgardRules_ArePickedFromTheirPresets_AndNoneTickedCannotBeSaved()
     {

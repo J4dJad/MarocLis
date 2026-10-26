@@ -841,7 +841,7 @@ internal sealed class SettlementDialog : MasterDataEditor
     {
         _detail = d;
         // The amounts saved, or the law's (SettlementScreenRules.FormFor), and the sentences that explain them.
-        var a = SettlementScreenRules.FormFor(d);
+        var a = SettlementScreenRules.FormFor(d, Fr);
 
         Controls.Add(new Label
         {
@@ -919,7 +919,7 @@ internal sealed class SettlementDialog : MasterDataEditor
         try
         {
             var form = Form();
-            SettlementScreenRules.Recompute(form, _detail, leave, notice, severance);
+            SettlementScreenRules.Recompute(form, _detail, leave, notice, severance, Fr);
             if (_leave.Text != form.LeaveIndemnity) _leave.Text = form.LeaveIndemnity;
             if (_notice.Text != form.NoticeIndemnity) _notice.Text = form.NoticeIndemnity;
             if (_severance.Text != form.Severance) _severance.Text = form.Severance;

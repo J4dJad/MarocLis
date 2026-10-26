@@ -582,7 +582,7 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         : base(localizer, dialogs, "Payroll.Variables", PayrollScreenRules.Who(row), 620, 430)
     {
         _original = row.Variables;
-        var form = PayrollScreenRules.FormFor(row.Variables);
+        var form = PayrollScreenRules.FormFor(row.Variables, CultureInfo.CurrentCulture);
 
         TextBox Field(string key, int x, int y, string? value)
         {
@@ -670,7 +670,7 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
         _boxes = new TextBox[fields.Count];
         for (var i = 0; i < fields.Count; i++)
         {
-            var box = TextField(fields[i].Key, 20 + i % 3 * 220, 10 + i / 3 * 52, 200, PayrollScreenRules.Rate(fields[i].Get(p)),
+            var box = TextField(fields[i].Key, 20 + i % 3 * 220, 10 + i / 3 * 52, 200, PayrollScreenRules.Rate(fields[i].Get(p), CultureInfo.CurrentCulture),
                                 mono: true, right: true);
             // decimal(18,6) columns, ceilings and SMIG included: the shared check refuses a
             // fifteen-figure amount the save could not store.

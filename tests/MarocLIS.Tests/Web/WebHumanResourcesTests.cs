@@ -129,7 +129,7 @@ public sealed class WebHumanResourcesTests : WebHumanResourcesContext
         page.Find(".action-bar [data-action='Personnel.Edit']").Click();
         page.Find("[data-field=employee-phone]").Input("0661 42 18 90");
         page.Find("[role=tab][data-tab=Pay]").Click();
-        page.Find("[data-field=employee-salary]").GetAttribute("value").Should().Be("7400.00");
+        page.Find("[data-field=employee-salary]").GetAttribute("value").Should().Be("7400,00", "pre-filled with the decimal comma, as the other boxes");
         page.Find("[data-field=employee-salary]").Input("7 650");
         page.Find("[data-modal=employee-file] [data-action='Action.Save']").Click();
 

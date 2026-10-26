@@ -240,6 +240,14 @@ public sealed class HumanResourcesLot9bRulesTests
     }
 
     [Fact]
+    public void The_month_s_variables_and_the_rates_are_prefilled_with_the_decimal_comma_of_the_screen()
+    {
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        PayrollScreenRules.Rate(4.48m, fr).Should().Be("4,48", "the dot was shown whatever the language");
+        PayrollScreenRules.Rate(4.48m).Should().Be("4.48");
+    }
+
+    [Fact]
     public void The_payslip_as_it_stands_says_its_amounts_in_the_currency_given_and_names_the_departure_and_the_accident()
     {
         var row = Payslip(new PayslipVariables { LeaveIndemnity = 1000m, NoticeIndemnity = 500m, WorkAccidentDays = 3m, WorkAccidentAllowance = 600m },

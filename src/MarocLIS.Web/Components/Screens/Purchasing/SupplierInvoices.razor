@@ -553,7 +553,7 @@
     private void AskPay()
     {
         if (!Actions.Pay || _busy || Selected is not { } row) return;
-        _paymentForm = SupplierInvoiceScreenRules.NewPayment(row, Clock.Today);
+        _paymentForm = SupplierInvoiceScreenRules.NewPayment(row, Clock.Today, Texts.Culture);
         Open(Prompt.Pay);
     }
 
@@ -718,7 +718,7 @@
             }
 
             _settings = current.Value;
-            _settingsForm = SupplierInvoiceScreenRules.SettingsForm(current.Value);
+            _settingsForm = SupplierInvoiceScreenRules.SettingsForm(current.Value, Texts.Culture);
             Open(Prompt.Settings);
         });
 

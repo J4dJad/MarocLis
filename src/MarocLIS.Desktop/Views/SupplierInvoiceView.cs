@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
@@ -808,7 +809,7 @@ internal sealed class SupplierInvoiceEntryDialog : MasterDataEditor
 
         static string N(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-        foreach (var form in SupplierInvoiceScreenRules.Lines(lines.Value))
+        foreach (var form in SupplierInvoiceScreenRules.Lines(lines.Value, CultureInfo.CurrentCulture))
         {
             var line = form.Line;
             var index = _grid.Rows.Add(
@@ -905,7 +906,7 @@ internal sealed class SupplierPaymentDialog : MasterDataEditor
         Controls.Add(_date);
 
         _amount = TextField("SupplierInvoices.Amount", 200, 14, 140,
-                            row.AmountOutstanding.ToString("0.00", CultureInfo.InvariantCulture),
+                            TypedNumber.ForEditing(row.AmountOutstanding, 2, CultureInfo.CurrentCulture),
                             latin: true, mono: true, right: true);
         _method = Choice("SupplierInvoices.Method", 360, 14, 140, SupplierPaymentMethod.Transfer,
                          "SupplierPaymentMethod");
@@ -1046,7 +1047,7 @@ internal sealed class PurchasingSettingsDialog : MasterDataEditor
         : base(localizer, dialogs, "SupplierInvoices.Settings", null, 760, 620)
     {
         _current = current;
-        static string N(decimal v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+        static string N(decimal v) => TypedNumber.ForEditing(v, 0, CultureInfo.CurrentCulture);
 
         // Three rates a row, not four: their captions, in Arabic, ran into each other over 160 pixels.
         _tolPercent = TextField("SupplierInvoices.TolerancePercent", 20, 14, 220, N(current.PriceTolerancePercent),

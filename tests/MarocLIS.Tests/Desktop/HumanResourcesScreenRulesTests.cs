@@ -540,6 +540,20 @@ public sealed class HumanResourcesScreenRulesTests
     }
 
     [Fact]
+    public void The_settlement_is_prefilled_with_the_decimal_comma_of_the_screen_and_reads_back()
+    {
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        var d = Settlement();
+        var form = SettlementScreenRules.FormFor(d, fr);
+        form.LeaveIndemnity.Should().Be("3415,38");
+        SettlementScreenRules.Check(form).Refusal.Should().BeNull();
+
+        form.ReferenceSalary = "8000";
+        SettlementScreenRules.Recompute(form, d, leave: true, culture: fr);
+        form.LeaveIndemnity.Should().NotContain(".", "recomputed in the same writing as it opened");
+    }
+
+    [Fact]
     public void The_settlement_says_where_its_amounts_go_and_is_final_once_signed()
     {
         var fr = CultureInfo.GetCultureInfo("fr-FR");

@@ -41,21 +41,21 @@ public static class SettlementScreenRules
 
     public const int NoteMaxLength = 500;
 
-    private static string N(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string N(decimal value, IFormatProvider? culture) => TypedNumber.ForEditing(value, 0, culture ?? CultureInfo.InvariantCulture);
 
     /// <summary>The amounts saved, or the law's when none are.</summary>
-    public static SettlementForm FormFor(SettlementDetail detail)
+    public static SettlementForm FormFor(SettlementDetail detail, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(detail);
         var a = detail.Saved ?? detail.Suggested;
         return new SettlementForm
         {
-            ReferenceSalary = N(a.ReferenceSalary),
-            LeaveDays = N(a.LeaveDays),
-            LeaveIndemnity = N(a.LeaveIndemnity),
+            ReferenceSalary = N(a.ReferenceSalary, culture),
+            LeaveDays = N(a.LeaveDays, culture),
+            LeaveIndemnity = N(a.LeaveIndemnity, culture),
             NoticeNotWorked = a.NoticeNotWorked,
-            NoticeIndemnity = N(a.NoticeIndemnity),
-            Severance = N(a.SeverancePay),
+            NoticeIndemnity = N(a.NoticeIndemnity, culture),
+            Severance = N(a.SeverancePay, culture),
             Note = a.Note
         };
     }
@@ -88,20 +88,21 @@ public static class SettlementScreenRules
     /// Puts the law's figure back in each amount whose basis just changed: the reference salary
     /// moves all three, the leave days the leave indemnity, the notice box the notice indemnity.
     /// </summary>
-    public static void Recompute(SettlementForm form, SettlementDetail d, bool leave = false, bool notice = false, bool severance = false)
+    public static void Recompute(SettlementForm form, SettlementDetail d, bool leave = false, bool notice = false, bool severance = false,
+                                 IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(d);
         if (!TryRead(form.ReferenceSalary, out var reference)) return;
 
         if (leave && TryRead(form.LeaveDays, out var days))
-            form.LeaveIndemnity = N(SettlementCalculator.LeaveIndemnity(days, reference, d.MonthlyWorkingDays));
+            form.LeaveIndemnity = N(SettlementCalculator.LeaveIndemnity(days, reference, d.MonthlyWorkingDays), culture);
         if (notice)
             form.NoticeIndemnity = N(form.NoticeNotWorked && d.NoticeApplies
                 ? SettlementCalculator.NoticeIndemnity(d.Notice, reference, d.MonthlyWorkingDays)
-                : 0m);
+                : 0m, culture);
         if (severance && d.SeveranceDue)
-            form.Severance = N(SettlementCalculator.Severance(d.ServiceYears, reference, d.MonthlyHours));
+            form.Severance = N(SettlementCalculator.Severance(d.ServiceYears, reference, d.MonthlyHours), culture);
     }
 
     /// <summary>The indemnities added up, a box that is no number counted as nothing.</summary>

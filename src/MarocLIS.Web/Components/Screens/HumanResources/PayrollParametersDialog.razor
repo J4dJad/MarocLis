@@ -63,7 +63,7 @@
 
     protected override void OnInitialized()
     {
-        _typed = [.. PayrollScreenRules.RateFields.Select(f => (string?)PayrollScreenRules.Rate(f.Get(Parameters)))];
+        _typed = [.. PayrollScreenRules.RateFields.Select(f => (string?)PayrollScreenRules.Rate(f.Get(Parameters), Texts.Culture))];
         _scale = Parameters.IncomeTaxScale;
     }
 

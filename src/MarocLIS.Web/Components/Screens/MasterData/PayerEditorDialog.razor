@@ -46,8 +46,8 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Coverage.ReimbursementRatePercent"]</span>
-                <input class="input mono num" type="number" min="0" max="100" step="0.01" data-field="rate" disabled="@(!Locks.RateEnabled)"
-                       value="@_form.RatePercent.ToString("0.##", CultureInfo.InvariantCulture)" @onchange="RateChanged" />
+                <input class="input mono num" type="text" inputmode="decimal" maxlength="6" dir="ltr" data-field="rate" disabled="@(!Locks.RateEnabled)"
+                       value="@TypedNumber.ForEditing(_form.RatePercent, 0, Texts.Culture)" @onchange="RateChanged" />
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Coverage.PaymentTermsDays"]</span>
@@ -161,7 +161,7 @@
     /// <summary>The rate as the workstation's spinner holds it: two decimals, between 0 and 100.</summary>
     private void RateChanged(ChangeEventArgs e)
     {
-        if (decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var rate))
+        if (TypedNumber.Parse(e.Value?.ToString()) is { } rate)
             _form.RatePercent = Math.Round(Math.Clamp(rate, 0m, 100m), 2);
     }
 

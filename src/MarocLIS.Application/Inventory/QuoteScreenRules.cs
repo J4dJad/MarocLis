@@ -335,7 +335,7 @@ public static class QuoteScreenRules
     // ---- A new request ------------------------------------------------------------------------------
 
     /// <summary>A new request: every article listed unticked, its reorder quantity offered; a response wanted within a week.</summary>
-    public static QuoteRequestForm NewRequest(IEnumerable<QuotableItem> items, DateOnly today)
+    public static QuoteRequestForm NewRequest(IEnumerable<QuotableItem> items, DateOnly today, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         return new QuoteRequestForm
@@ -344,7 +344,7 @@ public static class QuoteScreenRules
             Items = [.. items.Select(i => new QuoteItemForm
             {
                 Item = i,
-                Quantity = i.ReorderQuantity > 0m ? i.ReorderQuantity.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty
+                Quantity = i.ReorderQuantity > 0m ? TypedNumber.ForEditing(i.ReorderQuantity, 0, culture ?? CultureInfo.InvariantCulture) : string.Empty
             })]
         };
     }

@@ -1,5 +1,6 @@
 @using System.Globalization
 @using MarocLIS.Application.Administration
+@using MarocLIS.Application.Input
 @using MarocLIS.Application.Patients
 @using MarocLIS.Domain.Common
 @using MarocLIS.Domain.Morocco
@@ -392,7 +393,7 @@
         if (detail is null) return;
 
         _header = $"{detail.MedicalRecordNumber} — {detail.LastName} {detail.FirstName}";
-        F.Load(detail, Languages.Current.Coerce(detail.PreferredLanguage));
+        F.Load(detail, Languages.Current.Coerce(detail.PreferredLanguage), Texts.Culture);
 
         // An anonymised file is a record of an erasure, not an editable patient.
         _anonymized = detail.IsAnonymized;
@@ -673,7 +674,7 @@
         public string? Treatment { get; set; }
         public string? Allergies { get; set; }
 
-        public void Load(PatientDetail d, AppLanguage language)
+        public void Load(PatientDetail d, AppLanguage language, IFormatProvider culture)
         {
             LastName = d.LastName;
             FirstName = d.FirstName;
@@ -703,8 +704,8 @@
             Pregnant = d.IsPregnant;
             HasLmp = d.LastMenstrualPeriod is not null;
             Lmp = d.LastMenstrualPeriod;
-            Weight = d.WeightKg?.ToString("0.##", CultureInfo.InvariantCulture);
-            Height = d.HeightCm?.ToString("0.##", CultureInfo.InvariantCulture);
+            Weight = d.WeightKg is { } weight ? TypedNumber.ForEditing(weight, 0, culture) : null;
+            Height = d.HeightCm is { } height ? TypedNumber.ForEditing(height, 0, culture) : null;
             BloodGroup = d.BloodGroup;
             Treatment = d.CurrentTreatment;
             Allergies = d.KnownAllergies;

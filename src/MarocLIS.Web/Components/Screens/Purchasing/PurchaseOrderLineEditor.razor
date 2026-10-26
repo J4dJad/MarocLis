@@ -94,7 +94,7 @@
     private void ItemChanged(ChangeEventArgs e)
     {
         if (!Guid.TryParse(e.Value?.ToString(), out var id) || Items.FirstOrDefault(i => i.Id == id) is not { } item) return;
-        PurchaseOrderScreenRules.Defaults(Form, item, SupplierId);
+        PurchaseOrderScreenRules.Defaults(Form, item, SupplierId, Texts.Culture);
         _checked = false;
         _refusal = null;
     }

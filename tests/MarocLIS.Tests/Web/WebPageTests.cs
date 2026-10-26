@@ -69,6 +69,39 @@ public sealed class WebPageTests : BunitContext
     }
 
     /// <summary>
+    /// A number box of the web is pre-filled and read as the screen's language writes numbers
+    /// (TypedNumber), never with the invariant culture: the payer's rate, the patient's weight and the
+    /// employee's hours opened with « 12.5 » where every other box took « 12,5 », and a browser
+    /// « number » box shows its own separator whatever the screen's language. The chart coordinates
+    /// of an SVG (the « F » helpers) are not text a user reads or types.
+    /// </summary>
+    [Fact]
+    public void NoNumberBoxOfTheWeb_IsPrefilledOrReadWithTheInvariantCulture()
+    {
+        var components = Path.Combine(WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web", "Components");
+        var patterns = new[]
+        {
+            new Regex(@"\.ToString\(""[0#NF][^""]*"",\s*(System\.Globalization\.)?CultureInfo\.InvariantCulture\)"),
+            new Regex(@"decimal\.TryParse\([^;]*InvariantCulture"),
+            new Regex(@"type=""number""[^>]*step=""0[.,]")
+        };
+
+        var wrong = new List<string>();
+        foreach (var file in Directory.GetFiles(components, "*.razor", SearchOption.AllDirectories))
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains("private static string F(double", StringComparison.Ordinal)) continue;
+                if (patterns.Any(p => p.IsMatch(lines[i])))
+                    wrong.Add($"{Path.GetFileName(file)}:{i + 1}: {lines[i].Trim()}");
+            }
+        }
+
+        wrong.Should().BeEmpty("a number is pre-filled with TypedNumber.ForEditing(value, decimals, Texts.Culture) and read with TypedNumber.Parse");
+    }
+
+    /// <summary>
     /// A text parameter given a field without its « @ » receives the field's name, not its value: the
     /// invoice dialog showed « _approvalRefused » in red on every invoice issued.
     /// </summary>

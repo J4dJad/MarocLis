@@ -96,19 +96,19 @@
 
     private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
 
-    protected override void OnInitialized() => _form = SettlementScreenRules.FormFor(Detail);
+    protected override void OnInitialized() => _form = SettlementScreenRules.FormFor(Detail, Texts.Culture);
 
     /// <summary>A basis typed: the amounts it moves put back to the law's.</summary>
     private void Typed(ChangeEventArgs e, Action<string?> set, bool leave = false, bool notice = false, bool severance = false)
     {
         set(e.Value as string);
-        SettlementScreenRules.Recompute(_form, Detail, leave, notice, severance);
+        SettlementScreenRules.Recompute(_form, Detail, leave, notice, severance, Texts.Culture);
     }
 
     private void NoticeChanged(ChangeEventArgs e)
     {
         _form.NoticeNotWorked = e.Value is true;
-        SettlementScreenRules.Recompute(_form, Detail, notice: true);
+        SettlementScreenRules.Recompute(_form, Detail, notice: true, culture: Texts.Culture);
     }
 
     private async Task SaveAsync()

@@ -150,7 +150,7 @@ public static class EmployeeFileRules
         detail is null ? null : $"{detail.Number} {detail.Request.LastName} {detail.Request.FirstName}";
 
     /// <summary>The form of a file opened, or of a new one hired today and on a permanent contract.</summary>
-    public static EmployeeForm FormFor(EmployeeDetail? detail, DateOnly today)
+    public static EmployeeForm FormFor(EmployeeDetail? detail, DateOnly today, IFormatProvider? culture = null)
     {
         if (detail?.Request is not { } r)
             return new EmployeeForm { HireDate = today };
@@ -181,7 +181,7 @@ public static class EmployeeFileRules
             ContractEndDate = r.ContractEndDate,
             TrialPeriodEndDate = r.TrialPeriodEndDate,
             WeeklyHours = r.WeeklyHours,
-            Salary = r.BaseSalary?.ToString("0.00", CultureInfo.InvariantCulture),
+            Salary = r.BaseSalary is { } salary ? TypedNumber.ForEditing(salary, 2, culture ?? CultureInfo.InvariantCulture) : null,
             Rib = r.Rib,
             Bank = r.BankName
         };
