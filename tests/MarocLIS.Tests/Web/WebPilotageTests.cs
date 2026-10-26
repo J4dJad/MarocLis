@@ -111,7 +111,7 @@ public sealed class WebPilotageTests : WebScreenContext
         page.Find("[data-state=greeting]").TextContent.Should().Be("Bonjour, Nadia");
         page.Find("[data-state=summary]").TextContent.Should().Contain("42").And.Contain("9");
         page.FindAll(".dashboard-step").Select(s => s.GetAttribute("href"))
-            .Should().Equal("ecran/collection", "ecran/reception", "ecran/entry", "ecran/validation", "ecran/reports");
+            .Should().Equal("ecran/collection", "ecran/reception", "ecran/entry", "ecran/validation", "ecran/reports?onglet=ToIssue");
         page.Find("[data-step='Dashboard.AwaitingValidation']").ClassName.Should().Contain("is-highlighted");
 
         page.FindAll("[data-alert]").Select(a => a.GetAttribute("data-alert"))

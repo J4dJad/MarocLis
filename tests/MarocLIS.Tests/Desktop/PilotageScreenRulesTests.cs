@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using MarocLIS.Application.Dashboard;
+using MarocLIS.Application.Reports;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Statistics;
 using MarocLIS.Application.Steering;
@@ -253,6 +254,15 @@ public sealed class PilotageScreenRulesTests
         board.QuietKeys.Should().Equal("Dashboard.QcAlertsLong", "Temperatures.DashboardMissing");
         board.QuietHintKey.Should().Be("Dashboard.NothingToReportHint");
         board.ShowsFlow.Should().BeTrue();
+    }
+
+    [Fact]
+    public void The_reports_to_issue_open_the_reports_on_their_to_issue_tab_every_other_figure_on_its_screens_first()
+    {
+        var board = DashboardScreenRules.Board(Snapshot(), new User(true, [.. Permissions.All]), Text, Fr);
+
+        board.Steps.Select(s => DashboardScreenRules.TabOf(s.Metric)).Should().Equal(null, null, null, null, nameof(ReportTab.ToIssue));
+        board.Pending.Should().OnlyContain(a => DashboardScreenRules.TabOf(a.Metric) == null);
     }
 
     [Fact]

@@ -328,9 +328,13 @@
     /// <summary>A file's report link: the register searched on its number, on « À émettre » when it waits there.</summary>
     [Parameter] public string? Search { get; set; }
 
+    /// <summary>The tab opened on, by its name (the dashboard's « Comptes rendus à émettre » opens « À émettre »).</summary>
+    [Parameter] public string? Tab { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         _term = Search?.Trim() ?? string.Empty;
+        if (Enum.TryParse<ReportTab>(Tab, ignoreCase: true, out var tab) && Enum.IsDefined(tab)) _tab = tab;
         await ActivateAsync();
 
         if (_term.Length > 0 && _pending.Count > 0 && _register.Count == 0) await SelectTabAsync(ReportTab.ToIssue);

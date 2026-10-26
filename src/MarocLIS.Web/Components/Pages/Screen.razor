@@ -108,7 +108,7 @@
             break;
 
         case ScreenDecision.Open when Key == "reports":
-            <MarocLIS.Web.Components.Screens.Reports.ReportRegister Search="@Recherche" />
+            <MarocLIS.Web.Components.Screens.Reports.ReportRegister Search="@Recherche" Tab="@Onglet" />
             break;
 
         case ScreenDecision.Open when Key == "billing":
@@ -284,7 +284,10 @@
     /// </summary>
     [SupplyParameterFromQuery(Name = "recherche")] public string? Recherche { get; set; }
 
-    /// <summary>« Paramètres » opened on a tab: the licence banner's link opens it on the licence's, as the workstation's.</summary>
+    /// <summary>
+    /// « Paramètres » opened on a tab: the licence banner's link opens it on the licence's, as the
+    /// workstation's; « Comptes rendus » on « À émettre » from the dashboard's step of that name.
+    /// </summary>
     [SupplyParameterFromQuery(Name = "onglet")] public string? Onglet { get; set; }
 
     private ScreenDecision _decision = ScreenDecision.NotFound;

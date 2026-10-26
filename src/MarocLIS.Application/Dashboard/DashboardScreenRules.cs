@@ -2,6 +2,7 @@ using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Input;
 using MarocLIS.Application.Navigation;
+using MarocLIS.Application.Reports;
 
 namespace MarocLIS.Application.Dashboard;
 
@@ -127,6 +128,17 @@ public static class DashboardScreenRules
     {
         ArgumentNullException.ThrowIfNull(metric);
         return DashboardRights.CanOpen(metric.NavigationKey, user) ? metric.NavigationKey : null;
+    }
+
+    /// <summary>
+    /// The tab a figure opens its screen on, when it is not the screen's own first tab: « Comptes
+    /// rendus à émettre » opens the reports on « À émettre », where those files are, and not on the
+    /// register of the reports already issued. Null for every other figure.
+    /// </summary>
+    public static string? TabOf(DashboardMetric metric)
+    {
+        ArgumentNullException.ThrowIfNull(metric);
+        return metric.LabelKey == "Dashboard.ReportsToRelease" ? nameof(ReportTab.ToIssue) : null;
     }
 
     /// <summary>

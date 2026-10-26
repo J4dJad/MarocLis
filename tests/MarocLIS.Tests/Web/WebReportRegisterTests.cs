@@ -44,6 +44,19 @@ public sealed class WebReportRegisterTests : WebFinanceContext
     }
 
     [Fact]
+    public void FromTheDashboardsReportsToIssue_TheRegisterOpensOnToIssue_WhereThoseFilesAre()
+    {
+        SignIn(AppLanguage.French, Cashier);
+        var page = Render<ReportRegister>(p => p.Add(x => x.Tab, "ToIssue"));
+
+        page.Find("[data-tab=ToIssue]").GetAttribute("aria-selected").Should().Be("true");
+        page.FindAll("[data-grid=pending] tbody tr").Should().ContainSingle();
+
+        Render<ReportRegister>(p => p.Add(x => x.Tab, "nimporte")).Find("[data-tab=Issued]")
+            .GetAttribute("aria-selected").Should().Be("true", "a tab unknown leaves the screen on its own first tab");
+    }
+
+    [Fact]
     public void AReprint_OfAnUnpaidFile_IsWarnedAbout_ThenAskedOfTheService()
     {
         SignIn(AppLanguage.French, Cashier);

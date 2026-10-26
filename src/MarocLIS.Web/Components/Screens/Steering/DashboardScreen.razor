@@ -67,7 +67,7 @@
                         var value = step.Metric.Value.ToString("N0", Texts.Culture);
                         @if (step.Opens is { } key)
                         {
-                            <a class="dashboard-step @(step.Highlighted ? "is-highlighted" : null)" href="@WebMenu.HrefOf(key)" data-step="@step.Metric.LabelKey" title="@caption">
+                            <a class="dashboard-step @(step.Highlighted ? "is-highlighted" : null)" href="@StepHref(key, step.Metric)" data-step="@step.Metric.LabelKey" title="@caption">
                                 <span class="dashboard-step-caption list-name">@caption</span>
                                 <span class="dashboard-step-value">@value</span>
                                 <span class="dashboard-step-link">@Texts[step.StepKey] @(rtl ? "‹" : "›")</span>
@@ -142,6 +142,10 @@
     private DashboardSnapshot? _snapshot;
     private DashboardBoard? _board;
     private DashboardSetupBanner? _setup;
+
+    /// <summary>A step's screen, on the tab its figure is counted in (« À émettre » for the reports to issue).</summary>
+    private static string StepHref(string key, DashboardMetric metric) =>
+        DashboardScreenRules.TabOf(metric) is { } tab ? $"{WebMenu.HrefOf(key)}?onglet={tab}" : WebMenu.HrefOf(key);
 
     /// <summary>The flow's columns: each step a share of the width, an arrow's between two.</summary>
     private static string StepColumns(int steps) =>
