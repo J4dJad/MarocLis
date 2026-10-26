@@ -98,38 +98,38 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
         _arabicName = TextField("Personnel.ArabicName", c3, y, w, r?.FullNameArabic, arabic: true);
         // The lengths of the columns: a longer value was refused by the database with an unexpected
         // error, and the form was lost with it.
-        _lastName.MaxLength = _firstName.MaxLength = 100;
-        _arabicName.MaxLength = 200;
+        _lastName.MaxLength = _firstName.MaxLength = EmployeeFileRules.NameMaxLength;
+        _arabicName.MaxLength = EmployeeFileRules.ArabicNameMaxLength;
 
         y += 52;
         _gender = Choice("Field.Gender", c1, y, w, r?.Gender ?? Gender.Unknown, "Gender");
         _birth = OptionalDate("Personnel.BirthDate", c2, y - 2, r?.BirthDate, max: DateTime.Today);
         _cin = TextField("Personnel.Cin", c3, y, w, r?.Cin, latin: true, mono: true);
-        _cin.MaxLength = 20;
+        _cin.MaxLength = EmployeeFileRules.CinMaxLength;
 
         y += 52;
         _cnss = TextField("Personnel.Cnss", c1, y, w, r?.CnssNumber, latin: true, mono: true);
-        _cnss.MaxLength = 20;
+        _cnss.MaxLength = EmployeeFileRules.CnssMaxLength;
         _family = Choice("Personnel.FamilyStatus", c2, y, w, r?.FamilyStatus ?? FamilyStatus.Unmarried, "FamilyStatus");
-        _children = Number("Personnel.Children", c3, y, 120, r?.DependentChildren ?? 0, max: 20);
+        _children = Number("Personnel.Children", c3, y, 120, r?.DependentChildren ?? 0, max: EmployeeFileRules.MaxChildren);
 
         y += 52;
         _phone = TextField("Field.Phone", c1, y, w, r?.Phone, latin: true);
         _email = TextField("Field.Email", c2, y, w, r?.Email, latin: true);
         _city = TextField("Personnel.City", c3, y, w, r?.City);
-        _phone.MaxLength = 30;
-        _email.MaxLength = 200;
-        _city.MaxLength = 100;
+        _phone.MaxLength = EmployeeFileRules.PhoneMaxLength;
+        _email.MaxLength = EmployeeFileRules.EmailMaxLength;
+        _city.MaxLength = EmployeeFileRules.CityMaxLength;
 
         y += 52;
         _address = TextField("Personnel.Address", c1, y, FormWidth - 40, r?.Address);
-        _address.MaxLength = 300;
+        _address.MaxLength = EmployeeFileRules.AddressMaxLength;
 
         y += 58;
         Section("Personnel.Position", y); y += 22;
         _job = Choice("Personnel.Job", c1, y, w, r?.Job ?? EmployeeJob.Technician, "EmployeeJob");
         _jobTitle = TextField("Personnel.JobTitle", c2, y, w, r?.JobTitle);
-        _jobTitle.MaxLength = 150;
+        _jobTitle.MaxLength = EmployeeFileRules.JobTitleMaxLength;
         _department = Lookup("Field.Department", c3, y, w,
                              lookups.Departments.Select(d => (d.Id, d.Label)), r?.DepartmentId);
 
@@ -142,10 +142,13 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
                                max: DateTime.Today);
 
         // A new file follows the job: picking "agent d'entretien" ticks the exposure box. An existing
-        // file keeps what HR decided.
-        if (detail is null)
-            _job.SelectedIndexChanged += (_, _) =>
-                _exposed.Checked = Employee.IsExposedByDefault(Selected<EmployeeJob>(_job));
+        // file keeps what HR decided (EmployeeFileRules.JobChanged).
+        _job.SelectedIndexChanged += (_, _) =>
+        {
+            var form = new EmployeeForm { Job = Selected<EmployeeJob>(_job), Exposed = _exposed.Checked };
+            EmployeeFileRules.JobChanged(form, isNew: detail is null);
+            _exposed.Checked = form.Exposed;
+        };
 
         y += 58;
         Section("Personnel.Contract", y); y += 22;
@@ -162,14 +165,22 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
 
         y += 52;
         _trialEnd = OptionalDate("Personnel.TrialEnd", c1, y - 2, r?.TrialPeriodEndDate);
-        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 120, r?.WeeklyHours ?? 44m, max: 60m, decimals: 2);
+        _weeklyHours = Number("Personnel.WeeklyHours", c2, y, 120, r?.WeeklyHours ?? EmployeeFileRules.DefaultWeeklyHours,
+                              max: EmployeeFileRules.MaxWeeklyHours, decimals: 2);
 
         var endNotice = Notice(c3, y + 4, w, 34, "Personnel.ContractEndNotice", UiTheme.Abnormal);
-        void RefreshEndNotice() => endNotice.Visible = Employee.RequiresEndDate(Selected<ContractType>(_contract));
+        void RefreshEndNotice() => endNotice.Visible = EmployeeFileRules.ShowsEndNotice(Selected<ContractType>(_contract));
         _contract.SelectedIndexChanged += (_, _) =>
         {
             RefreshEndNotice();
-            if (Employee.RequiresEndDate(Selected<ContractType>(_contract))) _contractEnd.Toggle.Checked = true;
+            // A contract that must end on a date gets one (EmployeeFileRules.ContractChanged).
+            var form = new EmployeeForm
+            {
+                ContractType = Selected<ContractType>(_contract),
+                ContractEndDate = DateOrNull(_contractEnd.Toggle, _contractEnd.Picker)
+            };
+            EmployeeFileRules.ContractChanged(form, DateOnly.FromDateTime(_contractEnd.Picker.Value.Date));
+            if (form.ContractEndDate is not null) _contractEnd.Toggle.Checked = true;
         };
         RefreshEndNotice();
 
@@ -183,9 +194,9 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
                                 latin: true, right: true);
             _rib = TextField("Personnel.Rib", c2, y, w, r?.Rib, latin: true, mono: true);
             _bank = TextField("Personnel.Bank", c3, y, w, r?.BankName);
-            Numeric(EditorValues.AmountMaxLength, _salary);
-            _rib.MaxLength = 30;
-            _bank.MaxLength = 100;
+            Numeric(EmployeeFileRules.SalaryMaxLength, _salary);
+            _rib.MaxLength = EmployeeFileRules.RibMaxLength;
+            _bank.MaxLength = EmployeeFileRules.BankMaxLength;
             y += 58;
         }
         else
@@ -212,64 +223,48 @@ internal sealed class EmployeeEditorDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_lastName.Text) || string.IsNullOrWhiteSpace(_firstName.Text))
+        // The shared check (EmployeeFileRules.Check): the name, the CIN and the CNSS number in their
+        // form, the salary a number and the RIB with its key, each refused on its box.
+        var form = new EmployeeForm
         {
-            Dialogs.Warn(Localizer["Employee_NameRequired"], Text);
-            _lastName.Focus();
-            return;
-        }
-
-        decimal? salary = null;
-        if (_salary is not null && !string.IsNullOrWhiteSpace(_salary.Text))
-        {
-            salary = DecimalOrNull(_salary);
-            if (salary is null)
-            {
-                Dialogs.Warn(Localizer["Employee_SalaryInvalid"], Text);
-                _salary.Focus();
-                return;
-            }
-        }
-
-        if (_rib is not null && !string.IsNullOrWhiteSpace(_rib.Text) && !Employee.IsValidRib(_rib.Text))
-        {
-            Dialogs.Warn(Localizer["Employee_RibInvalid"], Text);
-            _rib.Focus();
-            return;
-        }
-
-        Request = new EmployeeRequest
-        {
-            EmployeeId = _detail?.Request.EmployeeId,
-            LastName = _lastName.Text.Trim(),
-            FirstName = _firstName.Text.Trim(),
-            FullNameArabic = Blank(_arabicName),
+            LastName = _lastName.Text,
+            FirstName = _firstName.Text,
+            ArabicName = _arabicName.Text,
             Gender = Selected<Gender>(_gender),
             BirthDate = DateOrNull(_birth.Toggle, _birth.Picker),
-            Cin = Blank(_cin),
-            CnssNumber = Blank(_cnss),
+            Cin = _cin.Text,
+            Cnss = _cnss.Text,
             FamilyStatus = Selected<FamilyStatus>(_family),
-            DependentChildren = (int)_children.Value,
-            Address = Blank(_address),
-            City = Blank(_city),
-            Phone = Blank(_phone),
-            Email = Blank(_email),
+            Children = (int)_children.Value,
+            Phone = _phone.Text,
+            Email = _email.Text,
+            City = _city.Text,
+            Address = _address.Text,
             Job = Selected<EmployeeJob>(_job),
-            JobTitle = Blank(_jobTitle),
+            JobTitle = _jobTitle.Text,
             DepartmentId = SelectedId(_department),
             UserId = SelectedId(_user),
-            IsExposedToBiologicalRisk = _exposed.Checked,
+            Exposed = _exposed.Checked,
             ConfidentialityClauseSignedOn = DateOrNull(_clause.Toggle, _clause.Picker),
             ContractType = Selected<ContractType>(_contract),
             HireDate = DateOnly.FromDateTime(_hireDate.Value.Date),
             ContractEndDate = DateOrNull(_contractEnd.Toggle, _contractEnd.Picker),
             TrialPeriodEndDate = DateOrNull(_trialEnd.Toggle, _trialEnd.Picker),
             WeeklyHours = _weeklyHours.Value,
-            BaseSalary = _canSeeSalary ? salary : null,
-            Rib = _rib is null ? null : Blank(_rib),
-            BankName = _bank is null ? null : Blank(_bank)
+            Salary = _salary?.Text,
+            Rib = _rib?.Text,
+            Bank = _bank?.Text
         };
 
+        var (refusal, request) = EmployeeFileRules.Check(form, _detail?.Request.EmployeeId, _canSeeSalary);
+        if (Refused(refusal,
+                    (EmployeeFileRules.LastNameField, _lastName), (EmployeeFileRules.FirstNameField, _firstName),
+                    (EmployeeFileRules.CinField, _cin), (EmployeeFileRules.CnssField, _cnss),
+                    (EmployeeFileRules.ChildrenField, _children), (EmployeeFileRules.WeeklyHoursField, _weeklyHours),
+                    (EmployeeFileRules.SalaryField, _salary), (EmployeeFileRules.RibField, _rib)))
+            return;
+
+        Request = request!;
         DialogResult = DialogResult.OK;
     }
 }
@@ -386,8 +381,7 @@ internal sealed class CredentialsDialog : Form
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not CredentialRow row) return;
-            if (row.ExpiresOn is { } until && until < DateOnly.FromDateTime(DateTime.Today)
-                || row.Fitness == MedicalFitness.Unfit)
+            if (CredentialRules.IsAlarm(row, DateOnly.FromDateTime(DateTime.Today)))
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
@@ -414,12 +408,17 @@ internal sealed class CredentialsDialog : Form
 
     private CredentialRow? Current() => _grid.CurrentRow?.Tag as CredentialRow;
 
+    private string T(string key, params object?[] args) => args.Length == 0 ? _localizer[key] : _localizer.Format(key, args);
+
     private void UpdateButtons()
     {
-        var row = Current();
-        _edit.Enabled = _attach.Enabled = _remove.Enabled = row is not null && _pending == 0;
-        _open.Enabled = row?.FileName is not null && _pending == 0;
-        _add.Enabled = _pending == 0;
+        // By document and one operation at a time (CredentialRules.Actions); the right is the gate's.
+        var actions = CredentialRules.Actions(Current(), _pending > 0, _ => true);
+        _edit.Enabled = actions.Edit;
+        _attach.Enabled = actions.Attach;
+        _remove.Enabled = actions.Remove;
+        _open.Enabled = actions.Open;
+        _add.Enabled = actions.Add;
     }
 
     /// <summary>One operation at a time: a second click while a scan uploads does nothing.</summary>
@@ -449,14 +448,10 @@ internal sealed class CredentialsDialog : Form
         _grid.Rows.Clear();
         foreach (var c in detail.Credentials)
         {
-            var note = c.Fitness is { } fitness
-                ? $"{_localizer[$"MedicalFitness.{fitness}"]}{(c.Note is null ? string.Empty : " · " + c.Note)}"
-                : c.Note ?? string.Empty;
-
-            var index = _grid.Rows.Add(_localizer[$"CredentialKind.{c.Kind}"], c.Title, c.Reference ?? string.Empty,
-                                       c.IssuedBy ?? string.Empty, c.ObtainedOn?.ToString("dd/MM/yyyy") ?? "—",
-                                       c.ExpiresOn?.ToString("dd/MM/yyyy") ?? "—",
-                                       c.FileName is null ? "—" : _localizer["Credential.HasScan"], note);
+            var index = _grid.Rows.Add(CredentialRules.Kind(c, T), c.Title, c.Reference ?? string.Empty,
+                                       c.IssuedBy ?? string.Empty, PersonnelScreenRules.DateOrDash(c.ObtainedOn),
+                                       PersonnelScreenRules.DateOrDash(c.ExpiresOn), CredentialRules.Scan(c, T),
+                                       CredentialRules.Note(c, T));
             _grid.Rows[index].Tag = c;
             if (c.FileName is not null) _grid.Rows[index].Cells["file"].ToolTipText = c.FileName;
             if (c.CredentialId == keep) _grid.CurrentCell = _grid.Rows[index].Cells[0];
@@ -523,9 +518,9 @@ internal sealed class CredentialsDialog : Form
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > CredentialFile.MaximumBytes)
+            if (CredentialRules.CheckScan(info.Name, info.Length) is { } refused)
             {
-                _dialogs.Warn(_localizer.Format("Credential_FileTooLarge", CredentialFile.MaximumBytes / (1024 * 1024)),
+                _dialogs.Warn(refused.Typed is { } typed ? _localizer.Format(refused.Key, typed) : _localizer[refused.Key],
                               _attach.Text);
                 return;
             }
@@ -560,7 +555,8 @@ internal sealed class CredentialsDialog : Form
     {
         if (Current() is not { } row) return;
 
-        var reason = _dialogs.PromptForReason(_localizer.Format("Credential.RemovePrompt", row.Title), _remove.Text);
+        var reason = _dialogs.PromptForReason(_localizer.Format("Credential.RemovePrompt", row.Title), _remove.Text,
+                                              maxLength: CredentialRules.RemoveReasonMaxLength);
         if (reason is null) return;
 
         var removed = await _personnel.RemoveCredentialAsync(_employeeId, row.CredentialId, reason);
@@ -577,7 +573,7 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
     private readonly ComboBox _kind, _fitness;
     private readonly TextBox _title, _reference, _issuer, _note;
     private readonly (CheckBox Toggle, DateTimePicker Picker) _obtained, _expires;
-    private string _suggested = string.Empty;
+    private readonly CredentialForm _form;
 
     internal CredentialRequest Request { get; private set; } = null!;
 
@@ -593,20 +589,22 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
                                  max: DateTime.Today);
         _expires = OptionalDate("Credential.ExpiresOn", 270, 164, null);
         _note = TextField("Field.Notes", 20, 216, 480);
-        _title.MaxLength = _issuer.MaxLength = 200;
-        _reference.MaxLength = 60;
-        _note.MaxLength = 500;
+        _title.MaxLength = CredentialRules.TitleMaxLength;
+        _issuer.MaxLength = CredentialRules.IssuedByMaxLength;
+        _reference.MaxLength = CredentialRules.ReferenceMaxLength;
+        _note.MaxLength = CredentialRules.NoteMaxLength;
         Notice(20, 266, 480, 34, "Credential.NoDiagnosisNotice");
 
+        // The form the shared rules propose (CredentialRules.FormFor): the document as it is.
+        _form = CredentialRules.FormFor(existing, DateOnly.FromDateTime(DateTime.Today), (k, a) => a.Length == 0 ? localizer[k] : localizer.Format(k, a));
         if (existing is not null)
         {
-            _title.Text = existing.Title;
-            _reference.Text = existing.Reference ?? string.Empty;
-            _issuer.Text = existing.IssuedBy ?? string.Empty;
-            SetDate(_obtained, existing.ObtainedOn);
-            SetDate(_expires, existing.ExpiresOn);
-            _note.Text = existing.Note ?? string.Empty;
-            _suggested = existing.Title;
+            _title.Text = _form.Title;
+            _reference.Text = _form.Reference ?? string.Empty;
+            _issuer.Text = _form.IssuedBy ?? string.Empty;
+            SetDate(_obtained, _form.ObtainedOn);
+            SetDate(_expires, _form.ExpiresOn);
+            _note.Text = _form.Note ?? string.Empty;
         }
 
         _kind.SelectedIndexChanged += (_, _) => OnKindChanged();
@@ -633,40 +631,29 @@ internal sealed class CredentialEditorDialog : MasterDataEditor
     /// </summary>
     private void OnKindChanged()
     {
-        var kind = Selected<CredentialKind>(_kind);
-        _fitness.Enabled = kind == CredentialKind.MedicalVisit;
+        _form.Kind = Selected<CredentialKind>(_kind);
+        _fitness.Enabled = CredentialRules.AsksFitness(_form.Kind);
 
-        var suggestion = kind is CredentialKind.Other or CredentialKind.Diploma or CredentialKind.ContinuingEducation
-            ? string.Empty
-            : Localizer[$"CredentialKind.{kind}"];
-
-        if (_title.Text.Length == 0 || _title.Text == _suggested) _title.Text = suggestion;
-        _suggested = suggestion;
+        _form.Title = _title.Text;
+        CredentialRules.KindChanged(_form, (k, a) => a.Length == 0 ? Localizer[k] : Localizer.Format(k, a));
+        _title.Text = _form.Title;
     }
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_title.Text))
-        {
-            Dialogs.Warn(Localizer["Credential_TitleRequired"], Text);
-            _title.Focus();
-            return;
-        }
+        _form.Kind = Selected<CredentialKind>(_kind);
+        _form.Fitness = Selected<MedicalFitness>(_fitness);
+        _form.Title = _title.Text;
+        _form.Reference = _reference.Text;
+        _form.IssuedBy = _issuer.Text;
+        _form.ObtainedOn = DateOrNull(_obtained.Toggle, _obtained.Picker);
+        _form.ExpiresOn = DateOrNull(_expires.Toggle, _expires.Picker);
+        _form.Note = _note.Text;
 
-        var kind = Selected<CredentialKind>(_kind);
+        var (refusal, request) = CredentialRules.Check(_form);
+        if (Refused(refusal, (CredentialRules.TitleField, _title), (CredentialRules.ExpiresField, _expires.Picker))) return;
 
-        Request = new CredentialRequest
-        {
-            Kind = kind,
-            Title = _title.Text.Trim(),
-            Reference = Blank(_reference),
-            IssuedBy = Blank(_issuer),
-            ObtainedOn = DateOrNull(_obtained.Toggle, _obtained.Picker),
-            ExpiresOn = DateOrNull(_expires.Toggle, _expires.Picker),
-            Fitness = kind == CredentialKind.MedicalVisit ? Selected<MedicalFitness>(_fitness) : null,
-            Note = Blank(_note)
-        };
-
+        Request = request!;
         DialogResult = DialogResult.OK;
     }
 }
@@ -688,7 +675,7 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
     internal EmployeeExitDialog(ILocalizer localizer, IUserDialogs dialogs, string employee,
                                 (DateOnly Date, ExitReason Reason, string? Comment)? current = null,
                                 string? linkedUserName = null)
-        : base(localizer, dialogs, current is null ? "Personnel.RecordExit" : "Personnel.CorrectExit", employee, 520,
+        : base(localizer, dialogs, DepartureRules.TitleKey(correcting: current is not null), employee, 520,
                linkedUserName is null ? 250 : 300)
     {
         Label("Personnel.ExitDate", 20, 10);
@@ -699,14 +686,13 @@ internal sealed class EmployeeExitDialog : MasterDataEditor
 
         _reason = Choice("Personnel.ExitReason", 270, 10, 230, current?.Reason ?? ExitReason.Resignation, "ExitReason");
         _comment = TextField("Field.Comment", 20, 64, 480, current?.Comment);
-        _comment.MaxLength = 500;
+        _comment.MaxLength = DepartureRules.CommentMaxLength;
         Notice(20, 116, 480, 40, "Personnel.ExitNoticeAfterLastDay", UiTheme.Abnormal);
 
         // The linked LIS account stops with the departure (owner decision, cycle 5): said before
         // the exit is saved, with the account's name.
-        if (linkedUserName is not null)
-            Notice(20, 160, 480, 40, "Personnel.ExitDeactivatesAccount", UiTheme.Abnormal).Text =
-                Localizer.Format("Personnel.ExitDeactivatesAccount", linkedUserName);
+        if (DepartureRules.AccountNotice(linkedUserName, (k, a) => Localizer.Format(k, a)) is { } notice)
+            Notice(20, 160, 480, 40, "Personnel.ExitDeactivatesAccount", UiTheme.Abnormal).Text = notice;
 
         Buttons(linkedUserName is null ? 200 : 250, 520);
         QhDialog.Dress(this, localizer, null);
@@ -728,9 +714,9 @@ internal sealed class EmployeeRehireDialog : MasterDataEditor
         Label("Personnel.RehireDate", 20, 10);
         _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
         _date.Format = DateTimePickerFormat.Short;
-        var earliest = exit.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        _date.MinDate = earliest;
-        _date.Value = DateTime.Today > earliest ? DateTime.Today : earliest;
+        // The day after the departure at the earliest (DepartureRules.EarliestRehire).
+        _date.MinDate = DepartureRules.EarliestRehire(exit).ToDateTime(TimeOnly.MinValue);
+        _date.Value = DepartureRules.RehireDefault(exit, DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue);
         Controls.Add(_date);
 
         Notice(20, 70, 480, 70, "Personnel.RehireNotice", UiTheme.Abnormal);
@@ -752,21 +738,20 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
     private readonly DateTimePicker _granted = new();
     private readonly (CheckBox Toggle, DateTimePicker Picker) _review;
     private readonly TextBox _evidence;
+    private readonly HabilitationForm _form;
 
-    internal HabilitationActivity Activity => Selected<HabilitationActivity>(_activity);
-    internal Guid? SubjectId => _subject.Enabled ? SelectedId(_subject) : null;
-    internal HabilitationLevel Level => Selected<HabilitationLevel>(_level);
-    internal DateOnly GrantedOn => DateOnly.FromDateTime(_granted.Value.Date);
-    internal DateOnly? ReviewDueOn => DateOrNull(_review.Toggle, _review.Picker);
-    internal string? Evidence => Blank(_evidence);
+    /// <summary>The decision checked by the shared rules (HabilitationScreenRules.Check).</summary>
+    internal HabilitationGrant Grant { get; private set; } = null!;
 
     internal HabilitationGrantDialog(ILocalizer localizer, IUserDialogs dialogs, string employee,
-                                     PersonnelLookups lookups, HabilitationActivity activity, Guid? subjectId)
+                                     PersonnelLookups lookups, HabilitationColumn? column)
         : base(localizer, dialogs, "Habilitation.Grant", employee, 560, 350)
     {
         _lookups = lookups;
+        // Opened on the column selected, habilitated from today, reviewed in a year (HabilitationScreenRules.FormFor).
+        _form = HabilitationScreenRules.FormFor(column, lookups, DateOnly.FromDateTime(DateTime.Today));
 
-        _activity = Choice("Habilitation.Activity", 20, 10, 250, activity, "HabilitationActivity");
+        _activity = Choice("Habilitation.Activity", 20, 10, 250, _form.Activity, "HabilitationActivity");
 
         Label("Habilitation.Subject", 290, 10);
         _subject.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -774,41 +759,43 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
         _subject.Bounds = new Rectangle(290, 28, 250, UiTheme.InputHeight);
         Controls.Add(_subject);
 
-        _level = Choice("Habilitation.Level", 20, 62, 250, HabilitationLevel.Authorized, "HabilitationLevel");
+        _level = Choice("Habilitation.Level", 20, 62, 250, _form.Level, "HabilitationLevel");
 
         Label("Habilitation.GrantedOn", 290, 62);
         _granted.Bounds = new Rectangle(290, 80, 180, UiTheme.InputHeight);
         _granted.Format = DateTimePickerFormat.Short;
         _granted.MaxDate = DateTime.Today;
-        _granted.Value = DateTime.Today;
+        _granted.Value = _form.GrantedOn.ToDateTime(TimeOnly.MinValue);
         Controls.Add(_granted);
 
-        _review = OptionalDate("Habilitation.ReviewDue", 20, 112,
-                               DateOnly.FromDateTime(DateTime.Today.AddYears(1)), min: DateTime.Today);
+        _review = OptionalDate("Habilitation.ReviewDue", 20, 112, _form.ReviewDueOn, min: DateTime.Today);
 
         _evidence = TextField("Habilitation.Evidence", 20, 166, 520);
-        _evidence.MaxLength = 500;
+        _evidence.MaxLength = HabilitationScreenRules.EvidenceMaxLength;
         Notice(20, 216, 520, 70, "Habilitation.SignatureNotice");
 
-        _activity.SelectedIndexChanged += (_, _) => FillSubjects(null);
-        FillSubjects(subjectId);
+        _activity.SelectedIndexChanged += (_, _) =>
+        {
+            _form.Activity = Selected<HabilitationActivity>(_activity);
+            HabilitationScreenRules.ActivityChanged(_form, _lookups);
+            FillSubjects();
+        };
+        FillSubjects();
 
         Buttons(296, 560);
         QhDialog.Dress(this, localizer, null);
     }
 
-    private void FillSubjects(Guid? current)
+    private void FillSubjects()
     {
-        var activity = Activity;
         _subject.Items.Clear();
-        _subject.Enabled = EmployeeHabilitation.RequiresSubject(activity);
+        _subject.Enabled = HabilitationScreenRules.AsksSubject(_form.Activity);
         if (!_subject.Enabled) return;
 
-        var options = EmployeeHabilitation.SubjectIsInstrument(activity) ? _lookups.Instruments : _lookups.Departments;
-        foreach (var option in options)
+        foreach (var option in HabilitationScreenRules.Subjects(_form.Activity, _lookups))
         {
             var index = _subject.Items.Add(new LookupChoice(option.Id, option.Label));
-            if (option.Id == current) _subject.SelectedIndex = index;
+            if (option.Id == _form.SubjectId) _subject.SelectedIndex = index;
         }
 
         if (_subject.SelectedIndex < 0 && _subject.Items.Count > 0) _subject.SelectedIndex = 0;
@@ -816,12 +803,19 @@ internal sealed class HabilitationGrantDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (_subject.Enabled && SelectedId(_subject) is null)
-        {
-            Dialogs.Warn(Localizer["Habilitation_SubjectRequired"], Text);
-            return;
-        }
+        _form.Activity = Selected<HabilitationActivity>(_activity);
+        _form.SubjectId = _subject.Enabled ? SelectedId(_subject) : null;
+        _form.Level = Selected<HabilitationLevel>(_level);
+        _form.GrantedOn = DateOnly.FromDateTime(_granted.Value.Date);
+        _form.ReviewDueOn = DateOrNull(_review.Toggle, _review.Picker);
+        _form.Evidence = _evidence.Text;
 
+        var (refusal, grant) = HabilitationScreenRules.Check(_form, DateOnly.FromDateTime(DateTime.Today));
+        if (Refused(refusal, (HabilitationScreenRules.SubjectField, _subject), (HabilitationScreenRules.GrantedOnField, _granted),
+                    (HabilitationScreenRules.ReviewField, _review.Picker)))
+            return;
+
+        Grant = grant!;
         DialogResult = DialogResult.OK;
     }
 }
@@ -846,62 +840,46 @@ internal sealed class SettlementDialog : MasterDataEditor
         : base(localizer, dialogs, "Personnel.Settlement", $"{d.Number} {d.FullName}", 720, 470)
     {
         _detail = d;
-        var a = d.Saved ?? d.Suggested;
-        static string N(decimal v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+        // The amounts saved, or the law's (SettlementScreenRules.FormFor), and the sentences that explain them.
+        var a = SettlementScreenRules.FormFor(d);
 
         Controls.Add(new Label
         {
             Font = UiTheme.Body, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 10, 680, 40),
-            Text = localizer.Format("Settlement.Summary", d.HireDate.ToString("dd/MM/yyyy", Fr), d.ExitDate.ToString("dd/MM/yyyy", Fr),
-                                    localizer[$"ExitReason.{d.ExitReason}"], d.ServiceYears.ToString("0.##", Fr),
-                                    localizer[$"StaffCategory.{d.Category}"])
+            Text = SettlementScreenRules.Summary(d, T, Fr)
         });
 
-        _reference = TextField("Settlement.ReferenceSalary", 20, 56, 200, N(a.ReferenceSalary), mono: true, right: true);
-        _leaveDays = TextField("Settlement.LeaveDays", 250, 56, 180, N(a.LeaveDays), mono: true, right: true);
-        _leave = TextField("Settlement.LeaveIndemnity", 460, 56, 240, N(a.LeaveIndemnity), mono: true, right: true);
-        Hint(20, 100, 420, d.ReferenceMonths > 0
-            ? localizer.Format("Settlement.ReferenceFromMonths", d.ReferenceMonths)
-            : localizer["Settlement.ReferenceFromBase"]);
+        _reference = TextField("Settlement.ReferenceSalary", 20, 56, 200, a.ReferenceSalary, mono: true, right: true);
+        _leaveDays = TextField("Settlement.LeaveDays", 250, 56, 180, a.LeaveDays, mono: true, right: true);
+        _leave = TextField("Settlement.LeaveIndemnity", 460, 56, 240, a.LeaveIndemnity, mono: true, right: true);
+        Hint(20, 100, 420, SettlementScreenRules.ReferenceHint(d, T));
 
         _noticeNotWorked = Check("Settlement.NoticeNotWorked", 20, 132, a.NoticeNotWorked);
-        _notice = TextField("Settlement.NoticeIndemnity", 460, 124, 240, N(a.NoticeIndemnity), mono: true, right: true);
-        var period = d.Notice.Months > 0
-            ? localizer.Format("Settlement.NoticeMonths", d.Notice.Months)
-            : localizer.Format("Settlement.NoticeDays", d.Notice.Days);
-        Hint(20, 156, 420, d.NoticeApplies
-            ? localizer.Format("Settlement.NoticeLegal", period)
-            : localizer["Settlement.NoticeNotDue"]);
+        _notice = TextField("Settlement.NoticeIndemnity", 460, 124, 240, a.NoticeIndemnity, mono: true, right: true);
+        Hint(20, 156, 420, SettlementScreenRules.NoticeHint(d, T));
 
-        _severance = TextField("Settlement.Severance", 460, 192, 240, N(a.SeverancePay), mono: true, right: true);
-        Hint(20, 210, 420, d.SeveranceDue
-            ? localizer.Format("Settlement.SeveranceDue", d.SeveranceHours.ToString("0.##", Fr))
-            : localizer["Settlement.SeveranceNotDue"]);
+        _severance = TextField("Settlement.Severance", 460, 192, 240, a.Severance, mono: true, right: true);
+        Hint(20, 210, 420, SettlementScreenRules.SeveranceHint(d, T, Fr));
 
         _note = TextField("Field.Notes", 20, 252, 680, a.Note);
-        _note.MaxLength = 500;
-        Numeric(EditorValues.AmountMaxLength, _reference, _leave, _notice, _severance);
+        _note.MaxLength = SettlementScreenRules.NoteMaxLength;
+        Numeric(SettlementScreenRules.AmountMaxLength, _reference, _leave, _notice, _severance);
         // A decimal(9,2) column: seven figures before the comma. Checked as a number like the
         // amounts: "abc" in the days was refused as a negative amount.
-        Numeric(7, _leaveDays);
+        Numeric(SettlementScreenRules.LeaveDaysMaxLength, _leaveDays);
 
         _total = new Label { Font = UiTheme.BodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = false, Bounds = new Rectangle(20, 306, 680, 22) };
         Controls.Add(_total);
 
-        if (d.SignedOn is { } signed)
-        {
-            Notice(20, 336, 680, 60, "Settlement.Signed", UiTheme.Abnormal).Text =
-                localizer.Format("Settlement.Signed", signed.ToString("dd/MM/yyyy", Fr));
+        var (notice, warning) = SettlementScreenRules.Notice(d, T);
+        Notice(20, 336, 680, 60, "Settlement.NoticePayroll", warning ? UiTheme.Abnormal : null).Text = notice;
+        if (SettlementScreenRules.IsReadOnly(d))
             foreach (var box in new Control[] { _reference, _leaveDays, _leave, _notice, _severance, _note, _noticeNotWorked })
                 box.Enabled = false;
-        }
-        else
-            Notice(20, 336, 680, 60, d.Payroll == SettlementPayroll.Closed ? "Settlement.NoticePayrollClosed" : "Settlement.NoticePayroll",
-                   d.Payroll == SettlementPayroll.Closed ? UiTheme.Abnormal : null);
 
         Buttons(410, 720);
 
-        _notice.Enabled = _noticeNotWorked.Checked && d.SignedOn is null;
+        _notice.Enabled = SettlementScreenRules.NoticeEditable(Form(), d);
         _reference.TextChanged += (_, _) => Recompute(leave: true, notice: true, severance: true);
         _leaveDays.TextChanged += (_, _) => Recompute(leave: true);
         _noticeNotWorked.CheckedChanged += (_, _) =>
@@ -914,33 +892,37 @@ internal sealed class SettlementDialog : MasterDataEditor
         QhDialog.Dress(this, localizer, null);
     }
 
+    private string T(string key, params object?[] args) => args.Length == 0 ? Localizer[key] : Localizer.Format(key, args);
+
     private void Hint(int x, int y, int width, string text) => Controls.Add(new Label
     {
         Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary, AutoSize = false, AutoEllipsis = true,
         Bounds = new Rectangle(x, y, width, 20), Text = text
     });
 
-    // The shared reader, as in the other editors: "1.250,50" was refused here as a negative amount.
-    private static bool Read(TextBox box, out decimal value) => EditorValues.TryParseOrZero(box.Text, out value);
+    private SettlementForm Form() => new()
+    {
+        ReferenceSalary = _reference.Text,
+        LeaveDays = _leaveDays.Text,
+        LeaveIndemnity = _leave.Text,
+        NoticeNotWorked = _noticeNotWorked.Checked,
+        NoticeIndemnity = _notice.Text,
+        Severance = _severance.Text,
+        Note = _note.Text
+    };
 
-    private static void Put(TextBox box, decimal value) => box.Text = value.ToString("0.##", CultureInfo.InvariantCulture);
-
-    /// <summary>Puts the law's figure back in each amount whose basis just changed.</summary>
+    /// <summary>Puts the law's figure back in each amount whose basis just changed (SettlementScreenRules.Recompute).</summary>
     private void Recompute(bool leave = false, bool notice = false, bool severance = false)
     {
-        if (_computing || !Read(_reference, out var reference)) return;
+        if (_computing) return;
         _computing = true;
         try
         {
-            var d = _detail;
-            if (leave && Read(_leaveDays, out var days))
-                Put(_leave, SettlementCalculator.LeaveIndemnity(days, reference, d.MonthlyWorkingDays));
-            if (notice)
-                Put(_notice, _noticeNotWorked.Checked && d.NoticeApplies
-                    ? SettlementCalculator.NoticeIndemnity(d.Notice, reference, d.MonthlyWorkingDays)
-                    : 0m);
-            if (severance && d.SeveranceDue)
-                Put(_severance, SettlementCalculator.Severance(d.ServiceYears, reference, d.MonthlyHours));
+            var form = Form();
+            SettlementScreenRules.Recompute(form, _detail, leave, notice, severance);
+            if (_leave.Text != form.LeaveIndemnity) _leave.Text = form.LeaveIndemnity;
+            if (_notice.Text != form.NoticeIndemnity) _notice.Text = form.NoticeIndemnity;
+            if (_severance.Text != form.Severance) _severance.Text = form.Severance;
         }
         finally
         {
@@ -950,34 +932,23 @@ internal sealed class SettlementDialog : MasterDataEditor
         ShowTotal();
     }
 
-    private void ShowTotal()
-    {
-        Read(_leave, out var leave);
-        Read(_notice, out var notice);
-        Read(_severance, out var severance);
-        _total.Text = Localizer.Format("Settlement.Total", (leave + notice + severance).ToString("N2", Fr));
-    }
+    private void ShowTotal() => _total.Text = SettlementScreenRules.TotalText(Form(), T, Fr);
 
     protected override void Accept()
     {
-        if (_detail.SignedOn is not null)
+        if (SettlementScreenRules.IsReadOnly(_detail))
         {
             DialogResult = DialogResult.Cancel;
             return;
         }
 
-        TextBox[] boxes = [_reference, _leaveDays, _leave, _notice, _severance];
-        var values = new decimal[boxes.Length];
-        for (var i = 0; i < boxes.Length; i++)
-            if (!Read(boxes[i], out values[i]) || values[i] < 0)
-            {
-                Dialogs.Warn(Localizer["Settlement_NegativeAmount"], Text);
-                boxes[i].Focus();
-                return;
-            }
+        var (refusal, amounts) = SettlementScreenRules.Check(Form());
+        if (Refused(refusal, (SettlementScreenRules.ReferenceField, _reference), (SettlementScreenRules.LeaveDaysField, _leaveDays),
+                    (SettlementScreenRules.LeaveField, _leave), (SettlementScreenRules.NoticeField, _notice),
+                    (SettlementScreenRules.SeveranceField, _severance)))
+            return;
 
-        Amounts = new SettlementAmounts(values[0], values[1], values[2], _noticeNotWorked.Checked,
-                                        _noticeNotWorked.Checked ? values[3] : 0m, values[4], Blank(_note));
+        Amounts = amounts!;
         DialogResult = DialogResult.OK;
     }
 }
@@ -996,7 +967,8 @@ internal sealed class SettlementSignedDialog : MasterDataEditor
         _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
         _date.Format = DateTimePickerFormat.Short;
         _date.MaxDate = DateTime.Today;
-        _date.MinDate = exit.ToDateTime(TimeOnly.MinValue) > DateTime.Today ? DateTime.Today : exit.ToDateTime(TimeOnly.MinValue);
+        // Not before the exit date, not in the future (SettlementScreenRules.EarliestSigning).
+        _date.MinDate = SettlementScreenRules.EarliestSigning(exit, DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue);
         _date.Value = DateTime.Today;
         Controls.Add(_date);
 

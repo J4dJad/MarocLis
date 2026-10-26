@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.HumanResources;
 using MarocLIS.Desktop.Infrastructure;
@@ -151,10 +149,11 @@ public sealed class PersonnelView : LocalizedView
         {
             // Serving a notice is still working here: the attestation de travail holds until the
             // exit date, and the certificate can be prepared from the day the departure is known.
-            var row = Current();
-            _employmentItem.Enabled = row is not null && OnStaff(row) && PermissionGate.Allows(Permissions.HumanResources.Manage);
-            _salaryItem.Enabled = PermissionGate.Allows(Permissions.HumanResources.Salary);
-            _certificateItem.Enabled = row?.ExitDate is not null && PermissionGate.Allows(Permissions.HumanResources.Manage);
+            // By right and by file (PersonnelScreenRules.Actions).
+            var actions = PersonnelScreenRules.Actions(Current(), Today, p => PermissionGate.Allows(p));
+            _employmentItem.Enabled = actions.EmploymentLetter;
+            _salaryItem.Enabled = actions.SalaryLetter;
+            _certificateItem.Enabled = actions.Certificate;
             _lettersMenu.Show(_letters, new Point(0, _letters.Height));
         };
         _employmentItem.Click += async (_, _) => await Guarded(() => LetterAsync(HrDocumentKind.EmploymentAttestation));
@@ -175,12 +174,15 @@ public sealed class PersonnelView : LocalizedView
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not EmployeeRow row) return;
 
-            if (!OnStaff(row))
-                e.CellStyle!.ForeColor = UiTheme.TextMuted;
-            else if (row.ContractEndDate is { } end && end < DateOnly.FromDateTime(DateTime.Today))
+            switch (PersonnelScreenRules.Ink(row, Today))
             {
-                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-                e.CellStyle.ForeColor = UiTheme.Critical;
+                case PersonnelInk.Departed:
+                    e.CellStyle!.ForeColor = UiTheme.TextMuted;
+                    break;
+                case PersonnelInk.ContractOver:
+                    e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                    e.CellStyle.ForeColor = UiTheme.Critical;
+                    break;
             }
         };
     }
@@ -247,12 +249,7 @@ public sealed class PersonnelView : LocalizedView
 
     private void Render()
     {
-        var term = _search.Text.Trim();
-        var rows = term.Length == 0
-            ? _rows
-            : _rows.Where(r => r.FullName.Contains(term, StringComparison.CurrentCultureIgnoreCase)
-                               || r.Number.Contains(term, StringComparison.OrdinalIgnoreCase)
-                               || (r.JobTitle?.Contains(term, StringComparison.CurrentCultureIgnoreCase) ?? false));
+        var rows = PersonnelScreenRules.Shown(_rows, _search.Text);
 
         _grid.SuspendLayout();
         // Kept on the file just edited, its departure just recorded or the language just switched.
@@ -264,15 +261,13 @@ public sealed class PersonnelView : LocalizedView
             {
                 var index = _grid.Rows.Add(
                     row.Number,
-                    row.ExitDate is { } left
-                        ? $"{row.FullName}  ({T(OnStaff(row) ? "Personnel.LeavingOn" : "Personnel.ExitedOn", left.ToString("dd/MM/yyyy"))})"
-                        : row.FullName,
+                    PersonnelScreenRules.NameLine(row, Today, T),
                     T($"EmployeeJob.{row.Job}"),
                     row.JobTitle ?? string.Empty,
                     row.DepartmentName ?? string.Empty,
                     T($"ContractType.{row.ContractType}"),
-                    row.HireDate.ToString("dd/MM/yyyy"),
-                    row.ContractEndDate?.ToString("dd/MM/yyyy") ?? "—",
+                    PersonnelScreenRules.Date(row.HireDate),
+                    PersonnelScreenRules.DateOrDash(row.ContractEndDate),
                     row.UserName ?? string.Empty);
 
                 _grid.Rows[index].Tag = row;
@@ -282,7 +277,7 @@ public sealed class PersonnelView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("QualityHr.Personnel.Count", _rows.Count(OnStaff), _grid.Rows.Count);
+        _heading.Text = PersonnelScreenRules.Count(_rows, _grid.Rows.Count, Today, T);
         RefreshExitCaption();
         ShowFile();
     }
@@ -296,33 +291,27 @@ public sealed class PersonnelView : LocalizedView
             return;
         }
 
-        (string, (Color, Color))? pill = row.ExitDate switch
-        {
-            { } exit when exit >= Today => (T("Personnel.LeavingOn", exit.ToString("dd/MM/yyyy")), QhTone.Warn),
-            { } exit => (T("Personnel.ExitedOn", exit.ToString("dd/MM/yyyy")), QhTone.Muted),
-            _ when row.ContractEndDate is { } end && end < Today => (T("Personnel.ContractEnd") + " " + end.ToString("dd/MM/yyyy"), QhTone.Crit),
-            _ => (T($"ContractType.{row.ContractType}"), QhTone.Ok)
-        };
+        // Where the file stands and its key facts (PersonnelScreenRules.Pill and Facts).
+        var pill = PersonnelScreenRules.Pill(row, Today, T);
 
-        var subtitle = string.Join(" · ", new[] { row.JobTitle, row.DepartmentName }.Where(v => !string.IsNullOrWhiteSpace(v)));
-
-        _aside.Show(row.FullName, subtitle, pill,
-        [
-            (T("Personnel.Number"), row.Number, true),
-            (T("Personnel.Job"), T($"EmployeeJob.{row.Job}"), false),
-            (T("Personnel.ContractType"), T($"ContractType.{row.ContractType}"), false),
-            (T("Personnel.HireDate"), row.HireDate.ToString("dd/MM/yyyy"), true),
-            (T("Personnel.ContractEnd"), row.ContractEndDate?.ToString("dd/MM/yyyy") ?? "—", true),
-            (T("Personnel.LinkedUser"), row.UserName ?? "—", true)
-        ]);
+        _aside.Show(row.FullName, PersonnelScreenRules.Subtitle(row), (pill.Text, HrTone(pill.Tone)),
+                    PersonnelScreenRules.Facts(row, T).Select(f => (f.Label, f.Value, f.Mono)));
     }
 
     private EmployeeRow? Current() => _grid.CurrentRow?.Tag as EmployeeRow;
 
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
-    /// <summary>On the staff today: no departure, or one not reached yet (the notice being served).</summary>
-    private static bool OnStaff(EmployeeRow row) => PersonnelRules.OnStaff(row, Today);
+    /// <summary>The pair of a pill's tone of the HR rules.</summary>
+    internal static (Color Back, Color Fore) HrTone(string tone) => tone switch
+    {
+        "Ok" => QhTone.Ok,
+        "Warning" => QhTone.Warn,
+        "Critical" => QhTone.Crit,
+        "Info" => QhTone.Info,
+        "Muted" => QhTone.Muted,
+        _ => QhTone.Wait
+    };
 
     /// <summary>
     /// The departure button follows the file: record an exit; correct or withdraw one not reached
@@ -331,12 +320,7 @@ public sealed class PersonnelView : LocalizedView
     private void RefreshExitCaption()
     {
         var row = Current();
-        _exit.Text = row?.ExitDate switch
-        {
-            null => T("Personnel.RecordExit"),
-            { } exit when exit >= Today => T("Personnel.ChangeExit"),
-            _ => T("Personnel.Rehire")
-        };
+        _exit.Text = T(PersonnelScreenRules.ExitKey(PersonnelScreenRules.StepOf(row, Today)));
         _edit.Enabled = _documents.Enabled = _exit.Enabled = _letters.Enabled = row is not null;
         _settlement.Enabled = row?.ExitDate is not null;
     }
@@ -378,8 +362,9 @@ public sealed class PersonnelView : LocalizedView
             var saved = await _settlements.SaveAsync(row.EmployeeId, dialog.Amounts);
             if (saved.IsFailure) { _dialogs.ShowFailure(saved); return; }
 
-            _status.ForeColor = saved.Value == SettlementPayroll.Closed ? UiTheme.Abnormal : UiTheme.Normal;
-            _status.Text = T($"Settlement.Saved.{saved.Value}");
+            var (said, tone) = PersonnelScreenRules.SettlementSaved(saved.Value, T);
+            _status.ForeColor = tone == "abnormal" ? UiTheme.Abnormal : UiTheme.Normal;
+            _status.Text = said;
         }
         catch (Exception ex)
         {
@@ -398,7 +383,7 @@ public sealed class PersonnelView : LocalizedView
     {
         if (Current() is not { ExitDate: { } exit } row) return;
 
-        using var dialog = new SettlementSignedDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}", exit);
+        using var dialog = new SettlementSignedDialog(Localizer, _dialogs, PersonnelScreenRules.Who(row), exit);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         var signed = await _settlements.SignAsync(row.EmployeeId, dialog.SignedOn);
@@ -438,11 +423,11 @@ public sealed class PersonnelView : LocalizedView
 
         Domain.Common.Result result;
 
-        switch (row.ExitDate)
+        switch (PersonnelScreenRules.StepOf(row, Today))
         {
-            case null:
+            case ExitStep.Record:
             {
-                using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}",
+                using var dialog = new EmployeeExitDialog(Localizer, _dialogs, PersonnelScreenRules.Who(row),
                                                           linkedUserName: row.UserName);
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 var recorded = await _personnel.RecordExitAsync(row.EmployeeId, dialog.ExitDate, dialog.Reason, dialog.Comment);
@@ -451,13 +436,13 @@ public sealed class PersonnelView : LocalizedView
                 ShowAccountOutcome(recorded.Value);
                 return;
             }
-            case { } exit when exit >= Today:
+            case ExitStep.Change:
                 // Not reached yet: corrected or withdrawn, not re-hired.
                 _exitMenu.Show(_exit, new Point(0, _exit.Height));
                 return;
-            case { } exit:
+            default:
             {
-                using var dialog = new EmployeeRehireDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}", exit);
+                using var dialog = new EmployeeRehireDialog(Localizer, _dialogs, PersonnelScreenRules.Who(row), row.ExitDate!.Value);
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 result = await _personnel.RehireAsync(row.EmployeeId, dialog.RehireDate);
                 break;
@@ -474,15 +459,14 @@ public sealed class PersonnelView : LocalizedView
     /// </summary>
     private void ShowAccountOutcome(DepartedAccountOutcome? outcome)
     {
-        if (outcome is null) return;
+        if (PersonnelScreenRules.AccountOutcome(outcome, T) is not { } said) return;
 
-        var date = outcome.DeactivationDate?.ToString("dd/MM/yyyy") ?? string.Empty;
-        (_status.ForeColor, _status.Text) = outcome.State switch
+        _status.Text = said.Text;
+        _status.ForeColor = said.Tone switch
         {
-            DepartedAccountState.Deactivated => (UiTheme.Normal, T("Personnel.AccountDeactivated", outcome.UserName)),
-            DepartedAccountState.Scheduled => (UiTheme.Normal, T("Personnel.AccountDeactivationScheduled", outcome.UserName, date)),
-            DepartedAccountState.KeptLastAdministrator => (UiTheme.Critical, T("Personnel.AccountKeptLastAdministrator", outcome.UserName)),
-            _ => (UiTheme.Abnormal, T("Personnel.AccountStillInactive", outcome.UserName))
+            "critical" => UiTheme.Critical,
+            "abnormal" => UiTheme.Abnormal,
+            _ => UiTheme.Normal
         };
     }
 
@@ -494,7 +478,7 @@ public sealed class PersonnelView : LocalizedView
             var detail = await _personnel.GetEmployeeAsync(row.EmployeeId);
             if (detail.IsFailure) { _dialogs.ShowFailure(detail); return; }
 
-            using var dialog = new EmployeeExitDialog(Localizer, _dialogs, $"{row.Number} {row.FullName}",
+            using var dialog = new EmployeeExitDialog(Localizer, _dialogs, PersonnelScreenRules.Who(row),
                                                       (exit, reason, detail.Value.ExitComment), row.UserName);
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
@@ -512,11 +496,11 @@ public sealed class PersonnelView : LocalizedView
 
     private async Task CancelExitAsync()
     {
-        if (Current() is not { ExitDate: { } exit } row) return;
+        if (Current() is not { ExitDate: not null } row) return;
         try
         {
-            var reason = _dialogs.PromptForReason(T("Personnel.CancelExitPrompt", row.FullName, exit.ToString("dd/MM/yyyy")),
-                                                  T("Personnel.CancelExit"));
+            var reason = _dialogs.PromptForReason(PersonnelScreenRules.CancelExitPrompt(row, T), T("Personnel.CancelExit"),
+                                                  maxLength: PersonnelScreenRules.CancelExitReasonMaxLength);
             if (reason is null) return;
 
             var result = await _personnel.CancelExitAsync(row.EmployeeId, reason);
@@ -554,7 +538,7 @@ public sealed class HabilitationView : LocalizedView
     private readonly Label _title = new();
 
     private HabilitationMatrix? _matrix;
-    private List<(HabilitationActivity Activity, Guid? SubjectId, string? Label)> _columns = [];
+    private IReadOnlyList<HabilitationColumn> _columns = [];
 
     public HabilitationView(PersonnelService personnel, IDocumentOutput output, IUserDialogs dialogs,
                             ILocalizer localizer, ICultureManager cultureManager,
@@ -613,20 +597,21 @@ public sealed class HabilitationView : LocalizedView
             if (e.RowIndex < 0 || e.ColumnIndex < 3) return;
             if (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is not HabilitationRow h) return;
 
-            if (h.ReviewDueOn is { } due && due < DateOnly.FromDateTime(DateTime.Today))
+            // The review overdue leads, then a person in training (HabilitationScreenRules.Ink).
+            switch (HabilitationScreenRules.Ink(h, DateOnly.FromDateTime(DateTime.Today)))
             {
-                e.CellStyle!.BackColor = UiTheme.CriticalBackground;
-                e.CellStyle.ForeColor = UiTheme.Critical;
-            }
-            else if (h.Level == HabilitationLevel.InTraining)
-            {
-                e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
-                e.CellStyle.ForeColor = UiTheme.Abnormal;
-            }
-            else
-            {
-                e.CellStyle!.ForeColor = UiTheme.Normal;
-                e.CellStyle.Font = UiTheme.SmallBold;
+                case HabilitationInk.ReviewOverdue:
+                    e.CellStyle!.BackColor = UiTheme.CriticalBackground;
+                    e.CellStyle.ForeColor = UiTheme.Critical;
+                    break;
+                case HabilitationInk.InTraining:
+                    e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
+                    e.CellStyle.ForeColor = UiTheme.Abnormal;
+                    break;
+                default:
+                    e.CellStyle!.ForeColor = UiTheme.Normal;
+                    e.CellStyle.Font = UiTheme.SmallBold;
+                    break;
             }
         };
     }
@@ -662,13 +647,6 @@ public sealed class HabilitationView : LocalizedView
         }
     }
 
-    private string ColumnHeader((HabilitationActivity Activity, Guid? SubjectId, string? Label) column) =>
-        column.Label is null ? T($"HabilitationActivity.{column.Activity}")
-                             : $"{T($"HabilitationActivity.{column.Activity}")}\n{column.Label}";
-
-    private string Cell(HabilitationRow h) =>
-        $"{T($"HabilitationLevelShort.{h.Level}")}{(h.ReviewDueOn is { } due ? $" · {due:MM/yy}" : string.Empty)}";
-
     private void Render()
     {
         if (_matrix is null) return;
@@ -680,16 +658,9 @@ public sealed class HabilitationView : LocalizedView
             ? (_columns[c.ColumnIndex - 3].Activity, _columns[c.ColumnIndex - 3].SubjectId)
             : null;
 
-        // Every activity anyone holds gets a column; the collection activities are always there, as
-        // they are the ones a new préleveur is placed on first.
-        _columns =
-        [
-            .. _matrix.Habilitations.Select(h => (h.Activity, h.SubjectId, h.SubjectLabel))
-                .Concat(new[] { HabilitationActivity.AdultCollection, HabilitationActivity.PaediatricCollection }
-                            .Select(a => (Activity: a, SubjectId: (Guid?)null, SubjectLabel: (string?)null)))
-                .Distinct()
-                .OrderBy(c => c.Activity).ThenBy(c => c.Item3, StringComparer.CurrentCulture)
-        ];
+        // Every activity anyone holds gets a column; the collection activities are always there
+        // (HabilitationScreenRules.Columns).
+        _columns = HabilitationScreenRules.Columns(_matrix);
 
         _grid.SuspendLayout();
         _grid.Rows.Clear();
@@ -709,7 +680,7 @@ public sealed class HabilitationView : LocalizedView
 
         for (var i = 0; i < _columns.Count; i++)
         {
-            var column = Column($"a{i}", ColumnHeader(_columns[i]), 120, UiTheme.Small);
+            var column = Column($"a{i}", HabilitationScreenRules.HeaderText(_columns[i], T), 120, UiTheme.Small);
             column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             _grid.Columns.Add(column);
         }
@@ -721,19 +692,15 @@ public sealed class HabilitationView : LocalizedView
             values[1] = employee.FullName;
             values[2] = T($"EmployeeJob.{employee.Job}");
 
-            var held = _matrix.Habilitations.Where(h => h.EmployeeId == employee.EmployeeId).ToList();
+            var held = _columns.Select(c => HabilitationScreenRules.Held(_matrix, employee.EmployeeId, c)).ToList();
             for (var i = 0; i < _columns.Count; i++)
-            {
-                var h = held.FirstOrDefault(x => x.Activity == _columns[i].Activity && x.SubjectId == _columns[i].SubjectId);
-                values[3 + i] = h is null ? string.Empty : Cell(h);
-            }
+                values[3 + i] = held[i] is { } h ? HabilitationScreenRules.ShortCell(h, T) : string.Empty;
 
             var index = _grid.Rows.Add(values);
             _grid.Rows[index].Tag = employee;
 
             for (var i = 0; i < _columns.Count; i++)
-                _grid.Rows[index].Cells[3 + i].Tag =
-                    held.FirstOrDefault(x => x.Activity == _columns[i].Activity && x.SubjectId == _columns[i].SubjectId);
+                _grid.Rows[index].Cells[3 + i].Tag = held[i];
         }
 
         _grid.ResumeLayout(performLayout: true);
@@ -741,7 +708,7 @@ public sealed class HabilitationView : LocalizedView
         if (keptEmployee is { } employeeId
             && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => (r.Tag as EmployeeRow)?.EmployeeId == employeeId) is { } kept)
         {
-            var column = keptColumn is { } key ? _columns.FindIndex(x => x.Activity == key.Item1 && x.SubjectId == key.Item2) : -1;
+            var column = keptColumn is { } key ? _columns.ToList().FindIndex(x => x.Activity == key.Item1 && x.SubjectId == key.Item2) : -1;
             try
             {
                 _grid.CurrentCell = kept.Cells[column >= 0 ? 3 + column : 0];
@@ -752,9 +719,7 @@ public sealed class HabilitationView : LocalizedView
             }
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        _heading.Text = T("QualityHr.Habilitations.Count", _matrix.Employees.Count, _matrix.Habilitations.Count,
-                          _matrix.Habilitations.Count(h => h.ReviewDueOn is { } d && d < today));
+        _heading.Text = HabilitationScreenRules.Count(_matrix, DateOnly.FromDateTime(DateTime.Today), T);
         _export.Enabled = _matrix.Employees.Count > 0;
         ShowDetail();
     }
@@ -766,39 +731,29 @@ public sealed class HabilitationView : LocalizedView
 
         _grant.Enabled = employee is not null;
 
-        if (cell?.Tag is HabilitationRow h)
-        {
-            _withdraw.Enabled = true;
-            _detail.ForeColor = UiTheme.TextSecondary;
-            _detail.Text = T("Habilitation.Detail", T($"HabilitationLevel.{h.Level}"), h.GrantedOn.ToString("dd/MM/yyyy"),
-                             h.GrantedBy, h.ReviewDueOn?.ToString("dd/MM/yyyy") ?? "—", h.Evidence ?? "—");
-        }
-        else
-        {
-            _withdraw.Enabled = false;
-            _detail.Text = _matrix is { Habilitations.Count: 0 } ? T("Habilitation.Empty") : string.Empty;
-        }
+        var h = cell?.Tag as HabilitationRow;
+        _withdraw.Enabled = h is not null;
+        if (h is not null) _detail.ForeColor = UiTheme.TextSecondary;
+        _detail.Text = HabilitationScreenRules.Detail(_matrix, h, T);
     }
 
     private async Task GrantAsync()
     {
         if (_grid.CurrentCell is not { } cell || _grid.Rows[cell.RowIndex].Tag is not EmployeeRow employee) return;
 
-        var (activity, subject) = cell.ColumnIndex >= 3
-            ? (_columns[cell.ColumnIndex - 3].Activity, _columns[cell.ColumnIndex - 3].SubjectId)
-            : (HabilitationActivity.AdultCollection, (Guid?)null);
+        var column = cell.ColumnIndex >= 3 ? _columns[cell.ColumnIndex - 3] : null;
 
         var lookups = await _personnel.GetLookupsAsync(employee.EmployeeId);
         if (lookups.IsFailure) { _dialogs.ShowFailure(lookups); return; }
 
         using var dialog = new HabilitationGrantDialog(Localizer, _dialogs, $"{employee.Number} {employee.FullName}",
-                                                       lookups.Value, activity, subject);
+                                                       lookups.Value, column);
 
         while (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            var granted = await _personnel.GrantAsync(employee.EmployeeId, dialog.Activity, dialog.SubjectId,
-                                                      dialog.Level, dialog.GrantedOn, dialog.ReviewDueOn,
-                                                      dialog.Evidence);
+            var g = dialog.Grant;
+            var granted = await _personnel.GrantAsync(employee.EmployeeId, g.Activity, g.SubjectId, g.Level, g.GrantedOn,
+                                                      g.ReviewDueOn, g.Evidence);
             if (granted.IsSuccess)
             {
                 await ActivateAsync();
@@ -814,9 +769,8 @@ public sealed class HabilitationView : LocalizedView
         if (_grid.CurrentCell is not { Tag: HabilitationRow h } cell) return;
         if (_grid.Rows[cell.RowIndex].Tag is not EmployeeRow employee) return;
 
-        var reason = _dialogs.PromptForReason(
-            T("Habilitation.WithdrawPrompt", T($"HabilitationActivity.{h.Activity}"), employee.FullName),
-            _withdraw.Text, maxLength: 500);
+        var reason = _dialogs.PromptForReason(HabilitationScreenRules.WithdrawPrompt(h, employee, T),
+                                              _withdraw.Text, maxLength: HabilitationScreenRules.WithdrawReasonMaxLength);
         if (reason is null) return;
 
         var result = await _personnel.WithdrawAsync(employee.EmployeeId, h.HabilitationId, reason);
@@ -830,33 +784,10 @@ public sealed class HabilitationView : LocalizedView
     {
         if (_matrix is null) return;
 
-        // Names and evidence are typed by users: the shared cell neutralises formulas for Excel.
-        static string Csv(string? value) => MarocLIS.Application.Inventory.CsvCell.Of(value);
-
-        var csv = new StringBuilder();
-        csv.AppendLine(string.Join(';', new[]
-        {
-            T("Personnel.Number"), T("Field.Name"), T("Personnel.Job"), T("Habilitation.Activity"),
-            T("Habilitation.Subject"), T("Habilitation.Level"), T("Habilitation.GrantedOn"),
-            T("Habilitation.GrantedBy"), T("Habilitation.ReviewDue"), T("Habilitation.Evidence")
-        }.Select(Csv)));
-
-        foreach (var employee in _matrix.Employees)
-        foreach (var h in _matrix.Habilitations.Where(x => x.EmployeeId == employee.EmployeeId)
-                                               .OrderBy(x => x.Activity))
-        {
-            csv.AppendLine(string.Join(';', new[]
-            {
-                employee.Number, employee.FullName, T($"EmployeeJob.{employee.Job}"),
-                T($"HabilitationActivity.{h.Activity}"), h.SubjectLabel, T($"HabilitationLevel.{h.Level}"),
-                h.GrantedOn.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), h.GrantedBy,
-                h.ReviewDueOn?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), h.Evidence
-            }.Select(Csv)));
-        }
-
         try
         {
-            var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
+            // Names and evidence are typed by users: the shared cell neutralises formulas for Excel.
+            var bytes = HabilitationScreenRules.ExportCsv(_matrix, T);
             var opened = await _output.OpenAsync(bytes, "csv");
             if (opened.IsFailure) _dialogs.ShowFailure(opened, _export.Text);
         }
@@ -875,7 +806,7 @@ public sealed class HabilitationView : LocalizedView
 /// </summary>
 public sealed class PersonnelDeadlinesView : LocalizedView
 {
-    private static readonly int[] Horizons = [30, 60, 90, 180];
+    private static IReadOnlyList<int> Horizons => PersonnelDeadlineScreenRules.Horizons;
 
     private readonly PersonnelService _personnel;
     private readonly IUserDialogs _dialogs;
@@ -963,23 +894,24 @@ public sealed class PersonnelDeadlinesView : LocalizedView
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not DeadlineRow row) return;
             if (_grid.Columns[e.ColumnIndex].Name != "due") return;
 
-            if (row.IsOverdue || row.DueOn is null) e.CellStyle!.ForeColor = UiTheme.Critical;
-            else if (row.DueOn is { } due && due <= DateOnly.FromDateTime(DateTime.Today).AddDays(30))
-                e.CellStyle!.ForeColor = UiTheme.Abnormal;
+            switch (PersonnelDeadlineScreenRules.Ink(row, DateOnly.FromDateTime(DateTime.Today)))
+            {
+                case DeadlineInk.Late: e.CellStyle!.ForeColor = UiTheme.Critical; break;
+                case DeadlineInk.Soon: e.CellStyle!.ForeColor = UiTheme.Abnormal; break;
+            }
         };
     }
 
     private static (Color Back, Color Fore) Tone(DeadlineRow row) =>
-        row.IsOverdue || row.DueOn is null ? QhTone.Crit
-        : row.DueOn.Value <= DateOnly.FromDateTime(DateTime.Today).AddDays(30) ? QhTone.Warn
-        : QhTone.Info;
+        PersonnelView.HrTone(PersonnelDeadlineScreenRules.Tone(row, DateOnly.FromDateTime(DateTime.Today)));
 
     protected override void ApplyTexts()
     {
         _title.Text = T("Nav.PersonnelDeadlines");
-        var selected = Math.Max(_horizon.SelectedIndex, 1);
+        var selected = _horizon.SelectedIndex >= 0 ? _horizon.SelectedIndex
+            : Horizons.ToList().IndexOf(PersonnelDeadlineScreenRules.DefaultHorizon);
         _horizon.Items.Clear();
-        foreach (var days in Horizons) _horizon.Items.Add(T("Deadline.Horizon", days));
+        foreach (var days in Horizons) _horizon.Items.Add(PersonnelDeadlineScreenRules.HorizonCaption(days, T));
         _horizon.SelectedIndex = selected;
 
         _refresh.Text = T("Action.Refresh");
@@ -1001,7 +933,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
     {
         try
         {
-            var horizon = Horizons[Math.Max(_horizon.SelectedIndex, 0)];
+            var horizon = _horizon.SelectedIndex >= 0 ? Horizons[_horizon.SelectedIndex] : PersonnelDeadlineScreenRules.DefaultHorizon;
             var result = await _personnel.GetDeadlinesAsync(horizon, ct);
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -1025,22 +957,15 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         _grid.SuspendLayout();
         // Kept on the deadline just dealt with: its file edited, it moves or leaves the list.
         _grid.RebuildKeeping<DeadlineRow, (Guid, DeadlineKind, HabilitationActivity?, string?)>(
-            r => (r.EmployeeId, r.Kind, r.Activity, r.Subject), () =>
+            PersonnelDeadlineScreenRules.KeyOf, () =>
         {
             _grid.Rows.Clear();
 
             foreach (var row in _rows)
             {
-                var state = row.DueOn is null ? T("Deadline.Missing")
-                          : row.IsOverdue ? T("Deadline.Overdue")
-                          : T("Deadline.InDays", row.DueOn.Value.DayNumber - today.DayNumber);
-
-                var subject = row.Kind == DeadlineKind.HabilitationReview && row.Activity is { } activity
-                    ? T($"HabilitationActivity.{activity}") + (row.Subject is null ? string.Empty : $" — {row.Subject}")
-                    : row.Subject ?? string.Empty;
-
-                var index = _grid.Rows.Add(state, row.DueOn?.ToString("dd/MM/yyyy") ?? "—", row.Number, row.FullName,
-                                           T($"EmployeeJob.{row.Job}"), T($"DeadlineKind.{row.Kind}"), subject);
+                var index = _grid.Rows.Add(PersonnelDeadlineScreenRules.State(row, today, T), PersonnelDeadlineScreenRules.Due(row),
+                                           row.Number, row.FullName, T($"EmployeeJob.{row.Job}"),
+                                           PersonnelDeadlineScreenRules.What(row, T), PersonnelDeadlineScreenRules.Subject(row, T));
                 _grid.Rows[index].Tag = row;
             }
         });
@@ -1048,7 +973,7 @@ public sealed class PersonnelDeadlinesView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("QualityHr.Deadlines.Count", _rows.Count, _rows.Count(r => r.IsOverdue));
+        _heading.Text = PersonnelDeadlineScreenRules.Count(_rows, T);
         _documents.Enabled = _edit.Enabled = _rows.Count > 0;
     }
 
