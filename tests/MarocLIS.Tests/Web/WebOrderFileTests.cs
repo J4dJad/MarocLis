@@ -142,6 +142,8 @@ public sealed class WebOrderFileTests : WebScreenContext
         var page = Open();
 
         page.Find("[data-tab=Analyses]").TextContent.Should().MatchRegex("[؀-ۿ]");
+        page.FindAll(".fact-value").Should().NotBeEmpty().And.OnlyContain(v => v.QuerySelector("bdi") != null,
+            "names and clinical information typed in French keep their own direction in Arabic");
 
         // The tube is named in Arabic too, not « Tube EDTA » as typed in French.
         page.Find("[data-tab=Tubes]").Click();

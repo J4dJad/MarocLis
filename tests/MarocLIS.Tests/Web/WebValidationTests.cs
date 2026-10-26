@@ -177,4 +177,21 @@ public sealed class WebValidationTests : WebBenchContext
         page.Find("[data-grid=worklist] thead").TextContent.Should().MatchRegex("[؀-ۿ]");
         page.Find("[data-action='Validation.ValidateSelection']").TextContent.Should().MatchRegex("[؀-ۿ]");
     }
+
+    /// <summary>
+    /// Typed in French, the clinical information read « .d'appendicite » in an Arabic session, its
+    /// full stop thrown to the start: it is now set apart in its own direction.
+    /// </summary>
+    [Fact]
+    public void TheClinicalInformationTypedInFrench_KeepsItsOwnDirection_InArabic()
+    {
+        _file.Order.ClinicalInformation = "Douleur de la fosse iliaque droite, suspicion d'appendicite.";
+        SignIn(AppLanguage.Arabic, Biologist);
+
+        var page = Open();
+
+        var clinical = page.Find("bdi[data-state=clinical]");
+        clinical.TextContent.Should().Be("Douleur de la fosse iliaque droite, suspicion d'appendicite.");
+        page.Find("[data-state=prescriber] bdi").Should().NotBeNull("a prescriber's name is typed text too");
+    }
 }

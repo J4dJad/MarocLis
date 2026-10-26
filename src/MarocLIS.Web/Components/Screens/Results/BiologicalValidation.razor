@@ -118,12 +118,12 @@
                     {
                         <div>
                             <p class="caption">@Texts["Order.ClinicalInformation"]</p>
-                            <p class="clamp-3 @(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? "muted" : null)" title="@open.ClinicalInformation">@(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? Texts["Validation.NotProvided"] : open.ClinicalInformation.Trim())</p>
+                            <p class="clamp-3 @(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? "muted" : null)" title="@open.ClinicalInformation"><bdi data-state="clinical">@(string.IsNullOrWhiteSpace(open.ClinicalInformation) ? Texts["Validation.NotProvided"] : open.ClinicalInformation.Trim())</bdi></p>
 
                             <p class="caption">@Texts["Validation.Prescriber"]</p>
                             <div data-state="prescriber">
                                 @{ var name = PrescriberContactRules.DisplayName(open.Prescriber, Texts.Language); }
-                                <p class="clamp-2 @(name is null ? "muted" : "strong")" title="@name">@(name ?? Texts["Validation.NotProvided"])</p>
+                                <p class="clamp-2 @(name is null ? "muted" : "strong")" title="@name"><bdi>@(name ?? Texts["Validation.NotProvided"])</bdi></p>
                                 @if (open.Prescriber?.Speciality?.For(Texts.Language) is { Length: > 0 } speciality)
                                 {
                                     <p class="small muted clamp-2" title="@speciality.Trim()">@speciality.Trim()</p>
