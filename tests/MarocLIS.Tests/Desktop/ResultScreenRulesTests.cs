@@ -136,6 +136,11 @@ public sealed class ResultScreenRulesTests
         ResultEntryRules.TechnicalConfirmation([rows[0]], Fr)
             .Should().Be("Valider techniquement 1 résultat saisi ? Il passe ensuite à la validation biologique.");
         localizer.Format(AppLanguage.English, "Validation.TechnicalConfirm", 1).Should().Be("Technically validate 1 entered result? It goes on to biological validation.");
+        localizer.Format(AppLanguage.English, "Validation.ValidatedCount", 3).Should().Be("3 results validated");
+        localizer.Format(AppLanguage.English, "Validation.ValidatedCount", 1).Should().Be("1 result validated");
+        localizer.Format(AppLanguage.English, "OrderEntry.TubeCount", 1, 2).Should().Be("1 tube · 2 labels");
+        localizer.Format(AppLanguage.English, "Collection.PatientsAndTubes", 4, 10).Should().Be("4 patients · 10 tubes");
+        localizer.Format(AppLanguage.English, "MobileUi.HistoryCount", 1).Should().Be("1 validated value");
 
         Fr("Collection.CollectedCount", 3).Should().Be("3 tubes prélevés");
         Fr("Collection.CollectedCount", 1).Should().Be("1 tube prélevé");
