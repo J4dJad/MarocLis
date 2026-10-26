@@ -1,5 +1,6 @@
 {
   "$comment": "English catalogue — used for exports, supplier correspondence and English-speaking staff.",
+  "Result_AwaitingRecollection": "{0}: the tube was rejected and a recollection is requested. The result is entered once the new tube is received.",
   "Calibration_ValidUntilPast": "The calibration's validity date cannot be earlier than today.",
   "Po_SupplierRequired": "Choose the supplier of the order.",
   "Po_ItemRequired": "Choose the item to order.",
@@ -3507,6 +3508,8 @@
   },
 
   "Result": {
+    "RecollectionPending": "Recollection",
+    "AwaitingRecollection": "Tube rejected, recollection requested for: {0}. These analyses are entered once the new tube is received.",
     "HistoryInterval": "reference range {0}",
     "HistoryCount": "{0} validated value(s)",
     "HistoryValue": "Value",

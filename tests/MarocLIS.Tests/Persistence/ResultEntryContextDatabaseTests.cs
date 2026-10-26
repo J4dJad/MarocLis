@@ -162,6 +162,48 @@ public sealed class ResultEntryContextDatabaseTests(ResultEntryContextScratchDat
             .Which.Should().Be(new Application.Results.ResultEntryProgress(seeded.Order.AccessionNumber, 2, 3));
     }
 
+    /// <summary>
+    /// A tube refused with a new draw asked: its analyses move onto the new tube, not drawn yet, and
+    /// are not owed until it is received — the worklist read « 0 / 16 » beside « 3 analyses » for the
+    /// hemogram nobody could enter.
+    /// </summary>
+    [SqlServerFact]
+    public async Task Progress_LeavesOutTheAnalysesOfATubeNotYetReceived()
+    {
+        var siteId = Guid.NewGuid();
+        var haematology = new Department(Unique("H"), new MultilingualText("Hématologie"));
+        var hb = new TestParameter(Unique("HB"), new MultilingualText("Hémoglobine"), ResultValueType.Numeric);
+        var tsh = new TestParameter(Unique("TSH"), new MultilingualText("TSH"), ResultValueType.Numeric);
+
+        var order = new LabOrder(Unique("A"), Guid.NewGuid(), siteId, Now, Guid.NewGuid());
+        var received = new MarocLIS.Domain.Samples.Sample(Unique("T"), order.Id, Guid.NewGuid(), siteId);
+        received.Collect(Now, Guid.NewGuid(), null, null).IsSuccess.Should().BeTrue();
+        received.Receive(Now.AddMinutes(5), Guid.NewGuid(), MarocLIS.Domain.Samples.SampleDefect.None, false, null, null).IsSuccess.Should().BeTrue();
+        var newDraw = new MarocLIS.Domain.Samples.Sample(Unique("T"), order.Id, Guid.NewGuid(), siteId);
+
+        var ready = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine) { DepartmentId = haematology.Id, SampleId = received.Id };
+        var waiting = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine) { DepartmentId = haematology.Id, SampleId = newDraw.Id };
+        order.AddItem(ready);
+        order.AddItem(waiting);
+
+        await using (var context = database.Context())
+        {
+            context.Departments.Add(haematology);
+            context.TestParameters.AddRange(hb, tsh);
+            context.LabOrders.Add(order);
+            context.Samples.AddRange(received, newDraw);
+            context.TestResults.AddRange(new TestResult(order.Id, ready.Id, tsh.Id, siteId),
+                                         new TestResult(order.Id, waiting.Id, hb.Id, siteId));
+            await context.SaveChangesAsync();
+        }
+
+        await using var read = database.Context();
+        var progress = await new ResultEntryContextQueries(read).GetProgressAsync(siteId, [order.AccessionNumber]);
+
+        progress.Should().ContainSingle()
+            .Which.Should().Be(new Application.Results.ResultEntryProgress(order.AccessionNumber, 0, 1));
+    }
+
     [SqlServerFact]
     public async Task Sectors_AreNamed_InDisplayOrder_UnknownCodesAbsent()
     {

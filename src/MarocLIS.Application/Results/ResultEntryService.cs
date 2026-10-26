@@ -33,6 +33,12 @@ public sealed record ResultEntryRow
     /// <summary>The tube this value comes from is not received yet: nothing can be entered.</summary>
     public bool IsAwaitingSample { get; init; }
 
+    /// <summary>
+    /// The tube awaited is the new draw asked for when the first one was refused (« re-prélèvement »):
+    /// the analyses moved onto it wait for the patient to be drawn again, not for a tube in transit.
+    /// </summary>
+    public bool IsAwaitingRecollection { get; init; }
+
     public string? CurrentValue { get; init; }
     public decimal? NumericValue { get; init; }
     public string? ValueOperator { get; init; }
@@ -232,6 +238,7 @@ public sealed class ResultEntryService(
                 order.RegisteredAt, ct);
         var sampleDefects = await LoadSampleDefectsAsync(order, ct);
         var sampleStatuses = await LoadSampleStatusesAsync(order, ct);
+        var recollections = await LoadRecollectionsAsync(sampleStatuses, ct);
 
         // Asked only when there is something critical, which is rare: one round trip, not one per row.
         var criticalIds = resultRows
@@ -285,6 +292,7 @@ public sealed class ResultEntryService(
                 // revision path rather than the entry grid.
                 IsReadOnly = parameter.IsCalculated || result.IsValidated || awaitingSample,
                 IsAwaitingSample = awaitingSample,
+                IsAwaitingRecollection = awaitingSample && recollections.Contains(item.SampleId!.Value),
                 // Empty until something is entered: FormatValue's "-" placeholder in the cell read
                 // as a value, and the cursor skipped the row as already filled.
                 CurrentValue = result.HasValue || result.Flags.HasFlag(ResultFlag.NotDone)
@@ -939,6 +947,23 @@ public sealed class ResultEntryService(
         }
 
         return defects;
+    }
+
+    /// <summary>
+    /// The tubes not yet received that replace a refused one: asked only when some tube is awaited,
+    /// which is rare, in one query.
+    /// </summary>
+    private async Task<HashSet<Guid>> LoadRecollectionsAsync(Dictionary<Guid, SampleStatus> statuses, CancellationToken ct)
+    {
+        var awaited = statuses
+            .Where(s => s.Value is not (SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored))
+            .Select(s => s.Key)
+            .ToList();
+        if (awaited.Count == 0) return [];
+
+        var refused = await samples.ListAsync(
+            s => s.ReplacementSampleId != null && awaited.Contains(s.ReplacementSampleId.Value), ct);
+        return [.. (refused ?? []).Select(s => s.ReplacementSampleId!.Value)];
     }
 
     private async Task<Dictionary<Guid, SampleStatus>> LoadSampleStatusesAsync(LabOrder order, CancellationToken ct)

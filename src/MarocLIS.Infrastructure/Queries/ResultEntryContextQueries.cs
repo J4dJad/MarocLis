@@ -2,6 +2,7 @@ using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Results;
+using MarocLIS.Domain.Samples;
 using MarocLIS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +28,13 @@ public sealed class ResultEntryContextQueries(LisDbContext db) : IResultEntryCon
                 where o.SiteId == siteId
                       && wanted.Contains(o.AccessionNumber)
                       && i.Status != LabOrderItemStatus.Cancelled
+                      // Only the analyses whose tube is in the laboratory, as the worklist counts
+                      // them: a refused tube's analyses waiting for the new draw are not owed yet.
+                      && (i.SampleId == null
+                          || db.Samples.Any(s => s.Id == i.SampleId
+                                             && (s.Status == SampleStatus.Received
+                                                 || s.Status == SampleStatus.InAnalysis
+                                                 || s.Status == SampleStatus.Stored)))
                       && (p.CalculationFormula == null || p.CalculationFormula == "")
                       && p.ValueType != ResultValueType.Heading
                 group r by o.AccessionNumber

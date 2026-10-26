@@ -176,7 +176,8 @@
                                             {
                                                 <input class="input input-value mono @ValueClass(row)" type="text" autocomplete="off" data-entry-value
                                                        data-field="value" aria-label="@row.ParameterName.For(Texts.Language)"
-                                                       readonly="@(!keyable)" data-empty="@string.IsNullOrWhiteSpace(row.CurrentValue)" title="@(row.IsAwaitingSample ? Texts.T("Result_SampleNotReceived", row.ParameterCode) : null)"
+                                                       readonly="@(!keyable)" data-empty="@string.IsNullOrWhiteSpace(row.CurrentValue)" title="@(row.IsAwaitingSample ? Texts.T(ResultEntryRules.EditRefusal(row)!, row.ParameterCode) : null)"
+                                                       placeholder="@(row.IsAwaitingRecollection ? Texts["Result.RecollectionPending"] : null)" data-state="@(row.IsAwaitingRecollection ? "awaiting-recollection" : null)"
                                                        value="@_typed.GetValueOrDefault(id)"
                                                        @oninput="e => _typed[id] = e.Value?.ToString()" @onfocus="() => Focused(row)" />
                                             }
@@ -607,8 +608,7 @@
                           ?? sheet.Rows.FirstOrDefault(r => !r.IsHeading)?.TestResultId;
 
         // Said once on opening, rather than discovered row by row as the boxes refuse the cursor.
-        var awaiting = ResultEntryRules.AwaitingSample(sheet.Rows);
-        _status = awaiting.Count > 0 ? (Texts.T("Result.AwaitingSample", string.Join(", ", awaiting)), "abnormal") : null;
+        _status = ResultEntryRules.AwaitingNotice(sheet.Rows, Texts.T) is { } awaiting ? (awaiting, "abnormal") : null;
 
         _focusFirst = true;
     }

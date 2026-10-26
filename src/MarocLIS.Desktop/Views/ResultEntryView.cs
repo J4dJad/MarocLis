@@ -1646,7 +1646,7 @@ public sealed class ResultEntryView : LocalizedView
             gridRow.Cells[ColumnComment].ReadOnly = !ResultEntryRules.TakesComment(row);
 
             if (row.IsAwaitingSample)
-                gridRow.Cells[ColumnValue].ToolTipText = T("Result_SampleNotReceived", row.ParameterCode);
+                gridRow.Cells[ColumnValue].ToolTipText = T(ResultEntryRules.EditRefusal(row)!, row.ParameterCode);
 
             if (keep is not null)
             {
@@ -1669,11 +1669,10 @@ public sealed class ResultEntryView : LocalizedView
         ShowRemaining();
 
         // Said once on opening, rather than discovered row by row as cells refuse the cursor.
-        var awaiting = ResultEntryRules.AwaitingSample(sheet.Rows);
-        if (awaiting.Count > 0)
+        if (ResultEntryRules.AwaitingNotice(sheet.Rows, T) is { } awaiting)
         {
             _status.ForeColor = UiTheme.Abnormal;
-            _status.Text = T("Result.AwaitingSample", string.Join(", ", awaiting));
+            _status.Text = awaiting;
         }
 
         FocusFirstEditableCell();

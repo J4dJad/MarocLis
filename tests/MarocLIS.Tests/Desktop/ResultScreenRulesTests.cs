@@ -23,12 +23,13 @@ public sealed class ResultScreenRulesTests
                                       ResultValueType type = ResultValueType.Numeric, string? value = null,
                                       string? comment = null, bool calculated = false, bool readOnly = false,
                                       bool awaitingSample = false, ResultFlag flags = ResultFlag.None,
-                                      decimal? numeric = null, bool communicated = false) => new()
+                                      decimal? numeric = null, bool communicated = false, bool recollection = false,
+                                      string analysis = "GLY") => new()
     {
         TestResultId = Guid.NewGuid(),
         LabOrderItemId = Guid.NewGuid(),
         TestParameterId = Guid.NewGuid(),
-        AnalysisCode = "GLY",
+        AnalysisCode = analysis,
         AnalysisName = new MultilingualText("Glycémie"),
         ParameterCode = "GLY",
         ParameterName = new MultilingualText("Glycémie à jeun"),
@@ -39,7 +40,8 @@ public sealed class ResultScreenRulesTests
         TechnicalComment = comment,
         IsCalculated = calculated,
         IsReadOnly = readOnly || calculated,
-        IsAwaitingSample = awaitingSample,
+        IsAwaitingSample = awaitingSample || recollection,
+        IsAwaitingRecollection = recollection,
         Flags = flags,
         IsCriticalCommunicated = communicated
     };
@@ -89,6 +91,29 @@ public sealed class ResultScreenRulesTests
         ResultEntryRules.RemainingToEnter(rows, id => id == typed.TestResultId ? "5,4" : null).Should().Be(1);
         ResultEntryRules.CanTechnicallyValidate(rows).Should().BeTrue();
         ResultEntryRules.CanTechnicallyValidate([typed, empty]).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A refused tube's analyses, moved onto the new draw (« re-prélèvement »), are not owed until it
+    /// is received: the file of three analyses ready read « 0 / 16 » and « 13 valeurs restent à saisir »
+    /// for the hemogram nobody could enter, and the bar called the refused tube « pas encore réceptionné ».
+    /// </summary>
+    [Fact]
+    public void A_refused_tube_s_analyses_await_the_new_draw_and_are_not_counted_as_owed()
+    {
+        var tsh = Row(analysis: "TSH");
+        var crp = Row(TestResultStatus.Entered, value: "12", analysis: "CRP");
+        ResultEntryRow[] rows = [tsh, crp, Row(recollection: true, analysis: "NFS"), Row(recollection: true, analysis: "NFS"),
+                                 Row(awaitingSample: true, analysis: "VS")];
+
+        ResultEntryRules.Progress(rows).Should().Be((1, 2));
+        ResultEntryRules.RemainingToEnter(rows, _ => null).Should().Be(1);
+        ResultEntryRules.EditRefusal(rows[2]).Should().Be("Result_AwaitingRecollection");
+        ResultEntryRules.EditRefusal(rows[4]).Should().Be("Result_SampleNotReceived");
+
+        var notice = ResultEntryRules.AwaitingNotice(rows, (key, args) => $"{key}({string.Join("|", args)})");
+        notice.Should().Be("Result.AwaitingRecollection(NFS) Result.AwaitingSample(VS)");
+        ResultEntryRules.AwaitingNotice([tsh, crp], (key, _) => key).Should().BeNull();
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -48,6 +49,26 @@ public static class ResultEntryRules
     /// </summary>
     public static IReadOnlyList<string> AwaitingSample(IEnumerable<ResultEntryRow> rows) =>
         [.. rows.Where(r => r.IsAwaitingSample).Select(r => r.AnalysisCode).Distinct()];
+
+    /// <summary>
+    /// What the bar says once a file opens with lines waiting on a tube: the analyses whose tube was
+    /// refused and is to be drawn again (« re-prélèvement demandé »), then those whose tube is simply
+    /// not received yet; null when every line can be entered. The refused tube's analyses read
+    /// « tube pas encore réceptionné » before, as if it were in transit.
+    /// </summary>
+    public static string? AwaitingNotice(IEnumerable<ResultEntryRow> rows, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(text);
+        var waiting = rows.Where(r => r.IsAwaitingSample).ToList();
+        var recollected = waiting.Where(r => r.IsAwaitingRecollection).Select(r => r.AnalysisCode).Distinct().ToList();
+        var inTransit = waiting.Where(r => !r.IsAwaitingRecollection).Select(r => r.AnalysisCode).Distinct().ToList();
+
+        var parts = new List<string>(2);
+        if (recollected.Count > 0) parts.Add(text("Result.AwaitingRecollection", string.Join(", ", recollected)));
+        if (inTransit.Count > 0) parts.Add(text("Result.AwaitingSample", string.Join(", ", inTransit)));
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
 
     /// <summary>The sectors (department codes) of a file of the worklist, for the sector chips.</summary>
     public static IEnumerable<string> SectorsOf(PendingEntryOrder order) =>
@@ -104,10 +125,14 @@ public static class ResultEntryRules
         return progress is null ? EntryWorklistPill.None : EntryWorklistPill.Progress;
     }
 
-    /// <summary>The values owed by a sheet — not headings, not calculated — and how many are in.</summary>
+    /// <summary>
+    /// The values owed by a sheet — not headings, not calculated, not on a tube still awaited — and
+    /// how many are in. The lines of a refused tube to be drawn again were counted, and a file of
+    /// three analyses ready read « 0 / 16 » for the hemogram nobody could enter.
+    /// </summary>
     public static (int Entered, int Owed) Progress(IEnumerable<ResultEntryRow> rows)
     {
-        var owed = rows.Where(r => !r.IsHeading && !r.IsCalculated).ToList();
+        var owed = rows.Where(r => !r.IsHeading && !r.IsCalculated && !r.IsAwaitingSample).ToList();
         return (owed.Count(r => r.Status != TestResultStatus.Awaited), owed.Count);
     }
 
@@ -116,7 +141,7 @@ public static class ResultEntryRules
     /// count falls as values are typed, before they are saved.
     /// </summary>
     public static int RemainingToEnter(IEnumerable<ResultEntryRow> rows, Func<Guid, string?> typedValue) =>
-        rows.Count(r => !r.IsHeading && !r.IsCalculated && r.Status == TestResultStatus.Awaited
+        rows.Count(r => !r.IsHeading && !r.IsCalculated && !r.IsAwaitingSample && r.Status == TestResultStatus.Awaited
                         && string.IsNullOrWhiteSpace(typedValue(r.TestResultId)));
 
     /// <summary>Technical validation only makes sense once something has been entered.</summary>
@@ -135,7 +160,8 @@ public static class ResultEntryRules
     /// released figure may already have been acted on.
     /// </summary>
     public static string? EditRefusal(ResultEntryRow row) =>
-        row.IsAwaitingSample ? "Result_SampleNotReceived"
+        row.IsAwaitingRecollection ? "Result_AwaitingRecollection"
+        : row.IsAwaitingSample ? "Result_SampleNotReceived"
         : row.Status is TestResultStatus.Validated or TestResultStatus.Reported ? "Result_ValidatedRequiresRevision"
         : null;
 

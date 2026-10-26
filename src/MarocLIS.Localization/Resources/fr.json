@@ -1,5 +1,6 @@
 {
   "$comment": "Catalogue français — langue de travail et langue de repli. Toute clé absente des autres catalogues est résolue ici.",
+  "Result_AwaitingRecollection": "{0} : le tube a été refusé et un re-prélèvement est demandé. Le résultat sera saisi à la réception du nouveau tube.",
   "Calibration_ValidUntilPast": "La date de validité de l'étalonnage ne peut pas être antérieure à aujourd'hui.",
   "Po_SupplierRequired": "Choisissez le fournisseur de la commande.",
   "Po_ItemRequired": "Choisissez l'article à commander.",
@@ -3507,6 +3508,8 @@
   },
 
   "Result": {
+    "RecollectionPending": "Re-prélèvement",
+    "AwaitingRecollection": "Tube refusé, re-prélèvement demandé pour : {0}. Ces analyses seront saisies à la réception du nouveau tube.",
     "HistoryInterval": "valeurs usuelles {0}",
     "HistoryCount": "{0} valeur(s) validée(s)",
     "HistoryValue": "Valeur",
