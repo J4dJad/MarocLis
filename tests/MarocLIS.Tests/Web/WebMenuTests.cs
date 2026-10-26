@@ -167,6 +167,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void ThePrescribersTheRelationsAndTheCampaigns_AreInTheMenu_ByTheirRights()
+    {
+        var relations = Keys(WebMenu.Build(new User(permissions: Permissions.Relations.View), FullStatus())).ToList();
+        relations.Should().Contain(["prescriberstats", "relations"]).And.NotContain("patientmessaging");
+
+        var campaigns = Keys(WebMenu.Build(new User(permissions: Permissions.Messaging.Campaign), FullStatus())).ToList();
+        campaigns.Should().Contain("patientmessaging").And.NotContain(["prescriberstats", "relations"]);
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["prescriberstats", "relations", "patientmessaging"]);
+    }
+
+    [Fact]
     public void TheDashboard_IsEveryonesAndTheStatisticsAndSteering_AreInTheMenu_ByTheirRights()
     {
         var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();

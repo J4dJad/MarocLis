@@ -11,6 +11,7 @@ using MarocLIS.Domain.Licensing;
 using MarocLIS.Infrastructure.Security;
 using MarocLIS.Localization;
 using MarocLIS.Web.Components.Pages;
+using MarocLIS.Web.Navigation;
 using MarocLIS.Web.Security;
 using MarocLIS.Web.Session;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,16 +56,16 @@ public sealed class WebPageTests : BunitContext
     }
 
     [Fact]
-    public void AScreenOfTheMenu_SaysItIsNotYetInTheWebVersion()
+    public void EveryScreenOfTheMenu_HasItsWebScreen_AndNoneSaysItIsNotYetThere()
     {
-        SignIn(AppLanguage.French, Permissions.Relations.View);
+        var source = File.ReadAllText(Path.Combine(WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web", "Components", "Pages", "Screen.razor"));
+        var mapped = Regex.Matches(source, "Key == \"([a-z]+)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var everyone = new User(permissions: [.. Permissions.All]);
+        var menu = WebMenu.Build(everyone, FullStatus()).SelectMany(g => g.Items).Select(i => i.Entry.Key).ToList();
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "prescriberstats"));
-
-        page.Find("h1").TextContent.Should().Contain("Statistiques prescripteurs");
-        page.Find("[data-state=unavailable]").TextContent.Should()
-            .Contain("Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.");
-        _auditor.Events.Should().BeEmpty();
+        menu.Should().NotBeEmpty();
+        menu.Where(k => !mapped.Contains(k)).Should().BeEmpty("every entry of the menu opens its screen in the web version");
+        source.Should().NotContain("Web.ScreenUnavailable", "no screen is left saying it is only on the workstation");
     }
 
     [Fact]
@@ -146,6 +147,9 @@ public sealed class WebPageTests : BunitContext
     [InlineData("planning", "Planning des gardes")]
     [InlineData("payroll", "Paie")]
     [InlineData("accidents", "Accidents du travail")]
+    [InlineData("prescriberstats", "Statistiques prescripteurs")]
+    [InlineData("relations", "Visites et conventions")]
+    [InlineData("patientmessaging", "Rappels et enquêtes")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);
@@ -197,13 +201,13 @@ public sealed class WebPageTests : BunitContext
     }
 
     [Fact]
-    public void TheArabicPlaceholder_IsInArabic()
+    public void TheArabicRefusal_IsInArabic()
     {
-        SignIn(AppLanguage.Arabic, Permissions.Relations.View);
+        SignIn(AppLanguage.Arabic, Permissions.Samples.Collect);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "prescriberstats"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "patientmessaging"));
 
-        page.Find("[data-state=unavailable]").TextContent.Should().Contain("نسخة الويب");
+        page.Find("[data-state=refused]").TextContent.Should().MatchRegex("[\u0600-\u06FF]");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");
     }
 
@@ -221,7 +225,7 @@ public sealed class WebPageTests : BunitContext
                      "Licence_WebInvalid", "LicenceModule.VersionWeb"])
             .ToHashSet(StringComparer.Ordinal);
 
-        used.Should().Contain(["Web.ScreenUnavailable", "Login.SignIn", "Web.Home.Welcome"], "the scan finds the pages' keys");
+        used.Should().Contain(["Web.ScreenNotFound", "Login.SignIn", "Web.Home.Welcome"], "the scan finds the pages' keys");
 
         foreach (var language in new[] { "fr", "en", "ar" })
         {
