@@ -1,4 +1,3 @@
-@using System.Globalization
 @using MarocLIS.Application.Input
 @using MarocLIS.Application.Steering
 @using MarocLIS.Domain.Common
@@ -20,31 +19,9 @@
 *@
 <div class="screen cost-margin" data-screen="costmargin">
     @{ var actions = Actions; var result = _result; }
-    <div class="list-tools" data-tools="filters">
-        <div class="chips" role="group">
-            @foreach (var preset in Enum.GetValues<PeriodPreset>())
-            {
-                <button type="button" class="chip @(preset == _preset ? "is-pressed" : null)" aria-pressed="@(preset == _preset ? "true" : "false")"
-                        data-filter="@preset" @onclick="() => ChooseAsync(preset)">@Texts[CostMarginScreenRules.PresetKey(preset)]</button>
-            }
-        </div>
-        <label class="field-inline">
-            <span class="field-label">@Texts["Field.From"]</span>
-            <input class="input input-date @Refused(CostMarginScreenRules.PeriodField)" type="date" data-field="margin-from"
-                   value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="FromChanged" />
-        </label>
-        <label class="field-inline">
-            <span class="field-label">@Texts["Field.To"]</span>
-            <input class="input input-date @Refused(CostMarginScreenRules.PeriodField)" type="date" data-field="@CostMarginScreenRules.PeriodField"
-                   value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="ToChanged" />
-        </label>
-        <FieldMessage Refusal="_refusal" Field="@CostMarginScreenRules.PeriodField" />
-        @if (result is not null)
-        {
-            var heading = CostMarginScreenRules.Heading(result, Texts.T);
-            <span class="list-tools-end muted small list-name" data-state="heading" title="@heading">@heading</span>
-        }
-    </div>
+    <MarocLIS.Web.Components.Screens.Steering.PeriodFilters State="_period" Prefix="margin" PeriodField="@CostMarginScreenRules.PeriodField"
+                                                            Refusal="_refusal" Heading="@(result is null ? null : CostMarginScreenRules.Heading(result, Texts.T))"
+                                                            OnChosen="LoadAsync" />
 
     <div class="screen-body">
         @if (result is not null)
@@ -152,8 +129,7 @@
 }
 
 @code {
-    private PeriodPreset _preset = PeriodPreset.ThisMonth;
-    private DateOnly _from, _to;
+    private MarocLIS.Web.Components.Screens.Steering.PeriodState _period = default!;
     private MarginTab _tab = MarginTab.ByAnalysis;
     private MarginAnalysis? _result;
     private FieldRefusal? _refusal;
@@ -178,31 +154,8 @@
 
     protected override Task OnInitializedAsync()
     {
-        (_from, _to) = CostMarginScreenRules.Range(_preset, Clock.Today)!.Value;
+        _period = new MarocLIS.Web.Components.Screens.Steering.PeriodState(Clock.Today);
         return LoadAsync();
-    }
-
-    private Task ChooseAsync(PeriodPreset preset)
-    {
-        _preset = preset;
-        if (CostMarginScreenRules.Range(preset, Clock.Today) is not { } range) return Task.CompletedTask;
-        (_from, _to) = range;
-        return LoadAsync();
-    }
-
-    // A date typed is a period of one's own: the chip « Personnalisée » takes over, as at the workstation.
-    private void FromChanged(ChangeEventArgs e)
-    {
-        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)) return;
-        _from = from;
-        _preset = PeriodPreset.Custom;
-    }
-
-    private void ToChanged(ChangeEventArgs e)
-    {
-        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to)) return;
-        _to = to;
-        _preset = PeriodPreset.Custom;
     }
 
     private async Task LoadAsync()
@@ -211,7 +164,7 @@
         _busy = true;
         try
         {
-            var (from, to) = (_from, _to);
+            var (from, to) = (_period.From, _period.To);
             var result = await Scopes.RunAsync<CostMarginService, Result<MarginAnalysis>>(s => s.GetAsync(from, to));
             if (result.IsFailure)
             {

@@ -140,6 +140,12 @@ public static class WebServiceCollectionExtensions
         // « Coût de revient et marge »: the tests of the period, their reagents and the analysers' contracts.
         // (« Rapprochement bancaire » and « Prévision de trésorerie » read ITreasuryQueries, registered above.)
         services.AddScoped<Application.Steering.ICostQueries, CostQueries>();
+        // « Tableau de bord », « Statistiques d'activité » and « Pilotage »: the day's figures of the
+        // site, the period's activity and money, and the period across the sites with its
+        // receivables, payroll and quality indicators.
+        services.AddScoped<Application.Dashboard.IDashboardQueries, DashboardQueries>();
+        services.AddScoped<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
+        services.AddScoped<Application.Steering.ISteeringQueries, SteeringQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

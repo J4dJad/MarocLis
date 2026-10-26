@@ -1,0 +1,65 @@
+@using MarocLIS.Application.Steering
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+
+@*
+    A table of a period report, the workstation's ReportGrids grid: the columns in the rules' order,
+    the figures right-aligned in the fixed-pitch face, codes and dates read left to right, a name
+    shortened only with its whole text in its tooltip, a row to watch in its ink.
+*@
+<div class="table-scroll">
+    <table class="grid report-grid" data-grid="@Name">
+        <thead>
+            <tr>
+                @foreach (var column in Columns)
+                {
+                    <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @for (var r = 0; r < Rows.Count; r++)
+            {
+                var row = Rows[r];
+                <tr class="@StockTones.Ink(row.Ink)" data-row="@r" data-ink="@row.Ink">
+                    @for (var c = 0; c < Columns.Count && c < row.Cells.Count; c++)
+                    {
+                        var column = Columns[c];
+                        var identifier = Identifier?.Invoke(column.Name) == true;
+                        <td class="@Cell(column, identifier)" dir="@(identifier ? "ltr" : null)" data-column="@column.Name">
+                            @if (column.Numeric || identifier)
+                            {
+                                @row.Cells[c]
+                            }
+                            else
+                            {
+                                <span class="list-name" title="@row.Cells[c]">@row.Cells[c]</span>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (Computed && Rows.Count == 0)
+    {
+        <p class="muted small card-pad" data-state="empty">@Texts["App.NoData"]</p>
+    }
+</div>
+
+@code {
+    /// <summary>The table's name, as its data-grid.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired] public IReadOnlyList<ReportColumn> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<ReportRow> Rows { get; set; } = [];
+
+    /// <summary>The columns read as identifiers (codes, dates): fixed-pitch, left to right.</summary>
+    [Parameter] public Func<string, bool>? Identifier { get; set; }
+
+    /// <summary>A period was computed: an empty table then says so.</summary>
+    [Parameter] public bool Computed { get; set; }
+
+    private static string? Cell(ReportColumn column, bool identifier) =>
+        column.Numeric ? "num nowrap mono" : identifier ? "mono small nowrap" : null;
+}

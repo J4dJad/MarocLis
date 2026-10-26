@@ -1,6 +1,7 @@
 @page "/"
 @inject WebTexts Texts
 @inject SessionContext Context
+@inject MarocLIS.Application.Licensing.ILicenceState Licence
 
 <PageTitle>MarocLIS — @Texts["Web.Home.Title"]</PageTitle>
 
@@ -20,4 +21,17 @@
             <dd>@DateTime.Now.ToString("dddd d MMMM yyyy", Texts.Culture)</dd>
         </dl>
     </div>
+
+    @* The workstation opens on its dashboard, the first entry of the menu: the web's home leads to it. *@
+    @if (MarocLIS.Application.Navigation.NavigationMenu.Find("dashboard") is { } dashboard
+         && MarocLIS.Application.Navigation.NavigationMenu.IsPermitted(dashboard, Context.User, Licence.Current))
+    {
+        <a class="card home-dashboard" href="@WebMenu.HrefOf("dashboard")" data-action="open-dashboard">
+            <Icon Glyph="WebMenu.IconOf(dashboard.Key)" Class="icon-title" />
+            <span class="home-dashboard-text">
+                <strong>@Texts[dashboard.LabelKey]</strong>
+                <span class="muted small">@Texts["Web.Home.DashboardHint"]</span>
+            </span>
+        </a>
+    }
 </div>

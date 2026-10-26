@@ -1,0 +1,129 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Statistics
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<ActivityStatisticsScreen> Logger
+
+@*
+    « Statistiques d'activité », the workstation's StatisticsView: what the management review needs
+    on one page for a period — the files, patients and tests, the turnaround from reception to
+    validation and the share on time, the money charged, invoiced, credited and collected — then the
+    activity by department, by analysis, by payer and by day. Each table is downloaded as CSV for the
+    review report or a spreadsheet. What is shown, offered and refused is StatisticsScreenRules';
+    the computation is StatisticsService's.
+*@
+<div class="screen report-screen" data-screen="statistics">
+    @{ var actions = Actions; var result = _result; }
+    <PeriodFilters State="_period" Prefix="statistics" PeriodField="@StatisticsScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@Heading(result)" OnChosen="LoadAsync" />
+
+    <div class="screen-body">
+        @if (result is not null)
+        {
+            <ReportTiles Tiles="StatisticsScreenRules.Tiles(result, Texts.T, Mad, Texts.Culture)" />
+        }
+
+        <section class="card card-flush report-card" data-card="statistics">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<StatisticsTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => _tab = tab">
+                        @Texts[StatisticsScreenRules.TabKey(tab)]
+                        @if (result is not null)
+                        {
+                            <span class="pill pill-waiting">@Rows(result, tab).Count</span>
+                        }
+                    </button>
+                }
+            </div>
+            <ReportTable Name="statistics" Columns="StatisticsScreenRules.Columns(_tab)" Rows="Rows(result, _tab)"
+                         Identifier="StatisticsScreenRules.IsIdentifier" Computed="@(result is not null)" />
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Statistics.Compute" Primary="true" Disabled="@(!actions.Compute || _busy)" OnClick="LoadAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@code {
+    private PeriodState _period = default!;
+    private StatisticsTab _tab = StatisticsTab.ByDepartment;
+    private ActivityStatistics? _result;
+    private FieldRefusal? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private StatisticsActions Actions => StatisticsScreenRules.Actions(Context.User.Has, _result);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private IReadOnlyList<MarocLIS.Application.Steering.ReportRow> Rows(ActivityStatistics? result, StatisticsTab tab) =>
+        StatisticsScreenRules.Rows(result, tab, Texts.Language, Texts.T, Mad, Texts.Culture);
+
+    // « Statistiques d'activité — 01/10/2026 → 26/10/2026 », the workstation's title and the period beside it.
+    private string Heading(ActivityStatistics? result) =>
+        result is null ? Texts["Statistics.Title"] : $"{Texts["Statistics.Title"]} — {StatisticsScreenRules.Subtitle(result)}";
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (from, to) = (_period.From, _period.To);
+            var result = await Scopes.RunAsync<StatisticsService, Result<ActivityStatistics>>(s => s.GetActivityAsync(from, to));
+            if (result.IsFailure)
+            {
+                var error = result.FirstError;
+                if (StatisticsScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _status = null;
+            _result = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing activity statistics failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CsvAsync()
+    {
+        if (!Actions.Export || _result is not { } result) return;
+        var csv = StatisticsScreenRules.Csv(result, _tab, Texts.Language, Texts.T, Mad, Texts.Culture);
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        var name = StatisticsScreenRules.FileName(result, _tab);
+        await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+        _status = (Texts.T("Web.StockDownloaded", name), "muted");
+    }
+}

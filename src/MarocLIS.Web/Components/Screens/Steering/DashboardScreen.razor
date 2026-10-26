@@ -1,0 +1,199 @@
+@using MarocLIS.Application.Dashboard
+@using MarocLIS.Infrastructure.Queries
+@using MarocLIS.Desktop.Infrastructure
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<DashboardScreen> Logger
+
+@*
+    « Tableau de bord », the workstation's DashboardView and the screen it opens on: the day's flow
+    first — tubes to draw, to receive, values to type, to validate, reports to issue — each step
+    opening the screen that holds it; then what needs attention, urgent first, each with the screen
+    that deals with it; the checks at zero named on the side, so a quiet day reads as checked rather
+    than as empty. Above them, until an administrator has dealt with it, the pre-go-live banner. Open
+    to everyone signed in; a figure the operator's rights keep from them is not shown, and a screen
+    they may not open is not offered. What is shown is DashboardScreenRules'; the figures are
+    IDashboardQueries'.
+*@
+<div class="screen dashboard" data-screen="dashboard">
+    @{ var board = _board; var rtl = Texts.Direction == "rtl"; }
+    <div class="screen-body">
+        @if (_setup is { } setup)
+        {
+            <div class="dashboard-setup" data-state="setup" role="status">
+                <Icon Glyph="Glyph.TriangleAlert" />
+                <strong class="dashboard-setup-title">@setup.Title</strong>
+                <span class="dashboard-setup-detail list-name" title="@setup.Detail">@setup.Detail</span>
+                @if (setup.Review)
+                {
+                    <a class="btn btn-secondary btn-small dashboard-setup-review" href="@WebMenu.HrefOf("catalog")" data-action="@setup.ReviewKey">@Texts[setup.ReviewKey]</a>
+                }
+            </div>
+        }
+
+        <div class="dashboard-greeting">
+            <h2 class="dashboard-hello" data-state="greeting">@Texts.T("Dashboard.Greeting", Context.User.FullName)</h2>
+            <p class="small @(_failed ? "critical" : "muted")" data-state="generated">@DashboardScreenRules.DateLine(Clock.Now, _failed ? null : _snapshot?.GeneratedAt, _failed, Texts.T, Texts.Culture)</p>
+        </div>
+
+        @if (board is not null && board.ShowsFlow)
+        {
+            <section class="card dashboard-flow" data-card="flow">
+                <div class="dashboard-card-head">
+                    <h3 class="card-heading">@Texts["Dashboard.FlowHeading"]</h3>
+                    <span class="muted small list-name" data-state="summary" title="@string.Join("  ·  ", board.Summary)">@string.Join("  ·  ", board.Summary)</span>
+                </div>
+                <div class="dashboard-steps">
+                    @for (var i = 0; i < board.Steps.Count; i++)
+                    {
+                        var step = board.Steps[i];
+                        if (i > 0)
+                        {
+                            @* The arrow between two steps, drawn: it points the way the page reads, leftwards in Arabic. *@
+                            <svg class="dashboard-arrow" viewBox="0 0 24 24" aria-hidden="true">
+                                @if (rtl)
+                                {
+                                    <path d="M19 12H5M5 12l5-5M5 12l5 5" />
+                                }
+                                else
+                                {
+                                    <path d="M5 12h14M19 12l-5-5M19 12l-5 5" />
+                                }
+                            </svg>
+                        }
+                        var caption = Texts[step.Metric.LabelKey];
+                        var value = step.Metric.Value.ToString("N0", Texts.Culture);
+                        @if (step.Opens is { } key)
+                        {
+                            <a class="dashboard-step @(step.Highlighted ? "is-highlighted" : null)" href="@WebMenu.HrefOf(key)" data-step="@step.Metric.LabelKey" title="@caption">
+                                <span class="dashboard-step-caption list-name">@caption</span>
+                                <span class="dashboard-step-value">@value</span>
+                                <span class="dashboard-step-link">@Texts[step.StepKey] @(rtl ? "‹" : "›")</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <div class="dashboard-step @(step.Highlighted ? "is-highlighted" : null)" data-step="@step.Metric.LabelKey" title="@caption">
+                                <span class="dashboard-step-caption list-name">@caption</span>
+                                <span class="dashboard-step-value">@value</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+        }
+
+        @if (board is not null)
+        {
+            <div class="dashboard-cards">
+                <section class="card card-flush dashboard-alerts" data-card="alerts">
+                    <div class="dashboard-card-head">
+                        <h3 class="card-heading">@Texts["Dashboard.AlertsHeading"]</h3>
+                        <span class="muted small" data-state="alert-count">@Texts.T(board.CountKey, board.Pending.Count)</span>
+                    </div>
+                    <ul class="dashboard-alert-list">
+                        @if (board.Pending.Count == 0)
+                        {
+                            <li class="dashboard-alert muted" data-state="no-priority">@Texts["Dashboard.NoPriority"]</li>
+                        }
+                        @foreach (var alert in board.Pending)
+                        {
+                            var text = Texts[alert.TextKey];
+                            <li class="dashboard-alert" data-alert="@alert.Metric.LabelKey" data-kind="@alert.Kind">
+                                <span class="dashboard-alert-pill"><Pill Text="@Texts[alert.PillKey]" Tone="@Tone(alert.Kind)" /></span>
+                                <span class="dashboard-alert-value @Ink(alert.Kind)">@alert.Metric.Value.ToString("N0", Texts.Culture)</span>
+                                <span class="dashboard-alert-text list-name" title="@text">@text</span>
+                                @if (alert.Opens is { } key)
+                                {
+                                    <a class="btn btn-secondary btn-small" href="@WebMenu.HrefOf(key)" data-action="@alert.ActionKey">@Texts[alert.ActionKey]</a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="card card-flush dashboard-quiet" data-card="quiet">
+                    <div class="dashboard-card-head dashboard-card-head-stack">
+                        <h3 class="card-heading">@Texts["Dashboard.NothingToReport"]</h3>
+                        <span class="muted small">@Texts[board.QuietHintKey]</span>
+                    </div>
+                    <ul class="dashboard-quiet-list">
+                        @foreach (var key in board.QuietKeys)
+                        {
+                            var text = Texts[key];
+                            <li data-quiet="@key"><Icon Glyph="Glyph.Check" Class="normal" /><span class="list-name" title="@text">@text</span></li>
+                        }
+                    </ul>
+                </section>
+            </div>
+        }
+    </div>
+
+    <ActionBar>
+        <Secondary>
+            <ActionButton Key="Action.Refresh" Disabled="_loading" OnClick="LoadAsync" />
+        </Secondary>
+    </ActionBar>
+</div>
+
+@code {
+    private DashboardSnapshot? _snapshot;
+    private DashboardBoard? _board;
+    private DashboardSetupBanner? _setup;
+    private bool _failed, _loading;
+
+    private static string Tone(DashboardAlertKind kind) => kind switch
+    {
+        DashboardAlertKind.Urgent => "Critical",
+        DashboardAlertKind.ToFollow => "Info",
+        _ => "Warning"
+    };
+
+    private static string Ink(DashboardAlertKind kind) => kind switch
+    {
+        DashboardAlertKind.Urgent => "critical",
+        DashboardAlertKind.ToFollow => "info",
+        _ => "abnormal"
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        // A second press of « Actualiser » while the first load runs would start a second reading.
+        if (_loading) return;
+        _loading = true;
+        try
+        {
+            var site = Context.User.SiteId;
+            var now = Clock.Now;
+            _snapshot = await Scopes.RunAsync<IDashboardQueries, DashboardSnapshot>(q => q.GetSnapshotAsync(site, now));
+            _board = DashboardScreenRules.Board(_snapshot, Context.User, Texts.T, Texts.Culture);
+            _failed = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the dashboard failed.");
+            _failed = true;
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            var status = await Scopes.RunAsync<ICatalogQueries, CatalogueSetupStatus>(q => q.GetCatalogueSetupStatusAsync());
+            _setup = DashboardScreenRules.Setup(status.UnverifiedRangeParameterCodes, status.PlaceholderTariffAnalysisCodes, Context.User, Texts.T);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not evaluate the catalogue setup warnings.");
+            _setup = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

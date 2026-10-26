@@ -1,0 +1,128 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<SteeringScreen> Logger
+
+@*
+    « Pilotage », the workstation's SteeringView: the director's view of a period across every site
+    the operator may open — revenue, invoiced and collected, reagent cost and margin, receivables
+    overdue, payroll against revenue (with the salary right only: no tile at all otherwise),
+    turnaround and QC rejections — then the revenue by day, site, payer and prescriber, the
+    receivables by age and the quality indicators. Each table is downloaded as CSV. What is shown,
+    offered and refused is SteeringScreenRules'; the computation is SteeringService's.
+*@
+<div class="screen report-screen" data-screen="steering">
+    @{ var actions = Actions; var result = _result; }
+    <PeriodFilters State="_period" Prefix="steering" PeriodField="@SteeringScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@Heading(result)" OnChosen="LoadAsync" />
+
+    <div class="screen-body">
+        @if (result is not null)
+        {
+            <ReportTiles Tiles="SteeringScreenRules.Tiles(result, Texts.T, Mad, Texts.Culture)" />
+        }
+
+        <section class="card card-flush report-card" data-card="steering">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<SteeringTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => _tab = tab">
+                        @Texts[SteeringScreenRules.TabKey(tab)]
+                        @if (result is not null && tab is not (SteeringTab.Quality or SteeringTab.Receivables))
+                        {
+                            <span class="pill pill-waiting">@Rows(result, tab).Count</span>
+                        }
+                    </button>
+                }
+            </div>
+            <ReportTable Name="steering" Columns="SteeringScreenRules.Columns(_tab)" Rows="Rows(result, _tab)" Computed="@(result is not null)" />
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Statistics.Compute" Primary="true" Disabled="@(!actions.Compute || _busy)" OnClick="LoadAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@code {
+    private PeriodState _period = default!;
+    private SteeringTab _tab = SteeringTab.ByDay;
+    private SteeringDashboard? _result;
+    private FieldRefusal? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private SteeringActions Actions => SteeringScreenRules.Actions(Context.User.Has, _result);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private IReadOnlyList<ReportRow> Rows(SteeringDashboard? result, SteeringTab tab) =>
+        SteeringScreenRules.Rows(result, tab, Texts.T, Mad, Texts.Culture);
+
+    // « Pilotage — 01/10/2026 → 26/10/2026 · 2 site(s) », the workstation's title and the period beside it.
+    private string Heading(SteeringDashboard? result) =>
+        result is null ? Texts["Steering.Title"] : $"{Texts["Steering.Title"]} — {SteeringScreenRules.Subtitle(result, Texts.T)}";
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (from, to) = (_period.From, _period.To);
+            var result = await Scopes.RunAsync<SteeringService, Result<SteeringDashboard>>(s => s.GetAsync(from, to));
+            if (result.IsFailure)
+            {
+                var error = result.FirstError;
+                if (SteeringScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _status = null;
+            _result = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing the steering dashboard failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CsvAsync()
+    {
+        if (!Actions.Export || _result is not { } result) return;
+        var csv = SteeringScreenRules.Csv(result, _tab, Texts.T, Mad, Texts.Culture);
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        var name = SteeringScreenRules.FileName(result, _tab);
+        await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+        _status = (Texts.T("Web.StockDownloaded", name), "muted");
+    }
+}

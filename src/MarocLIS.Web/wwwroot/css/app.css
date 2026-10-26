@@ -1254,3 +1254,60 @@ html[dir=rtl] :is([data-screen=accountingexport], [data-screen=accountingsetting
 html[dir=rtl] :is([data-screen=bankreconciliation], [data-screen=cashforecast], [data-screen=costmargin],
     [data-modal=bank-accounts], [data-modal=statement-import], [data-modal=forecast-items]) .grid :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
 @media (max-width: 1100px) { .screen-body > .recon-panes { grid-template-columns: minmax(0, 1fr); } .import-mapping { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* « Statistiques d'activité » and « Pilotage »: the key figures four to a row, then the tables by tab, which take the height left. */
+.report-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.report-tile { background: var(--surface-raised); border: 1px solid var(--border); min-inline-size: 0; gap: 2px; }
+.report-tile[data-ink=Abnormal] { border-color: var(--abnormal); }
+.report-tile[data-ink=Critical] { border-color: var(--critical); }
+.report-tile-caption { font-size: 12px; overflow-wrap: anywhere; }
+.report-tile-value { font-size: 19px; overflow-wrap: anywhere; line-height: 1.25; }
+.report-tile-sub { overflow-wrap: anywhere; }
+.screen-body > .report-card { flex: 1 1 auto; min-block-size: 260px; display: flex; flex-direction: column; }
+.report-card > .table-scroll { flex: 1 1 auto; min-block-size: 0; max-block-size: none; border: 0; border-radius: 0; }
+.report-grid th { white-space: normal; vertical-align: bottom; }
+.report-grid tr.abnormal td { color: var(--abnormal); }
+.report-grid tr.critical td { color: var(--critical); }
+:is([data-screen=statistics], [data-screen=steering]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=statistics], [data-screen=steering]) .grid :is(th, td):last-child { padding-left: 22px; padding-right: 8px; }
+/* « Tableau de bord »: the banner before go-live, the greeting, the day's flow, then what needs attention beside what is at zero. */
+.dashboard-setup { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid #F2C9A8; border-radius: 6px; background: var(--abnormal-bg); color: var(--abnormal); }
+.dashboard-setup > .icon { flex: none; }
+.dashboard-setup-title { flex: none; max-inline-size: 45%; }
+.dashboard-setup-detail { flex: 1 1 auto; -webkit-line-clamp: 1; line-clamp: 1; }
+.dashboard-setup-review { flex: none; color: var(--abnormal); border-color: #E0B48F; background: var(--abnormal-bg); }
+.dashboard-greeting { display: flex; flex-direction: column; gap: 2px; }
+.dashboard-hello { font-size: 20px; }
+.dashboard-greeting p { margin: 0; }
+.dashboard-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-inline-size: 0; }
+.dashboard-card-head > .card-heading { margin: 0; font-size: 15px; flex: none; }
+.dashboard-card-head > .list-name { -webkit-line-clamp: 1; line-clamp: 1; text-align: end; }
+.dashboard-card-head-stack { flex-direction: column; align-items: flex-start; gap: 2px; }
+.dashboard-flow { display: flex; flex-direction: column; gap: 12px; }
+.dashboard-steps { display: flex; align-items: stretch; }
+.dashboard-steps > .dashboard-step { flex: 1 1 0; }
+.dashboard-steps > .dashboard-arrow { flex: none; }
+.dashboard-step { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--text); text-decoration: none; }
+a.dashboard-step:hover { border-color: var(--accent); color: var(--text); }
+.dashboard-step.is-highlighted { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-pressed); }
+.dashboard-step-caption { color: var(--text-secondary); -webkit-line-clamp: 1; line-clamp: 1; }
+.dashboard-step.is-highlighted .dashboard-step-caption { color: var(--accent-pressed); }
+.dashboard-step-value { font-size: 28px; font-weight: 700; line-height: 1.15; }
+.dashboard-step-link { margin-block-start: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+.dashboard-step.is-highlighted .dashboard-step-link { color: var(--accent-pressed); }
+.dashboard-arrow { align-self: center; inline-size: 24px; block-size: 24px; fill: none; stroke: var(--border-strong); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dashboard-cards { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.dashboard-cards > .card > .dashboard-card-head { padding: 14px 16px 10px; }
+.dashboard-alert-list, .dashboard-quiet-list { list-style: none; margin: 0; padding: 0 16px 8px; }
+.dashboard-alert { display: grid; grid-template-columns: 122px 48px minmax(0, 1fr) auto; align-items: center; gap: 0 12px; min-block-size: 44px; padding-block: 4px; border-block-start: 1px solid #E6EBEF; }
+.dashboard-alert[data-state=no-priority] { display: block; padding-block: 12px; }
+.dashboard-alert-value { font-size: 15px; font-weight: 600; text-align: end; font-variant-numeric: tabular-nums; }
+.dashboard-alert-value.info { color: var(--info); }
+.dashboard-alert > .btn { margin-inline-end: 6px; }
+.dashboard-quiet-list li { display: flex; align-items: center; gap: 8px; min-block-size: 26px; }
+.dashboard-quiet-list .icon.normal { color: var(--normal); flex: none; }
+.dashboard-quiet-list .list-name { -webkit-line-clamp: 1; line-clamp: 1; }
+/* The home: the way to the dashboard, the screen the workstation opens on. */
+.home-dashboard { display: flex; align-items: center; gap: 12px; margin-block-start: 16px; color: var(--text); text-decoration: none; max-inline-size: 640px; }
+.home-dashboard:hover { border-color: var(--accent); color: var(--text); }
+.home-dashboard-text { display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 1100px) { .report-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard-cards { grid-template-columns: minmax(0, 1fr); } }

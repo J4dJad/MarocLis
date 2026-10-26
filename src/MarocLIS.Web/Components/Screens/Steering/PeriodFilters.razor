@@ -1,0 +1,71 @@
+@using System.Globalization
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Steering
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    The period of the steering screens, the workstation's PeriodBar: the chips (this month, last
+    month, this year, last year, a period of one's own), the two dates, the refusal of the period
+    beside them, and the period computed at the far end. A chip computes at once; a date typed waits
+    for « Calculer ».
+*@
+<div class="list-tools" data-tools="filters">
+    <div class="chips" role="group">
+        @foreach (var preset in Enum.GetValues<PeriodPreset>())
+        {
+            <button type="button" class="chip @(preset == State.Preset ? "is-pressed" : null)" aria-pressed="@(preset == State.Preset ? "true" : "false")"
+                    data-filter="@preset" @onclick="() => ChooseAsync(preset)">@Texts[PeriodReport.PresetKey(preset)]</button>
+        }
+    </div>
+    <label class="field-inline">
+        <span class="field-label">@Texts["Field.From"]</span>
+        <input class="input input-date @Refused" type="date" data-field="@($"{Prefix}-from")"
+               value="@State.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="FromChanged" />
+    </label>
+    <label class="field-inline">
+        <span class="field-label">@Texts["Field.To"]</span>
+        <input class="input input-date @Refused" type="date" data-field="@PeriodField"
+               value="@State.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="ToChanged" />
+    </label>
+    <FieldMessage Refusal="Refusal" Field="@PeriodField" />
+    @if (Heading is { Length: > 0 } heading)
+    {
+        <span class="list-tools-end muted small list-name" data-state="heading" title="@heading">@heading</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PeriodState State { get; set; } = default!;
+
+    /// <summary>The start of the « from » box's name: « {Prefix}-from ».</summary>
+    [Parameter, EditorRequired] public string Prefix { get; set; } = string.Empty;
+
+    /// <summary>The name a refusal of the period carries, on the « to » box.</summary>
+    [Parameter, EditorRequired] public string PeriodField { get; set; } = string.Empty;
+
+    [Parameter] public FieldRefusal? Refusal { get; set; }
+
+    /// <summary>The period computed, at the far end of the row.</summary>
+    [Parameter] public string? Heading { get; set; }
+
+    /// <summary>A chip pressed that gives days: the screen computes them.</summary>
+    [Parameter] public EventCallback OnChosen { get; set; }
+
+    private string? Refused => Refusal?.Field == PeriodField ? "is-refused" : null;
+
+    private Task ChooseAsync(PeriodPreset preset) =>
+        State.Choose(preset, Clock.Today) ? OnChosen.InvokeAsync() : Task.CompletedTask;
+
+    private void FromChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from))
+            State.TypeFrom(from);
+    }
+
+    private void ToChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to))
+            State.TypeTo(to);
+    }
+}

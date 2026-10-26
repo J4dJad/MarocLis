@@ -27,6 +27,18 @@
 
     @switch (_decision)
     {
+        case ScreenDecision.Open when Key == "dashboard":
+            <MarocLIS.Web.Components.Screens.Steering.DashboardScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "statistics":
+            <MarocLIS.Web.Components.Screens.Steering.ActivityStatisticsScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "steering":
+            <MarocLIS.Web.Components.Screens.Steering.SteeringScreen />
+            break;
+
         case ScreenDecision.Open when Key == "patients":
             <MarocLIS.Web.Components.Screens.Patients.PatientSearch />
             break;
