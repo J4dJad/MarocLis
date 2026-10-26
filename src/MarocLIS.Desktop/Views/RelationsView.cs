@@ -1,4 +1,7 @@
+using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
+using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Relations;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
@@ -104,10 +107,12 @@ public sealed class RelationsView : LocalizedView
 
         // The state of a convention as a pill: in force, ending soon, or out of force.
         Pilotage.Pills(_partnerships, "state", row => row.Tag is not PartnershipRow p ? null
-            : !p.IsActive ? (UiTheme.SurfaceSunken, UiTheme.TextSecondary, "○")
-            : p.EndingSoon ? (UiTheme.AbnormalBackground, UiTheme.Abnormal, "!")
-            : p.InForce ? (UiTheme.NormalBackground, UiTheme.Normal, "✓")
-            : (UiTheme.SurfaceSunken, UiTheme.TextSecondary, "○"));
+            : RelationsScreenRules.Tone(RelationsScreenRules.State(p)) switch
+            {
+                StockTone.Warning => (UiTheme.AbnormalBackground, UiTheme.Abnormal, StockTones.Symbol(StockTone.Warning)),
+                StockTone.Done => (UiTheme.NormalBackground, UiTheme.Normal, StockTones.Symbol(StockTone.Done)),
+                var other => (UiTheme.SurfaceSunken, UiTheme.TextSecondary, StockTones.Symbol(other))
+            });
 
         _visitPage = Pilotage.CardPage(_visits);
         _duePage = Pilotage.CardPage(_due);
@@ -163,20 +168,26 @@ public sealed class RelationsView : LocalizedView
 
     private PartnershipRow? SelectedPartnership => _partnerships.CurrentRow?.Tag as PartnershipRow;
 
+    private RelationsTab Tab => _tabs.SelectedTab == _partnershipPage ? RelationsTab.Partnerships
+        : _tabs.SelectedTab == _duePage ? RelationsTab.DueVisits
+        : RelationsTab.Visits;
+
     private void UpdateButtons()
     {
-        var manage = _currentUser.Has(Permissions.Relations.Manage);
-        _newVisit.Visible = _editVisit.Visible = manage && !OnPartnerships;
-        _deleteVisit.Available = manage && !OnPartnerships;
-        _newPartnership.Visible = _editPartnership.Visible = manage && OnPartnerships;
-        _attach.Available = manage && OnPartnerships;
-        _openFile.Available = _inactive.Visible = OnPartnerships;
+        var actions = RelationsScreenRules.Actions(_currentUser.Has, Tab, SelectedVisit, SelectedPartnership);
+        _newVisit.Visible = _editVisit.Visible = actions.VisitActions;
+        _deleteVisit.Available = actions.VisitActions;
+        _newPartnership.Visible = _editPartnership.Visible = actions.PartnershipActions;
+        _attach.Available = actions.PartnershipActions;
+        _openFile.Available = _inactive.Visible = actions.ShowInactive;
 
         // Only with a row to act on: with an empty list « Modifier », « Supprimer » and the
         // document actions were offered and did nothing when clicked.
-        _editVisit.Enabled = _deleteVisit.Enabled = SelectedVisit is not null;
-        _editPartnership.Enabled = _attach.Enabled = SelectedPartnership is not null;
-        _openFile.Enabled = SelectedPartnership is { FileName: not null };
+        _editVisit.Enabled = actions.EditVisit;
+        _deleteVisit.Enabled = actions.DeleteVisit;
+        _editPartnership.Enabled = actions.EditPartnership;
+        _attach.Enabled = actions.Attach;
+        _openFile.Enabled = actions.OpenFile;
         Pilotage.SyncMore(_more, _moreMenu);
     }
 
@@ -249,7 +260,7 @@ public sealed class RelationsView : LocalizedView
     }
 
     private void ShowCounts() =>
-        _bar.Subtitle.Text = T("Relations.Counts", _visitCount, _dueCount, _partnershipCount);
+        _bar.Subtitle.Text = RelationsScreenRules.Counts(_visitCount, _dueCount, _partnershipCount, T);
 
     private void FillVisits(DataGridView grid, IReadOnlyList<DelegateVisitRow> rows)
     {
@@ -259,10 +270,9 @@ public sealed class RelationsView : LocalizedView
             grid.Rows.Clear();
             foreach (var v in rows)
             {
-                var index = grid.Rows.Add(Date(v.VisitDate), v.PrescriberName, v.Institution ?? string.Empty, v.DelegateName,
-                                          T($"VisitPurpose.{v.Purpose}"), v.Notes ?? string.Empty, Date(v.NextVisitOn));
+                var index = grid.Rows.Add([.. RelationsScreenRules.Cells(v, T)]);
                 grid.Rows[index].Tag = v;
-                if (v.NextVisitDue) grid.Rows[index].Cells["next"].Style.ForeColor = UiTheme.Overdue;
+                if (RelationsScreenRules.NextVisitDue(v)) grid.Rows[index].Cells["next"].Style.ForeColor = UiTheme.Overdue;
             }
         });
     }
@@ -275,19 +285,9 @@ public sealed class RelationsView : LocalizedView
             _partnerships.Rows.Clear();
             foreach (var p in rows)
             {
-                var state = !p.IsActive ? T("Relations.State.Inactive")
-                    : p.EndingSoon ? T("Relations.State.EndingSoon")
-                    : p.InForce ? T("Relations.State.InForce")
-                    : T("Relations.State.NotInForce");
-                var index = _partnerships.Rows.Add(p.PartnerName, T($"PartnerKind.{p.PartnerKind}"),
-                                                   T($"PartnershipKind.{p.Kind}"), p.Reference ?? string.Empty,
-                                                   Date(p.StartDate), Date(p.EndDate), state,
-                                                   p.DiscountPercent is { } d ? $"{d:0.##} %" : string.Empty,
-                                                   string.Join(" · ", new[] { p.ContactName, p.ContactPhone }
-                                                       .Where(s => !string.IsNullOrWhiteSpace(s))),
-                                                   p.FileName ?? string.Empty);
+                var index = _partnerships.Rows.Add([.. RelationsScreenRules.Cells(p, T, CultureInfo.CurrentCulture)]);
                 _partnerships.Rows[index].Tag = p;
-                if (p.EndingSoon) _partnerships.Rows[index].DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
+                if (RelationsScreenRules.EndingSoon(p)) _partnerships.Rows[index].DefaultCellStyle.BackColor = UiTheme.AbnormalBackground;
             }
         });
     }
@@ -302,54 +302,51 @@ public sealed class RelationsView : LocalizedView
         ComboBox prescriber = null!, delegateUser = null!, purpose = null!;
         DateTimePicker date = null!, next = null!;
         TextBox notes = null!;
+        SaveDelegateVisitRequest? request = null;
+
+        VisitForm Form() => new(FieldDialog.Value(date)!.Value, FieldDialog.Selected<Guid>(prescriber),
+                                FieldDialog.Selected<Guid>(delegateUser), FieldDialog.Selected<VisitPurpose>(purpose),
+                                FieldDialog.Value(notes), FieldDialog.Value(next));
 
         using var dialog = new FieldDialog(Localizer, existing is null ? T("Relations.NewVisit") : T("Relations.EditVisit"), () =>
         {
-            if (FieldDialog.Selected<Guid>(prescriber) == Guid.Empty || FieldDialog.Selected<Guid>(delegateUser) == Guid.Empty)
+            var (refusal, checkedRequest) = RelationsScreenRules.Check(Form(), existing?.Id, DateOnly.FromDateTime(DateTime.Today));
+            if (refusal is not null)
             {
-                _dialogs.Warn(T("Relations.ChoosePrescriberAndDelegate"), Title);
+                _dialogs.Warn(Say(refusal), Title);
                 return false;
             }
+            request = checkedRequest;
             return true;
         }, intro: T("Relations.VisitIntro"));
 
-        date = dialog.Date(T("Field.Date"), existing?.VisitDate);
+        var form = RelationsScreenRules.FormFor(existing, _currentUser.UserId, DateOnly.FromDateTime(DateTime.Today));
+        date = dialog.Date(T("Field.Date"), form.VisitDate);
         prescriber = dialog.Choice(T("Relations.Column.prescriber"),
-                                   options.Value.Prescribers.Select(p => (p.Id, Display(p))), existing?.PrescriberId ?? Guid.Empty);
+                                   options.Value.Prescribers.Select(p => (p.Id, RelationsScreenRules.Display(p, T))), form.PrescriberId);
         delegateUser = dialog.Choice(T("Relations.Column.delegate"),
-                                     options.Value.Staff.Select(s => (s.Id, Display(s))),
-                                     existing?.DelegateUserId ?? _currentUser.UserId);
+                                     options.Value.Staff.Select(s => (s.Id, RelationsScreenRules.Display(s, T))), form.DelegateUserId);
         purpose = dialog.Choice(T("Relations.Column.purpose"),
-                                Enum.GetValues<VisitPurpose>().Select(p => (p, T($"VisitPurpose.{p}"))),
-                                existing?.Purpose ?? VisitPurpose.FollowUp);
-        notes = dialog.TextField(T("Relations.Column.notes"), existing?.Notes, DelegateVisit.NotesMaxLength, multiline: true);
-        next = dialog.Date(T("Relations.Column.next"), existing?.NextVisitOn, optional: true);
+                                Enum.GetValues<VisitPurpose>().Select(p => (p, T($"VisitPurpose.{p}"))), form.Purpose);
+        notes = dialog.TextField(T("Relations.Column.notes"), form.Notes, DelegateVisit.NotesMaxLength, multiline: true);
+        next = dialog.Date(T("Relations.Column.next"), form.NextVisitOn, optional: true);
 
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (dialog.ShowDialog(this) != DialogResult.OK || request is null) return;
 
-        var saved = await _relations.SaveVisitAsync(new SaveDelegateVisitRequest
-        {
-            Id = existing?.Id,
-            VisitDate = FieldDialog.Value(date)!.Value,
-            PrescriberId = FieldDialog.Selected<Guid>(prescriber),
-            DelegateUserId = FieldDialog.Selected<Guid>(delegateUser),
-            Purpose = FieldDialog.Selected<VisitPurpose>(purpose),
-            Notes = FieldDialog.Value(notes),
-            NextVisitOn = FieldDialog.Value(next)
-        });
+        var saved = await _relations.SaveVisitAsync(request);
 
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, Title); return; }
         await LoadAsync();
     }
 
-    // A record the visit or convention already names, since deactivated, stays selectable and says so.
-    private string Display(RelationLookup lookup) =>
-        lookup.IsActive ? lookup.Display : $"{lookup.Display} {T("Contracts.InactiveSuffix")}";
+    /// <summary>A refusal of the shared rules, in the operator's language.</summary>
+    private string Say(FieldRefusal refusal) =>
+        refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed) : T(refusal.Key);
 
     private async Task DeleteVisitAsync()
     {
         if (SelectedVisit is not { } visit) return;
-        var reason = _dialogs.PromptForReason(T("Message.ConfirmDelete", $"{Date(visit.VisitDate)} — {visit.PrescriberName}"),
+        var reason = _dialogs.PromptForReason(RelationsScreenRules.DeletePrompt(visit, T),
                                               maxLength: RelationsService.DeletionReasonMaxLength);
         if (reason is null) return;
 
@@ -373,63 +370,72 @@ public sealed class RelationsView : LocalizedView
         var options = await _relations.GetOptionsAsync(existing?.PrescriberId is { } linkedId ? [linkedId] : null);
         if (options.IsFailure) { _dialogs.ShowFailure(options, Title); return; }
 
-        TextBox name = null!;
+        var culture = CultureInfo.CurrentCulture;
+        var form = RelationsScreenRules.FormFor(existing, DateOnly.FromDateTime(DateTime.Today), culture);
+        Func<PartnershipForm> read = () => form;
+        SavePartnershipRequest? request = null;
+
         using var dialog = new FieldDialog(Localizer, existing is null ? T("Relations.NewPartnership") : T("Relations.EditPartnership"), () =>
         {
-            if (string.IsNullOrWhiteSpace(name.Text))
+            var (refusal, checkedRequest) = RelationsScreenRules.Check(read(), existing?.Id);
+            if (refusal is not null)
             {
-                _dialogs.Warn(T("Partnership_PartnerRequired"), Title);
+                _dialogs.Warn(Say(refusal), Title);
                 return false;
             }
+            request = checkedRequest;
             return true;
         }, height: 640, intro: T("Relations.PartnershipIntro"));
 
-        name = dialog.TextField(T("Relations.Column.partner"), existing?.PartnerName);
+        var name = dialog.TextField(T("Relations.Column.partner"), form.PartnerName, RelationsScreenRules.PartnerNameMaxLength);
         var partnerKind = dialog.Choice(T("Relations.Column.partnerKind"),
-                                        Enum.GetValues<PartnerKind>().Select(k => (k, T($"PartnerKind.{k}"))),
-                                        existing?.PartnerKind ?? PartnerKind.Clinic);
+                                        Enum.GetValues<PartnerKind>().Select(k => (k, T($"PartnerKind.{k}"))), form.PartnerKind);
         var prescriber = dialog.Choice(T("Relations.LinkedPrescriber"),
-                                       new[] { (Guid.Empty, "—") }.Concat(options.Value.Prescribers.Select(p => (p.Id, Display(p)))),
-                                       existing?.PrescriberId ?? Guid.Empty);
+                                       new[] { (Guid.Empty, "—") }.Concat(options.Value.Prescribers.Select(p => (p.Id, RelationsScreenRules.Display(p, T)))),
+                                       form.PrescriberId ?? Guid.Empty);
         var kind = dialog.Choice(T("Relations.Column.kind"),
-                                 Enum.GetValues<PartnershipKind>().Select(k => (k, T($"PartnershipKind.{k}"))),
-                                 existing?.Kind ?? PartnershipKind.CareConvention);
-        var reference = dialog.TextField(T("Relations.Column.reference"), existing?.Reference, 60);
-        var start = dialog.Date(T("Relations.Column.start"), existing?.StartDate);
-        var end = dialog.Date(T("Relations.Column.end"), existing?.EndDate, optional: true);
-        var terms = dialog.TextField(T("Relations.Terms"), existing?.Terms, Partnership.TermsMaxLength, multiline: true);
+                                 Enum.GetValues<PartnershipKind>().Select(k => (k, T($"PartnershipKind.{k}"))), form.Kind);
+        var reference = dialog.TextField(T("Relations.Column.reference"), form.Reference, RelationsScreenRules.ReferenceMaxLength);
+        var start = dialog.Date(T("Relations.Column.start"), form.StartDate);
+        var end = dialog.Date(T("Relations.Column.end"), form.EndDate, optional: true);
+        var terms = dialog.TextField(T("Relations.Terms"), form.Terms, Partnership.TermsMaxLength, multiline: true);
         var discount = dialog.Number(T("Relations.Column.discount"), existing?.DiscountPercent ?? 0m, 0m, 100m, 2);
         var paymentDays = dialog.Number(T("Relations.PaymentTermsDays"), existing?.PaymentTermsDays ?? 0, 0, 365);
-        var ice = dialog.TextField("ICE", existing?.PartnerIce, 20);
-        var contact = dialog.TextField(T("Relations.ContactName"), existing?.ContactName, 150);
-        var phone = dialog.TextField(T("Field.Phone"), existing?.ContactPhone, 30);
-        var email = dialog.TextField(T("Field.Email"), existing?.ContactEmail, 200);
-        var notes = dialog.TextField(T("Field.Notes"), existing?.Notes, 1000, multiline: true);
-        var active = dialog.Check(T("Field.Active"), existing?.IsActive ?? true);
+        // The ICE under its name in the operator's language, as on the invoices' settings.
+        var ice = dialog.TextField(T("Billing.Ice"), form.Ice, RelationsScreenRules.IceMaxLength);
+        var contact = dialog.TextField(T("Relations.ContactName"), form.ContactName, RelationsScreenRules.ContactNameMaxLength);
+        var phone = dialog.TextField(T("Field.Phone"), form.ContactPhone, RelationsScreenRules.PhoneMaxLength);
+        var email = dialog.TextField(T("Field.Email"), form.ContactEmail, RelationsScreenRules.EmailMaxLength);
+        var notes = dialog.TextField(T("Field.Notes"), form.Notes, RelationsScreenRules.PartnershipNotesMaxLength, multiline: true);
+        var active = dialog.Check(T("Field.Active"), form.IsActive);
 
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-
-        var linked = FieldDialog.Selected<Guid>(prescriber);
-        var saved = await _relations.SavePartnershipAsync(new SavePartnershipRequest
+        read = () =>
         {
-            Id = existing?.Id,
-            PartnerName = name.Text,
-            PartnerKind = FieldDialog.Selected<PartnerKind>(partnerKind),
-            PrescriberId = linked == Guid.Empty ? null : linked,
-            PartnerIce = FieldDialog.Value(ice),
-            ContactName = FieldDialog.Value(contact),
-            ContactPhone = FieldDialog.Value(phone),
-            ContactEmail = FieldDialog.Value(email),
-            Kind = FieldDialog.Selected<PartnershipKind>(kind),
-            Reference = FieldDialog.Value(reference),
-            StartDate = FieldDialog.Value(start)!.Value,
-            EndDate = FieldDialog.Value(end),
-            Terms = FieldDialog.Value(terms),
-            DiscountPercent = discount.Value == 0m ? null : discount.Value,
-            PaymentTermsDays = paymentDays.Value == 0m ? null : (int)paymentDays.Value,
-            Notes = FieldDialog.Value(notes),
-            IsActive = active.Checked
-        });
+            var linked = FieldDialog.Selected<Guid>(prescriber);
+            return new PartnershipForm
+            {
+                PartnerName = name.Text,
+                PartnerKind = FieldDialog.Selected<PartnerKind>(partnerKind),
+                PrescriberId = linked == Guid.Empty ? null : linked,
+                Kind = FieldDialog.Selected<PartnershipKind>(kind),
+                Reference = FieldDialog.Value(reference),
+                StartDate = FieldDialog.Value(start)!.Value,
+                EndDate = FieldDialog.Value(end),
+                Terms = FieldDialog.Value(terms),
+                Discount = discount.Value.ToString(culture),
+                PaymentDays = paymentDays.Value.ToString(culture),
+                Ice = FieldDialog.Value(ice),
+                ContactName = FieldDialog.Value(contact),
+                ContactPhone = FieldDialog.Value(phone),
+                ContactEmail = FieldDialog.Value(email),
+                Notes = FieldDialog.Value(notes),
+                IsActive = active.Checked
+            };
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK || request is null) return;
+
+        var saved = await _relations.SavePartnershipAsync(request);
 
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, Title); return; }
         await LoadAsync();
@@ -451,9 +457,9 @@ public sealed class RelationsView : LocalizedView
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > PartnershipDocument.MaximumBytes)
+            if (RelationsScreenRules.CheckDocument(info.Name, info.Length) is { } refused)
             {
-                _dialogs.Warn(T("Purchasing_FileTooLarge", PartnershipDocument.MaximumBytes / (1024 * 1024)), _attach.Text);
+                _dialogs.Warn(Say(refused), _attach.Text);
                 return;
             }
             content = await File.ReadAllBytesAsync(info.FullName);

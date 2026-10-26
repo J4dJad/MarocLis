@@ -1,5 +1,7 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
+using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Relations;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
@@ -116,9 +118,9 @@ public sealed class PatientMessagingView : LocalizedView
 
         // A message refused by the gateway reads as such without the colour of its row.
         Pilotage.Pills(_log, "status", row => row.Tag is PatientMessageStatus status
-            ? status == PatientMessageStatus.Failed
+            ? PatientMessagingScreenRules.Tone(status) == StockTone.Critical
                 ? (UiTheme.CriticalBackground, UiTheme.CriticalInk, "!")
-                : (UiTheme.NormalBackground, UiTheme.Normal, "✓")
+                : (UiTheme.NormalBackground, UiTheme.Normal, StockTones.Symbol(StockTone.Done))
             : null);
 
         _reminderPage = Pilotage.CardPage(_reminders);
@@ -185,11 +187,11 @@ public sealed class PatientMessagingView : LocalizedView
         _bar.Heading.Text = T("Nav.PatientMessaging");
         _bar.Subtitle.Text = T("Messaging.Title");
         _more.Text = T("ResultEntry.MoreActions");
-        _reminderPage.Text = T("Messaging.Reminders");
-        _rulePage.Text = T("Messaging.Rules");
-        _surveyPage.Text = T("Messaging.Surveys");
-        _resultPage.Text = T("Messaging.SurveyResults");
-        _logPage.Text = T("Messaging.Log");
+        _reminderPage.Text = T(PatientMessagingScreenRules.TabKey(MessagingTab.Reminders));
+        _rulePage.Text = T(PatientMessagingScreenRules.TabKey(MessagingTab.Rules));
+        _surveyPage.Text = T(PatientMessagingScreenRules.TabKey(MessagingTab.Surveys));
+        _resultPage.Text = T(PatientMessagingScreenRules.TabKey(MessagingTab.SurveyResults));
+        _logPage.Text = T(PatientMessagingScreenRules.TabKey(MessagingTab.Log));
         _sendReminders.Text = T("Messaging.SendSelected");
         _sendSurveys.Text = T("Messaging.SendSelected");
         _newRule.Text = T("Messaging.NewRule");
@@ -198,9 +200,7 @@ public sealed class PatientMessagingView : LocalizedView
         _importReplies.Text = T("Messaging.ImportReplies");
         _settings.Text = T("Messaging.SurveySettings");
 
-        _notice.Text = T("Messaging.ConsentNotice") + " " +
-                       (_messaging.CanSendSms ? string.Empty : T("Messaging.SmsNotConfiguredNotice") + " ") +
-                       T("Messaging.WhatsAppNotice");
+        _notice.Text = PatientMessagingScreenRules.Notice(_messaging.CanSendSms, T);
 
         foreach (var grid in new[] { _reminders, _rules, _surveys, _comments, _log })
             foreach (DataGridViewColumn column in grid.Columns)
@@ -229,10 +229,7 @@ public sealed class PatientMessagingView : LocalizedView
         if (IsBusy) return;
         var tab = _tabs.SelectedTab;
         var grid = Pilotage.GridOf(tab);
-        var context = tab == _reminderPage ? "Relations/ReminderPreview"
-            : tab == _surveyPage ? "Relations/SurveyPreview"
-            : tab == _logPage ? "Relations/MessageLog"
-            : null;
+        var context = PatientMessagingScreenRules.ExportContext(TabOf(tab));
 
         if (context is not null && grid is { Rows.Count: > 0 })
         {
@@ -242,6 +239,13 @@ public sealed class PatientMessagingView : LocalizedView
 
         await ExportAsync(grid, _output, _dialogs, _bar.Export.Text, Localizer);
     }
+
+    private MessagingTab TabOf(TabPage? tab) =>
+        tab == _rulePage ? MessagingTab.Rules
+        : tab == _surveyPage ? MessagingTab.Surveys
+        : tab == _resultPage ? MessagingTab.SurveyResults
+        : tab == _logPage ? MessagingTab.Log
+        : MessagingTab.Reminders;
 
     // Nothing reads while a write runs (see WriteAsync); the write refreshes the list itself at its end.
     private Task LoadAsync(CancellationToken ct = default) => IsBusy ? Task.CompletedTask : ReloadAsync(ct);
@@ -260,8 +264,7 @@ public sealed class PatientMessagingView : LocalizedView
                 _reminders.Rows.Clear();
                 foreach (var c in result.Value)
                 {
-                    var i = _reminders.Rows.Add(true, c.PatientName, c.Phone, c.Analysis, Date(c.ResultDate), Date(c.DueOn),
-                                                c.Text, c.Segments);
+                    var i = _reminders.Rows.Add([true, .. PatientMessagingScreenRules.Cells(c, CultureInfo.CurrentCulture)]);
                     _reminders.Rows[i].Tag = c;
                 }
                 LockReadOnlyColumns(_reminders);
@@ -277,8 +280,7 @@ public sealed class PatientMessagingView : LocalizedView
                     var language = Localizer.CurrentLanguage;
                     foreach (var r in rules.Value)
                     {
-                        var i = _rules.Rows.Add(r.Code, r.Name.For(language), r.DelayMonths, r.WindowDays,
-                                                r.Template.For(language), r.IsActive ? T("Action.Yes") : T("Action.No"));
+                        var i = _rules.Rows.Add([.. PatientMessagingScreenRules.Cells(r, language, T, CultureInfo.CurrentCulture)]);
                         _rules.Rows[i].Tag = r;
                     }
                 });
@@ -290,9 +292,7 @@ public sealed class PatientMessagingView : LocalizedView
                 _surveys.Rows.Clear();
                 foreach (var c in result.Value)
                 {
-                    var i = _surveys.Rows.Add(true, c.PatientName, c.Phone, c.AccessionNumber,
-                                              c.ReportedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
-                                              c.Text, c.Segments);
+                    var i = _surveys.Rows.Add([true, .. PatientMessagingScreenRules.Cells(c, Offset(c.ReportedAt), CultureInfo.CurrentCulture)]);
                     _surveys.Rows[i].Tag = c;
                 }
                 LockReadOnlyColumns(_surveys);
@@ -302,14 +302,10 @@ public sealed class PatientMessagingView : LocalizedView
                 var result = await _messaging.GetSurveyResultsAsync(_bar.From, _bar.To, ct);
                 if (result.IsFailure) { _dialogs.ShowFailure(result, Title); return; }
                 var r = result.Value;
-                string Tile(string key, string value) => $"{T(key)}\n{value}";
-                _resultTiles[0].Text = Tile("Messaging.Invited", $"{Count(r.Invited)} ({Count(r.Delivered)} {T("Messaging.Delivered")})");
-                _resultTiles[1].Text = Tile("Messaging.Answered", $"{Count(r.Answered)} · {Share(r.ResponseRatePercent)}");
-                _resultTiles[2].Text = Tile("Messaging.AverageScore", r.AverageScore is { } a ? $"{a:0.00} / 5" : "—");
-                _resultTiles[3].Text = Tile("Messaging.Distribution",
-                    string.Join("  ", r.Distribution.Select((n, i) => $"{i + 1}★ {n}")));
+                var tiles = PatientMessagingScreenRules.Tiles(r, T, CultureInfo.CurrentCulture);
+                for (var t = 0; t < _resultTiles.Length && t < tiles.Count; t++) ReportGrids.Show(_resultTiles[t], tiles[t]);
                 _comments.Rows.Clear();
-                foreach (var c in r.Comments) _comments.Rows.Add(Date(c.Date), c.Score, c.Comment);
+                foreach (var c in r.Comments) _comments.Rows.Add([.. PatientMessagingScreenRules.Cells(c, CultureInfo.CurrentCulture)]);
             }
             else if (tab == _logPage)
             {
@@ -318,12 +314,10 @@ public sealed class PatientMessagingView : LocalizedView
                 _log.Rows.Clear();
                 foreach (var m in result.Value)
                 {
-                    var i = _log.Rows.Add(m.SentAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
-                                          T($"PatientMessageKind.{m.Kind}"), m.PatientName, m.Phone,
-                                          T($"PatientMessageStatus.{m.Status}"),
-                                          m.Failure is null ? m.Text : $"{m.Text}  [{m.Failure}]");
+                    var i = _log.Rows.Add([.. PatientMessagingScreenRules.Cells(m, Offset(m.SentAt), T)]);
                     _log.Rows[i].Tag = m.Status;
-                    if (m.Status == PatientMessageStatus.Failed) _log.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
+                    if (PatientMessagingScreenRules.Tone(m.Status) == StockTone.Critical)
+                        _log.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
                 }
             }
         }
@@ -341,6 +335,9 @@ public sealed class PatientMessagingView : LocalizedView
         }
     }
 
+    /// <summary>The workstation's offset at that moment: the times are read in its clock.</summary>
+    private static TimeSpan Offset(DateTimeOffset at) => TimeZoneInfo.Local.GetUtcOffset(at);
+
     private static void LockReadOnlyColumns(DataGridView grid)
     {
         foreach (DataGridViewColumn column in grid.Columns) column.ReadOnly = column.Name != "send";
@@ -356,7 +353,7 @@ public sealed class PatientMessagingView : LocalizedView
         _reminders.EndEdit();
         var picked = Ticked<ReminderCandidate>(_reminders).ToList();
         if (picked.Count == 0) { _dialogs.Info(T("Message.NothingSelected"), _sendReminders.Text); return; }
-        if (!_dialogs.Confirm(T("Messaging.ConfirmSend", picked.Count), _sendReminders.Text)) return;
+        if (!_dialogs.Confirm(PatientMessagingScreenRules.ConfirmSend(picked.Count, T), _sendReminders.Text)) return;
 
         var result = await _messaging.SendRemindersAsync(
             [.. picked.Select(c => new ReminderSelection(c.RuleId, c.PatientId, c.OrderId))]);
@@ -369,7 +366,7 @@ public sealed class PatientMessagingView : LocalizedView
         _surveys.EndEdit();
         var picked = Ticked<SurveyCandidate>(_surveys).ToList();
         if (picked.Count == 0) { _dialogs.Info(T("Message.NothingSelected"), _sendSurveys.Text); return; }
-        if (!_dialogs.Confirm(T("Messaging.ConfirmSend", picked.Count), _sendSurveys.Text)) return;
+        if (!_dialogs.Confirm(PatientMessagingScreenRules.ConfirmSend(picked.Count, T), _sendSurveys.Text)) return;
 
         var result = await _messaging.SendSurveysAsync(_bar.From, _bar.To, [.. picked.Select(c => c.OrderId)]);
         Report(result, _sendSurveys.Text);
@@ -379,8 +376,7 @@ public sealed class PatientMessagingView : LocalizedView
     private void Report(Result<CampaignOutcome> result, string title)
     {
         if (result.IsFailure) { _dialogs.ShowFailure(result, title); return; }
-        var o = result.Value;
-        _dialogs.Info(T("Messaging.CampaignOutcome", o.Sent, o.Failed, o.Skipped), title);
+        _dialogs.Info(PatientMessagingScreenRules.Outcome(result.Value, T).Text, title);
     }
 
     private async Task EditRuleAsync(ReminderRuleRow? existing)
@@ -393,47 +389,49 @@ public sealed class PatientMessagingView : LocalizedView
         }
 
         var language = Localizer.CurrentLanguage;
-        var current = existing?.AnalysisTestId ?? existing?.TestPanelId ?? Guid.Empty;
+        var culture = CultureInfo.CurrentCulture;
+        var targets = PatientMessagingScreenRules.Targets(_targets, existing);
+        var form = PatientMessagingScreenRules.FormFor(existing, culture);
+        Func<ReminderRuleForm> read = () => form;
+        SaveReminderRuleRequest? request = null;
 
-        // A rule whose analysis is no longer offered (inactive, or under a specific consent) keeps
-        // it, so that the rule can still be switched off; the service refuses to keep it active.
-        var targets = _targets.ToList();
-        if (existing is not null && targets.All(t => t.Id != current))
-            targets.Add(new ReminderTarget(current, existing.TestPanelId is not null, existing.Code, existing.Name));
-
-        using var dialog = new FieldDialog(Localizer, existing is null ? T("Messaging.NewRule") : T("Messaging.EditRule"),
-                                           height: 600, intro: T("Messaging.RuleIntro"));
-        var target = dialog.Choice(T("Messaging.Column.analysis"),
-            targets.Select(t => (t.Id, $"{t.Code} — {t.Name.For(language)}{(t.IsPanel ? " (" + T("Messaging.Panel") + ")" : string.Empty)}")),
-            current);
-        var delay = dialog.Number(T("Messaging.Column.delay"), existing?.DelayMonths ?? 3,
-                                  ReminderRule.MinimumDelayMonths, ReminderRule.MaximumDelayMonths);
-        var window = dialog.Number(T("Messaging.Column.window"), existing?.WindowDays ?? 60, 1, 365);
-        var fr = dialog.TextField(T("Messaging.TemplateFr"), existing?.Template.Fr ?? MessagingSettings.DefaultReminderFr,
-                                  MessageWording.MaximumLength, multiline: true);
-        var ar = dialog.TextField(T("Messaging.TemplateAr"), existing?.Template.Ar ?? MessagingSettings.DefaultReminderAr,
-                                  MessageWording.MaximumLength, multiline: true);
-        dialog.Note(T("Messaging.PlaceholdersHelp", string.Join(" ", MessageWording.Placeholders)));
-        var active = dialog.Check(T("Field.Active"), existing?.IsActive ?? true);
-
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-
-        var id = FieldDialog.Selected<Guid>(target);
-        var chosen = targets.FirstOrDefault(t => t.Id == id);
-        var saved = await _messaging.SaveRuleAsync(new SaveReminderRuleRequest
+        using var dialog = new FieldDialog(Localizer, existing is null ? T("Messaging.NewRule") : T("Messaging.EditRule"), () =>
         {
-            Id = existing?.Id,
-            AnalysisTestId = chosen is { IsPanel: false } ? chosen.Id : null,
-            TestPanelId = chosen is { IsPanel: true } ? chosen.Id : null,
-            DelayMonths = (int)delay.Value,
-            WindowDays = (int)window.Value,
-            Template = new MultilingualText(fr.Text, FieldDialog.Value(ar)),
-            IsActive = active.Checked
-        });
+            var (refusal, checkedRequest) = PatientMessagingScreenRules.Check(read(), targets, existing?.Id);
+            if (refusal is not null)
+            {
+                _dialogs.Warn(Say(refusal), Title);
+                return false;
+            }
+            request = checkedRequest;
+            return true;
+        }, height: 600, intro: T("Messaging.RuleIntro"));
+        var target = dialog.Choice(T("Messaging.Column.analysis"),
+            targets.Select(t => (t.Id, PatientMessagingScreenRules.Display(t, language, T))), form.TargetId);
+        var delay = dialog.Number(T("Messaging.Column.delay"), existing?.DelayMonths ?? PatientMessagingScreenRules.DefaultDelayMonths,
+                                  ReminderRule.MinimumDelayMonths, ReminderRule.MaximumDelayMonths);
+        var window = dialog.Number(T("Messaging.Column.window"), existing?.WindowDays ?? PatientMessagingScreenRules.DefaultWindowDays,
+                                   1, PatientMessagingScreenRules.MaximumWindowDays);
+        var fr = dialog.TextField(T("Messaging.TemplateFr"), form.TemplateFr, MessageWording.MaximumLength, multiline: true);
+        var ar = dialog.TextField(T("Messaging.TemplateAr"), form.TemplateAr, MessageWording.MaximumLength, multiline: true);
+        dialog.Note(PatientMessagingScreenRules.PlaceholdersHelp(T));
+        var active = dialog.Check(T("Field.Active"), form.IsActive);
+        read = () => new ReminderRuleForm(FieldDialog.Selected<Guid>(target), delay.Value.ToString(culture), window.Value.ToString(culture),
+                                          fr.Text, ar.Text, active.Checked);
+
+        if (dialog.ShowDialog(this) != DialogResult.OK || request is null) return;
+
+        var saved = await _messaging.SaveRuleAsync(request);
 
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, Title); return; }
         await ReloadAsync();
     }
+
+    /// <summary>A refusal of the shared rules, in the operator's language.</summary>
+    private string Say(FieldRefusal refusal) =>
+        refusal.Field == PatientMessagingScreenRules.RuleDelayField ? PatientMessagingScreenRules.DelayRefusal(T)
+        : refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed)
+        : T(refusal.Key);
 
     private async Task RecordAnswerAsync()
     {
@@ -444,8 +442,15 @@ public sealed class PatientMessagingView : LocalizedView
         var comment = dialog.TextField(T("Messaging.Column.comment"), null, SurveyInvitation.CommentMaxLength, multiline: true);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        var recorded = await _messaging.RecordAnswerAsync(code.Text, (int)score.Value, FieldDialog.Value(comment),
-                                                          SurveyAnswerChannel.Manual);
+        var (refusal, answer) = PatientMessagingScreenRules.Check(
+            new SurveyAnswerForm(code.Text, score.Value.ToString(CultureInfo.CurrentCulture), comment.Text));
+        if (refusal is not null || answer is not { } a)
+        {
+            _dialogs.Warn(Say(refusal!), _recordAnswer.Text);
+            return;
+        }
+
+        var recorded = await _messaging.RecordAnswerAsync(a.Code, a.Score, a.Comment, SurveyAnswerChannel.Manual);
         if (recorded.IsFailure) { _dialogs.ShowFailure(recorded, _recordAnswer.Text); return; }
         _dialogs.Info(T("Message.Saved"), _recordAnswer.Text);
         await ReloadAsync();
@@ -463,10 +468,9 @@ public sealed class PatientMessagingView : LocalizedView
         var result = await _messaging.ImportRepliesAsync(text.Text);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _importReplies.Text); return; }
 
-        var o = result.Value;
-        var details = string.Join(Environment.NewLine, o.Refused.Concat(o.Unrecognised.Select(l => $"? {l}")).Take(20));
-        _dialogs.Info(T("Messaging.ImportOutcome", o.Recorded, o.Refused.Count, o.Unrecognised.Count)
-                      + (details.Length == 0 ? string.Empty : Environment.NewLine + details), _importReplies.Text);
+        var (summary, lines) = PatientMessagingScreenRules.ImportOutcome(result.Value, T);
+        _dialogs.Info(summary + (lines.Count == 0 ? string.Empty : Environment.NewLine + string.Join(Environment.NewLine, lines)),
+                      _importReplies.Text);
         await ReloadAsync();
     }
 
@@ -480,18 +484,20 @@ public sealed class PatientMessagingView : LocalizedView
                                            intro: T("Messaging.SurveySettingsIntro"));
         var fr = dialog.TextField(T("Messaging.TemplateFr"), s.SurveyTemplateFr, MessageWording.MaximumLength, multiline: true);
         var ar = dialog.TextField(T("Messaging.TemplateAr"), s.SurveyTemplateAr, MessageWording.MaximumLength, multiline: true);
-        dialog.Note(T("Messaging.PlaceholdersHelp", string.Join(" ", MessageWording.Placeholders)));
-        var url = dialog.TextField(T("Messaging.SurveyUrl"), s.SurveyUrl, 300);
-        var interval = dialog.Number(T("Messaging.SurveyInterval"), s.SurveyIntervalDays, 0, 3650);
+        dialog.Note(PatientMessagingScreenRules.PlaceholdersHelp(T));
+        var url = dialog.TextField(T("Messaging.SurveyUrl"), s.SurveyUrl, PatientMessagingScreenRules.SurveyUrlMaxLength);
+        var interval = dialog.Number(T("Messaging.SurveyInterval"), s.SurveyIntervalDays, 0, PatientMessagingScreenRules.MaximumIntervalDays);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        var saved = await _messaging.SaveSettingsAsync(s with
+        var (refusal, settings) = PatientMessagingScreenRules.Check(
+            new SurveySettingsForm(fr.Text, ar.Text, url.Text, interval.Value.ToString(CultureInfo.CurrentCulture)), s);
+        if (refusal is not null || settings is null)
         {
-            SurveyTemplateFr = fr.Text.Trim(),
-            SurveyTemplateAr = ar.Text.Trim(),
-            SurveyUrl = url.Text.Trim(),
-            SurveyIntervalDays = (int)interval.Value
-        });
+            _dialogs.Warn(Say(refusal!), _settings.Text);
+            return;
+        }
+
+        var saved = await _messaging.SaveSettingsAsync(settings);
         if (saved.IsFailure) _dialogs.ShowFailure(saved, _settings.Text);
         else await ReloadAsync();
     }
