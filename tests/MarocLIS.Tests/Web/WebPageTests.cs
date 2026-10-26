@@ -137,6 +137,8 @@ public sealed class WebPageTests : BunitContext
     [InlineData("costmargin", "Coût de revient et marge")]
     [InlineData("statistics", "Statistiques d'activité")]
     [InlineData("steering", "Pilotage")]
+    [InlineData("serumbank", "Sérothèque")]
+    [InlineData("subcontracting", "Sous-traitance")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);

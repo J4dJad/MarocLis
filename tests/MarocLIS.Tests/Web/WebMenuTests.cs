@@ -120,6 +120,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheSerumBankAndTheSubcontracting_AreInTheMenu_ByTheirRights()
+    {
+        var receiver = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Receive), FullStatus())).ToList();
+        receiver.Should().Contain("serumbank").And.NotContain("subcontracting");
+
+        var sender = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Subcontract), FullStatus())).ToList();
+        sender.Should().Contain("subcontracting").And.NotContain("serumbank");
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["serumbank", "subcontracting"]);
+    }
+
+    [Fact]
     public void TheDashboard_IsEveryonesAndTheStatisticsAndSteering_AreInTheMenu_ByTheirRights()
     {
         var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
