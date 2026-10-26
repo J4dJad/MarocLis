@@ -2392,6 +2392,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<int>("Hl7Dialect")
+                        .HasColumnType("int");
+
                     b.Property<string>("Host")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");

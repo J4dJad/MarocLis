@@ -126,6 +126,13 @@ public sealed class InstrumentInterface : AuditableAggregateRoot, ISiteScoped
     /// <summary>Whether the analyser's own flags and comments are kept with the result for validation.</summary>
     public bool KeepInstrumentFlags { get; set; } = true;
 
+    /// <summary>
+    /// The vendor's reading of HL7, for an HL7 link: Mindray marks its QC and calibration results in
+    /// the header and answers a worklist query with QCK^Q02 and DSR^Q03 rather than ORM^O01.
+    /// Standard on any other protocol.
+    /// </summary>
+    public Hl7Dialect Hl7Dialect { get; set; }
+
     /// <summary>The format settings as one value, for the parsers.</summary>
     public InstrumentMessageFormat MessageFormat => new()
     {
@@ -133,7 +140,8 @@ public sealed class InstrumentInterface : AuditableAggregateRoot, ISiteScoped
         TestCodeSuffix = FormatTestCodeSuffix,
         SpecimenIdField = FormatSpecimenIdField,
         SpecimenIdComponent = FormatSpecimenIdComponent,
-        AcceptedResultTypes = FormatAcceptedResultTypes
+        AcceptedResultTypes = FormatAcceptedResultTypes,
+        Hl7Dialect = Protocol == InstrumentProtocol.Hl7V2 ? Hl7Dialect : Hl7Dialect.Standard
     };
 
     public DateTimeOffset? LastConnectedAt { get; set; }
@@ -206,6 +214,27 @@ public enum InstrumentProtocol
     RocheIntegra = 6
 }
 
+/// <summary>
+/// How an analyser reads HL7 v2 where vendors depart from the textbook. The Mindray values name the
+/// family: they speak one dialect (HL7 v2.3.1 over MLLP, results ORU^R01 marked sample / calibration
+/// / QC in MSH-16, worklist query QRY^Q02 answered by QCK^Q02 then DSR^Q03), and the family decides
+/// what the link offers: the haematology BC series has no worklist query here.
+/// </summary>
+public enum Hl7Dialect
+{
+    /// <summary>The standard's own reading: ORU^R01 results, ORM^O01 orders in answer to a query.</summary>
+    Standard = 0,
+
+    /// <summary>Mindray BS chemistry (BS-200E, BS-240, BS-380, BS-480, BS-800, BS-2000…).</summary>
+    MindrayBs = 1,
+
+    /// <summary>Mindray BC haematology (BC-5000, BC-5150, BC-5380, BC-5390, BC-6000, BC-6800…).</summary>
+    MindrayBc = 2,
+
+    /// <summary>Mindray CL immunoassay in HL7 mode (CL-900i, CL-1000i, CL-2000i, CL-6000i…).</summary>
+    MindrayCl = 3
+}
+
 /// <summary>An unmapped result that is not a number: an analyser alarm, a histogram file name.</summary>
 public enum UnmappedNonNumericHandling
 {
@@ -229,6 +258,12 @@ public sealed record InstrumentMessageFormat
     public string? SpecimenIdField { get; init; }
     public int? SpecimenIdComponent { get; init; }
     public string? AcceptedResultTypes { get; init; }
+
+    /// <summary>The vendor's reading of HL7; Standard for every other protocol.</summary>
+    public Hl7Dialect Hl7Dialect { get; init; }
+
+    /// <summary>Whether the link speaks Mindray's HL7 (BS, BC or CL).</summary>
+    public bool IsMindray => Hl7Dialect is Hl7Dialect.MindrayBs or Hl7Dialect.MindrayBc or Hl7Dialect.MindrayCl;
 
     /// <summary>The accepted result types as a set, upper-cased; empty keeps everything.</summary>
     public IReadOnlySet<string> AcceptedTypes =>
