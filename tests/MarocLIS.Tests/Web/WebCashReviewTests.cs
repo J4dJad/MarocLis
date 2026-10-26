@@ -65,6 +65,25 @@ public sealed class WebCashReviewTests : WebAdminContext
         page.Find("[data-state=status]").TextContent.Should().Contain("EL IDRISSI Karim");
     }
 
+    /// <summary>
+    /// « À viser » with every till of the period already signed says that nothing is left to sign off,
+    /// not that no till was closed; « Toutes » lists the till signed.
+    /// </summary>
+    [Fact]
+    public void AnEmptyToSignOffList_SaysNothingIsLeftToSign_NotThatNoTillWasClosed()
+    {
+        SignIn(AppLanguage.French, Supervisor);
+        Treasury.On(nameof(ITreasuryQueries.GetClosedCashSessionsAsync),
+                    args => (bool)args[3]! ? Array.Empty<CashSessionReviewRow>() : new[] { Till(Guid.NewGuid(), 0m) });
+
+        var page = Render<CashReview>();
+
+        page.Find("[data-state=empty]").TextContent.Should().StartWith("Aucune caisse à viser dans la période.");
+        page.Find("[data-filter=all]").Click();
+        page.FindAll("[data-state=empty]").Should().BeEmpty();
+        page.FindAll("[data-grid=sessions] tbody tr").Should().HaveCount(1);
+    }
+
     [Fact]
     public void OnesOwnTill_IsNotSignedOff_AndSaysWhy()
     {
@@ -97,7 +116,7 @@ public sealed class WebCashReviewTests : WebAdminContext
 
         var page = Render<CashReview>();
 
-        page.Find("[data-state=empty]").TextContent.Should().Be("لا توجد صناديق مغلقة في هذه الفترة.");
+        page.Find("[data-state=empty]").TextContent.Should().Be("لا توجد صناديق للتأشير عليها في هذه الفترة. تظهر الصناديق المؤشر عليها ضمن « الكل ».");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");
     }
 }

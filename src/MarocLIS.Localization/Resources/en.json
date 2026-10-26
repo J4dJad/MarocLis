@@ -6762,6 +6762,7 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "CashReviewNoneToSignOff": "No till left to sign off in this period. The tills already signed off are under “All”.",
     "AccidentClosed": "File {0} closed.",
     "AccidentCheckRecorded": "Check recorded on file {0}.",
     "AccidentLogged": "Follow-up added to file {0}.",

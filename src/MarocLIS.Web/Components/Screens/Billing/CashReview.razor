@@ -75,7 +75,7 @@
             </div>
             @if (_loaded && _rows.Count == 0)
             {
-                <p class="card-pad muted" data-state="empty">@Texts["Web.CashReviewNone"]</p>
+                <p class="card-pad muted" data-state="empty">@Texts[CashReviewRules.EmptyKey(_pendingOnly)]</p>
             }
         </div>
 

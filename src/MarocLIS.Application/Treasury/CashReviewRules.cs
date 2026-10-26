@@ -26,6 +26,13 @@ public static class CashReviewRules
     /// <summary>The comment's column: a longer one failed the sign-off.</summary>
     public const int CommentMaxLength = CashSession.ReconciliationCommentMaxLength;
 
+    /// <summary>
+    /// What an empty list says, by its filter: on « À viser », that nothing is left to sign off —
+    /// the tills already signed are under « Toutes »; it read « Aucune caisse clôturée » while the
+    /// period held a till closed and signed.
+    /// </summary>
+    public static string EmptyKey(bool pendingOnly) => pendingOnly ? "Web.CashReviewNoneToSignOff" : "Web.CashReviewNone";
+
     public static int PendingCount(IEnumerable<CashSessionReviewRow> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);

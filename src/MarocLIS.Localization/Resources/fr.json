@@ -6763,6 +6763,7 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "CashReviewNoneToSignOff": "Aucune caisse à viser dans la période. Les caisses déjà visées sont sous « Toutes ».",
     "AccidentClosed": "Dossier {0} clos.",
     "AccidentCheckRecorded": "Contrôle enregistré sur le dossier {0}.",
     "AccidentLogged": "Suivi ajouté au dossier {0}.",
