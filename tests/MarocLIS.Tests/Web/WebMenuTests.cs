@@ -91,6 +91,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheFinanceScreens_AreInTheMenu_ByTheirRights()
+    {
+        var accountant = Keys(WebMenu.Build(new User(permissions: Permissions.Accounting.Export), FullStatus())).ToList();
+        accountant.Should().Contain(["accountingexport", "accountingsettings"]).And.NotContain("fixedassets");
+
+        var manager = Keys(WebMenu.Build(new User(permissions: Permissions.Assets.View), FullStatus())).ToList();
+        manager.Should().Contain("fixedassets").And.NotContain(["accountingexport", "accountingsettings"]);
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["accountingexport", "accountingsettings", "fixedassets"]);
+    }
+
+    [Fact]
     public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
     {
         var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();

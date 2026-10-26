@@ -129,6 +129,9 @@ public sealed class WebPageTests : BunitContext
     [InlineData("supplierevaluation", "Évaluation")]
     [InlineData("equipment", "Équipements")]
     [InlineData("contracts", "Contrats automates")]
+    [InlineData("accountingexport", "Export comptable")]
+    [InlineData("accountingsettings", "Comptes et journaux")]
+    [InlineData("fixedassets", "Immobilisations")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);
