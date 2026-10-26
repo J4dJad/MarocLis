@@ -69,6 +69,18 @@ public sealed class WebPageTests : BunitContext
     }
 
     [Fact]
+    public void TheWorkstationOnlyText_IsGoneFromTheThreeCatalogues_NothingSayingItAnyMore()
+    {
+        var resources = Path.Combine(WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Localization", "Resources");
+        foreach (var language in new[] { "fr", "en", "ar" })
+        {
+            using var catalogue = JsonDocument.Parse(File.ReadAllText(Path.Combine(resources, language + ".json")));
+            catalogue.RootElement.GetProperty("Web").TryGetProperty("ScreenUnavailable", out _)
+                .Should().BeFalse($"no screen says it is only on the workstation since lot 10 ({language})");
+        }
+    }
+
+    [Fact]
     public void AScreenWithoutTheRight_IsRefused_WhenItsAddressIsTyped()
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);

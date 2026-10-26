@@ -6943,7 +6943,6 @@
     "MigrationProfileConnection": "Ce profil a été enregistré pour une base ancienne lue depuis un poste Windows ; sa connexion n'est pas utilisée ici. Envoyez le fichier exporté de cette base.",
     "MigrationTemplatesArchive": "modeles-reprise.zip",
     "MigrationStart": "Choisissez les données à reprendre, puis envoyez un fichier Excel ou CSV.",
-    "ScreenUnavailable": "Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.",
     "RelationsDetail": "Voir le détail",
     "InstrumentsFromWorkstation": "Les valeurs des analyseurs arrivent par le poste Windows qui les pilote ; elles s'affichent ici dès leur réception.",
     "ScreenNotFound": "Cet écran n'existe pas.",

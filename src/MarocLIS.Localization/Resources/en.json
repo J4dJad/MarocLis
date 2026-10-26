@@ -6942,7 +6942,6 @@
     "MigrationProfileConnection": "This profile was saved for an old database read from a Windows workstation; its connection is not used here. Send the file exported from that database.",
     "MigrationTemplatesArchive": "migration-templates.zip",
     "MigrationStart": "Choose the data to migrate, then send an Excel or CSV file.",
-    "ScreenUnavailable": "This screen is not yet available in the Web version. Use the Windows version.",
     "RelationsDetail": "View details",
     "InstrumentsFromWorkstation": "Analyser values arrive through the Windows workstation that drives the analysers; they show here as soon as they are received.",
     "ScreenNotFound": "This screen does not exist.",
