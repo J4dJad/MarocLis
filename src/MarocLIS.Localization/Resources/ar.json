@@ -6943,6 +6943,7 @@
     "MigrationTemplatesArchive": "migration-templates.zip",
     "MigrationStart": "اختر البيانات المراد استيرادها، ثم أرسل ملف Excel أو CSV.",
     "ScreenUnavailable": "هذه الشاشة غير متوفرة بعد في نسخة الويب. استخدم نسخة Windows.",
+    "RelationsDetail": "عرض التفاصيل",
     "InstrumentsFromWorkstation": "تصل قيم أجهزة التحليل عبر محطة Windows التي تشغّلها، وتظهر هنا فور استلامها.",
     "ScreenNotFound": "هذه الشاشة غير موجودة.",
     "ScreenRefusedTitle": "تم رفض الوصول",
