@@ -2547,6 +2547,7 @@
   },
 
   "Deadline": {
+    "Today": "Today",
     "InDaysFull": "In {0} {0:plural:day|days}",
     "InDays": "In {0} d",
     "Overdue": "Overdue",
@@ -6755,6 +6756,7 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "ContractEndsOn": "ends {0}",
     "PersonnelSelect": "Select a file to see its card.",
     "PersonnelNone": "No file matches.",
     "PersonnelRehired": "Re-hire of {0} recorded from {1}.",

@@ -2547,6 +2547,7 @@
   },
 
   "Deadline": {
+    "Today": "Aujourd'hui",
     "InDaysFull": "Dans {0} {0:plural:jour|jours}",
     "InDays": "Dans {0} j",
     "Overdue": "En retard",
@@ -6756,6 +6757,7 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "ContractEndsOn": "fin le {0}",
     "PersonnelSelect": "Sélectionnez un dossier pour en voir la fiche.",
     "PersonnelNone": "Aucun dossier ne correspond.",
     "PersonnelRehired": "Réintégration de {0} enregistrée à compter du {1}.",

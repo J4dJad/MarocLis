@@ -54,13 +54,14 @@ public static class PersonnelDeadlineScreenRules
         _ => "Info"
     };
 
-    /// <summary>« Manquant », « En retard », or « Dans 12 jours ».</summary>
+    /// <summary>« Manquant », « En retard », « Aujourd'hui » or « Dans 12 jours ».</summary>
     public static string State(DeadlineRow row, DateOnly today, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(text);
         return row.DueOn is null ? text("Deadline.Missing")
             : row.IsOverdue ? text("Deadline.Overdue")
+            : row.DueOn.Value <= today ? text("Deadline.Today")
             : text("Deadline.InDaysFull", row.DueOn.Value.DayNumber - today.DayNumber);
     }
 

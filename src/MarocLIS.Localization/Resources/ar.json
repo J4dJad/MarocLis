@@ -2547,6 +2547,7 @@
   },
 
   "Deadline": {
+    "Today": "اليوم",
     "InDaysFull": "بعد {0} يوم",
     "InDays": "بعد {0} ي",
     "Overdue": "متأخر",
@@ -6755,6 +6756,7 @@
     "Done": "اكتملت الاستعادة."
   },
   "Web": {
+    "ContractEndsOn": "ينتهي في {0}",
     "PersonnelSelect": "اختر ملفًا لعرض بطاقته.",
     "PersonnelNone": "لا يوجد أي ملف مطابق.",
     "PersonnelRehired": "تم تسجيل إعادة إدماج {0} ابتداءً من {1}.",
