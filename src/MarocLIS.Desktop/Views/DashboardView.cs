@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Dashboard;
 using MarocLIS.Application.Navigation;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
@@ -119,56 +120,6 @@ public sealed class DashboardView : LocalizedView
     };
 
     private static bool CanOpen(string? key) => DashboardRights.CanOpen(key, PermissionGate.User);
-
-    private static bool MaySee(DashboardMetric metric) => DashboardRights.MaySee(metric.LabelKey, PermissionGate.User);
-
-    /// <summary>The five steps of a file through the laboratory, in the order it takes them.</summary>
-    private static readonly (string MetricKey, string StepKey)[] FlowSteps =
-    [
-        ("Dashboard.AwaitingCollection", "Dashboard.StepCollection"),
-        ("Dashboard.AwaitingReception", "Dashboard.StepReception"),
-        ("Dashboard.AwaitingEntry", "Dashboard.StepEntry"),
-        ("Dashboard.AwaitingValidation", "Dashboard.StepValidation"),
-        ("Dashboard.ReportsToRelease", "Dashboard.StepReports")
-    ];
-
-    // The step the biologist's day turns on; it stands out in the flow.
-    private const string HighlightedStep = "Dashboard.AwaitingValidation";
-
-    /// <summary>The kind of attention an alert asks for, in the order the list shows them.</summary>
-    private enum AlertKind { Urgent = 0, ToPlan = 1, ToHandle = 2, ToFollow = 3 }
-
-    /// <summary>
-    /// How an alert reads in the list: its wording, the caption of its button, and the kind of
-    /// attention it asks for when it is not urgent.
-    /// </summary>
-    private sealed record AlertLook(string TextKey, string ActionKey, AlertKind Kind);
-
-    private static readonly Dictionary<string, AlertLook> AlertLooks = new(StringComparer.Ordinal)
-    {
-        ["Dashboard.CriticalPending"] = new("Dashboard.CriticalPending", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Dashboard.OverdueOrders"] = new("Dashboard.OverdueOrdersLong", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Dashboard.QcAlerts"] = new("Dashboard.QcAlertsLong", "Dashboard.ActionOpenQc", AlertKind.ToHandle),
-        ["Equipment.NextCalibration"] = new("Dashboard.CalibrationOverdue", "Dashboard.ActionPlan", AlertKind.ToPlan),
-        ["Dashboard.OpenNonConformities"] = new("Dashboard.OpenNonConformities", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Inventory.ToReorder"] = new("Inventory.ToReorder", "Dashboard.ActionOrder", AlertKind.ToHandle),
-        ["Inventory.ExpiringSoon"] = new("Dashboard.ReagentsExpiringSoon", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Stock.DashboardExpiringCritical"] = new("Stock.DashboardExpiringCritical", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Stock.DashboardStockOuts"] = new("Stock.DashboardStockOuts", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Temperatures.DashboardMissing"] = new("Temperatures.DashboardMissing", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["Dashboard.RejectedSamplesToday"] = new("Dashboard.RejectedSamplesToday", "Dashboard.ActionView", AlertKind.ToFollow),
-        ["Dashboard.Receivables"] = new("Dashboard.ReceivablesLong", "Dashboard.ActionView", AlertKind.ToFollow),
-        ["SupplierInvoices.DashboardOverdue"] = new("SupplierInvoices.DashboardOverdue", "Dashboard.ActionView", AlertKind.ToHandle),
-        ["SupplierInvoices.DashboardDueSoon"] = new("SupplierInvoices.DashboardDueSoon", "Dashboard.ActionView", AlertKind.ToPlan)
-    };
-
-    private static AlertLook LookOf(DashboardMetric metric) =>
-        AlertLooks.TryGetValue(metric.LabelKey, out var look)
-            ? look
-            : new AlertLook(metric.LabelKey, "Dashboard.ActionView", AlertKind.ToHandle);
-
-    private static AlertKind KindOf(DashboardMetric metric) =>
-        metric.Severity == DashboardSeverity.Urgent ? AlertKind.Urgent : LookOf(metric).Kind;
 
     // ---- Layout ---------------------------------------------------------------------------------
 
@@ -509,22 +460,9 @@ public sealed class DashboardView : LocalizedView
 
     private void ShowGeneratedAt()
     {
-        var now = _snapshot?.GeneratedAt ?? _clock.Now;
-        var date = now.ToString("dddd d MMMM yyyy", CultureInfo.CurrentCulture);
-        if (date.Length > 0) date = char.ToUpper(date[0], CultureInfo.CurrentCulture) + date[1..];
-
-        if (_loadFailed)
-        {
-            _generatedAt.Text = $"{date} · {T("Message.UnexpectedError")}";
-            _generatedAt.ForeColor = UiTheme.Critical;
-        }
-        else
-        {
-            _generatedAt.Text = _snapshot is null
-                ? date
-                : $"{date} · {T("Dashboard.RefreshedAt", _snapshot.GeneratedAt.ToString("HH:mm:ss", CultureInfo.InvariantCulture))}";
-            _generatedAt.ForeColor = UiTheme.TextSecondary;
-        }
+        _generatedAt.Text = DashboardScreenRules.DateLine(_clock.Now, _loadFailed ? null : _snapshot?.GeneratedAt, _loadFailed, T,
+                                                          CultureInfo.CurrentCulture);
+        _generatedAt.ForeColor = _loadFailed ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
     // ---- Loading --------------------------------------------------------------------------------
@@ -593,41 +531,22 @@ public sealed class DashboardView : LocalizedView
 
     private void ShowSetup(CatalogueSetupStatus? status)
     {
-        if (status is null || status.IsComplete)
+        if (status is null
+            || DashboardScreenRules.Setup(status.UnverifiedRangeParameterCodes, status.PlaceholderTariffAnalysisCodes,
+                                          PermissionGate.User, T) is not { } banner)
         {
             _setupBanner.Visible = false;
             return;
         }
 
-        var ranges = status.UnverifiedRangeParameterCodes;
-        var tariffs = status.PlaceholderTariffAnalysisCodes;
-
-        var details = new List<string>();
-        if (ranges.Count > 0)
-        {
-            _setupTitle.Text = T("Dashboard.RangesPending", ranges.Count);
-            details.Add(Names(ranges));
-            if (tariffs.Count > 0) details.Add(T("Dashboard.TariffsPending", tariffs.Count));
-        }
-        else
-        {
-            _setupTitle.Text = T("Dashboard.TariffsPending", tariffs.Count);
-            details.Add(Names(tariffs));
-        }
-
-        _setupDetail.Text = string.Join("  ·  ", details);
+        _setupTitle.Text = banner.Title;
+        _setupDetail.Text = banner.Detail;
         _tips.SetToolTip(_setupDetail, _setupDetail.Text);
 
         // The banner shows to everyone, as before; the way to the catalogue only to whom may open it.
-        _setupReview.Text = T(ranges.Count > 0 ? "Dashboard.ReviewRanges" : "Dashboard.OpenCatalog");
-        _setupReview.Visible = CanOpen("catalog");
+        _setupReview.Text = T(banner.ReviewKey);
+        _setupReview.Visible = banner.Review;
         _setupBanner.Visible = true;
-
-        string Names(IReadOnlyList<string> codes)
-        {
-            var shown = string.Join(", ", codes.Take(3));
-            return codes.Count > 3 ? T("Dashboard.AndOthers", shown, codes.Count - 3) : shown;
-        }
     }
 
     // ---- Rendering ------------------------------------------------------------------------------
@@ -637,8 +556,9 @@ public sealed class DashboardView : LocalizedView
         SuspendLayout();
         try
         {
-            RenderFlow(snapshot.Activity);
-            RenderAlerts(snapshot.Alerts);
+            var board = DashboardScreenRules.Board(snapshot, PermissionGate.User, T, CultureInfo.CurrentCulture);
+            RenderFlow(board);
+            RenderAlerts(board);
         }
         finally
         {
@@ -652,22 +572,11 @@ public sealed class DashboardView : LocalizedView
         Invalidate(invalidateChildren: true);
     }
 
-    private void RenderFlow(IReadOnlyList<DashboardMetric> activity)
+    private void RenderFlow(DashboardBoard board)
     {
-        var byKey = activity.ToDictionary(m => m.LabelKey, StringComparer.Ordinal);
-
         // Files registered and reports issued today, as the line beside the heading.
-        var summary = new List<string>();
-        if (byKey.TryGetValue("Dashboard.OrdersToday", out var orders) && MaySee(orders))
-            summary.Add(T("Dashboard.OrdersRegisteredToday", orders.Value.ToString("N0", CultureInfo.CurrentCulture)));
-        if (byKey.TryGetValue("Report.Plural", out var released) && MaySee(released) && released.Value > 0)
-            summary.Add(T("Dashboard.ReportsReleasedToday", released.Value.ToString("N0", CultureInfo.CurrentCulture)));
-        _flowSummary.Text = string.Join("  ·  ", summary);
-
-        var steps = FlowSteps
-            .Where(s => byKey.TryGetValue(s.MetricKey, out var metric) && MaySee(metric))
-            .Select(s => (Metric: byKey[s.MetricKey], s.StepKey))
-            .ToList();
+        _flowSummary.Text = string.Join("  ·  ", board.Summary);
+        var steps = board.Steps;
 
         _flowSteps.SuspendLayout();
         ClearControls(_flowSteps);
@@ -683,16 +592,18 @@ public sealed class DashboardView : LocalizedView
             }
 
             _flowSteps.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / steps.Count));
-            _flowSteps.Controls.Add(BuildStepTile(steps[i].Metric, steps[i].StepKey), i * 2, 0);
+            _flowSteps.Controls.Add(BuildStepTile(steps[i]), i * 2, 0);
         }
 
         _flowSteps.ResumeLayout(performLayout: true);
-        _flowCard.Visible = steps.Count > 0 || summary.Count > 0;
+        _flowCard.Visible = board.ShowsFlow;
     }
 
-    private TableLayoutPanel BuildStepTile(DashboardMetric metric, string stepKey)
+    private TableLayoutPanel BuildStepTile(DashboardStep step)
     {
-        var highlighted = metric.LabelKey == HighlightedStep;
+        var metric = step.Metric;
+        var stepKey = step.StepKey;
+        var highlighted = step.Highlighted;
         var ink = highlighted ? UiTheme.AccentInk : UiTheme.TextPrimary;
 
         var tile = new TableLayoutPanel
@@ -740,9 +651,8 @@ public sealed class DashboardView : LocalizedView
 
         // The way to the step's screen, only for whom may open it: the tile is then clickable as a
         // whole, and its link takes the keyboard.
-        if (CanOpen(metric.NavigationKey))
+        if (step.Opens is { } key)
         {
-            var key = metric.NavigationKey!;
             var chevron = RightToLeft == RightToLeft.Yes ? "‹" : "›";
             var link = new LinkLabel
             {
@@ -772,17 +682,11 @@ public sealed class DashboardView : LocalizedView
         return tile;
     }
 
-    private void RenderAlerts(IReadOnlyList<DashboardMetric> alerts)
+    private void RenderAlerts(DashboardBoard board)
     {
-        var visible = alerts.Where(MaySee).ToList();
-
-        // Urgent first, then what to plan, to handle, to follow — so the eye lands on what matters
-        // without having to read every row.
-        var pending = visible.Where(m => m.Value > 0)
-            .OrderBy(KindOf)
-            .ThenByDescending(m => m.Value)
-            .ToList();
-        var quiet = visible.Where(m => m.Value <= 0).ToList();
+        // Urgent first, then what to plan, to handle, to follow (the rules' order).
+        var pending = board.Pending;
+        var quiet = board.QuietKeys;
 
         _alertsCount.Text = T("Dashboard.SubjectCount", pending.Count);
 
@@ -820,7 +724,7 @@ public sealed class DashboardView : LocalizedView
         _quiet.RowStyles.Clear();
         _quiet.RowCount = Math.Max(1, quiet.Count);
 
-        _quietHint.Text = T(quiet.Count > 0 ? "Dashboard.NothingToReportHint" : "Dashboard.NothingAtZero");
+        _quietHint.Text = T(board.QuietHintKey);
 
         for (var row = 0; row < quiet.Count; row++)
         {
@@ -837,7 +741,7 @@ public sealed class DashboardView : LocalizedView
 
             var text = new Label
             {
-                Text = T(LookOf(quiet[row]).TextKey),
+                Text = T(quiet[row]),
                 AutoSize = false,
                 AutoEllipsis = true,
                 Dock = DockStyle.Fill,
@@ -853,20 +757,18 @@ public sealed class DashboardView : LocalizedView
         _quiet.ResumeLayout(performLayout: true);
     }
 
-    private void AddAlertRow(DashboardMetric metric, int row)
+    private void AddAlertRow(DashboardAlert alert, int row)
     {
-        var look = LookOf(metric);
-        var kind = KindOf(metric);
+        var metric = alert.Metric;
 
-        var (pillKey, fill, ink, count) = kind switch
+        var (fill, ink, count) = alert.Kind switch
         {
-            AlertKind.Urgent => ("Dashboard.PillUrgent", UiTheme.CriticalBackground, UiTheme.CriticalInk, UiTheme.Critical),
-            AlertKind.ToPlan => ("Dashboard.PillToPlan", UiTheme.AbnormalBackground, UiTheme.Abnormal, UiTheme.Abnormal),
-            AlertKind.ToFollow => ("Dashboard.PillToFollow", UiTheme.InfoBackground, UiTheme.Info, UiTheme.Info),
-            _ => ("Dashboard.PillToHandle", UiTheme.AbnormalBackground, UiTheme.Abnormal, UiTheme.Abnormal)
+            DashboardAlertKind.Urgent => (UiTheme.CriticalBackground, UiTheme.CriticalInk, UiTheme.Critical),
+            DashboardAlertKind.ToFollow => (UiTheme.InfoBackground, UiTheme.Info, UiTheme.Info),
+            _ => (UiTheme.AbnormalBackground, UiTheme.Abnormal, UiTheme.Abnormal)
         };
 
-        var pill = new Pill(T(pillKey), fill, ink) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+        var pill = new Pill(T(alert.PillKey), fill, ink) { Anchor = AnchorStyles.Left, Margin = new Padding(0) };
 
         var value = new Label
         {
@@ -881,7 +783,7 @@ public sealed class DashboardView : LocalizedView
 
         var text = new Label
         {
-            Text = T(look.TextKey),
+            Text = T(alert.TextKey),
             AutoSize = false,
             AutoEllipsis = true,
             Dock = DockStyle.Fill,
@@ -895,10 +797,9 @@ public sealed class DashboardView : LocalizedView
         _alerts.Controls.Add(text, 2, row);
 
         // No button where the user may not open the screen: the figure is still theirs to know.
-        if (CanOpen(metric.NavigationKey))
+        if (alert.Opens is { } key)
         {
-            var key = metric.NavigationKey!;
-            var action = UiTheme.SecondaryButton(T(look.ActionKey));
+            var action = UiTheme.SecondaryButton(T(alert.ActionKey));
             action.AutoSize = true;
             action.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             action.Font = UiTheme.Small;

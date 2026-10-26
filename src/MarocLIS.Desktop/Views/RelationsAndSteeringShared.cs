@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.Text;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Inventory;
+using MarocLIS.Application.Steering;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
@@ -16,8 +16,6 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 internal sealed class PeriodBar : Panel
 {
-    private enum Preset { ThisMonth, LastMonth, ThisYear, LastYear, Custom }
-
     private readonly ILocalizer _localizer;
     private readonly PageHead _head = new();
     private readonly FilterRow _row = new();
@@ -25,8 +23,8 @@ internal sealed class PeriodBar : Panel
     private readonly Label _toLabel = new();
     private readonly DateTimePicker _from = new();
     private readonly DateTimePicker _to = new();
-    private readonly Dictionary<Preset, ChipButton> _chips = [];
-    private Preset _preset = Preset.ThisMonth;
+    private readonly Dictionary<PeriodPreset, ChipButton> _chips = [];
+    private PeriodPreset _preset = PeriodPreset.ThisMonth;
     private bool _applying;
     private bool _texts;
 
@@ -80,7 +78,7 @@ internal sealed class PeriodBar : Panel
             label.Margin = new Padding(8, 10, 6, 0);
         }
 
-        foreach (var preset in Enum.GetValues<Preset>())
+        foreach (var preset in Enum.GetValues<PeriodPreset>())
             _chips[preset] = _row.Chip((_, _) => Choose(preset));
 
         foreach (var picker in new[] { _from, _to })
@@ -141,7 +139,7 @@ internal sealed class PeriodBar : Panel
 
         foreach (var (preset, chip) in _chips)
         {
-            chip.Text = _localizer[$"Statistics.Preset{preset}"];
+            chip.Text = _localizer[PeriodReport.PresetKey(preset)];
             chip.Selected = preset == _preset;
         }
 
@@ -150,7 +148,7 @@ internal sealed class PeriodBar : Panel
         ApplyPreset();
     }
 
-    private void Choose(Preset preset)
+    private void Choose(PeriodPreset preset)
     {
         _preset = preset;
         foreach (var (key, chip) in _chips) chip.Selected = key == preset;
@@ -161,23 +159,13 @@ internal sealed class PeriodBar : Panel
     {
         if (_applying) return;
 
-        var today = DateTime.Today;
-        var month = new DateTime(today.Year, today.Month, 1);
-        (DateTime From, DateTime To)? range = _preset switch
-        {
-            Preset.ThisMonth => (month, today),
-            Preset.LastMonth => (month.AddMonths(-1), month.AddDays(-1)),
-            Preset.ThisYear => (new DateTime(today.Year, 1, 1), today),
-            Preset.LastYear => (new DateTime(today.Year - 1, 1, 1), new DateTime(today.Year - 1, 12, 31)),
-            _ => null
-        };
-        if (range is not { } r) return;
+        if (PeriodReport.Range(_preset, DateOnly.FromDateTime(DateTime.Today)) is not { } r) return;
 
         _applying = true;
         try
         {
-            _from.Value = r.From;
-            _to.Value = r.To;
+            _from.Value = r.From.ToDateTime(TimeOnly.MinValue);
+            _to.Value = r.To.ToDateTime(TimeOnly.MinValue);
         }
         finally
         {
@@ -187,9 +175,9 @@ internal sealed class PeriodBar : Panel
 
     private void MarkCustom()
     {
-        if (_applying || _preset == Preset.Custom) return;
-        _preset = Preset.Custom;
-        foreach (var (key, chip) in _chips) chip.Selected = key == Preset.Custom;
+        if (_applying || _preset == PeriodPreset.Custom) return;
+        _preset = PeriodPreset.Custom;
+        foreach (var (key, chip) in _chips) chip.Selected = key == PeriodPreset.Custom;
     }
 }
 
@@ -211,11 +199,34 @@ internal static class ReportGrids
         });
 
     internal static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
-    internal static string Count(int value) => value.ToString("N0", CultureInfo.CurrentCulture);
-    internal static string Percent(double? value) => value is { } p ? $"{p:+0.0;-0.0;0.0} %" : "—";
-    internal static string Share(double? value) => value is { } p ? $"{p:0.0} %" : "—";
-    internal static string Date(DateOnly value) => value.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture);
+    internal static string Count(int value) => PeriodReport.Count(value, CultureInfo.CurrentCulture);
+    internal static string Percent(double? value) => PeriodReport.Change(value, CultureInfo.CurrentCulture);
+    internal static string Share(double? value) => PeriodReport.Share(value, CultureInfo.CurrentCulture);
+    internal static string Date(DateOnly value) => PeriodReport.Date(value);
     internal static string Date(DateOnly? value) => value is { } d ? Date(d) : string.Empty;
+
+    /// <summary>The workstation's figure-tile text of a key figure of the shared rules.</summary>
+    internal static void Show(KpiTile tile, ReportTile figure)
+    {
+        tile.Text = figure.TileText;
+        tile.Emphasis = figure.Ink switch
+        {
+            StockInk.Critical => UiTheme.Critical,
+            StockInk.Abnormal => UiTheme.Overdue,
+            _ => null
+        };
+    }
+
+    /// <summary>A grid's rows from the shared rules' rows, an ink other than plain drawn on the whole row.</summary>
+    internal static void Fill(DataGridView grid, IEnumerable<ReportRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var i = grid.Rows.Add([.. row.Cells]);
+            if (row.Ink == StockInk.Abnormal) grid.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Overdue;
+            else if (row.Ink == StockInk.Critical) grid.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
+        }
+    }
 
     /// <summary>
     /// The grid as CSV, semicolon-separated with a BOM, cells neutralised against spreadsheet
@@ -231,15 +242,11 @@ internal static class ReportGrids
             return;
         }
 
-        static string Cell(object? value) => CsvCell.Of(Convert.ToString(value, CultureInfo.CurrentCulture));
-
         var columns = grid.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).OrderBy(c => c.DisplayIndex).ToList();
-        var csv = new StringBuilder();
-        csv.AppendLine(string.Join(';', columns.Select(c => Cell(c.HeaderText))));
-        foreach (DataGridViewRow row in grid.Rows)
-            csv.AppendLine(string.Join(';', columns.Select(c => Cell(row.Cells[c.Index].Value))));
-
-        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
+        var bytes = PeriodReport.Csv(
+            [.. columns.Select(c => c.HeaderText)],
+            grid.Rows.Cast<DataGridViewRow>().Select(row => (IReadOnlyList<string>)
+                [.. columns.Select(c => Convert.ToString(row.Cells[c.Index].Value, CultureInfo.CurrentCulture) ?? string.Empty)]))!;
         var opened = await output.OpenAsync(bytes, "csv");
         if (opened.IsFailure) dialogs.ShowFailure(opened, title);
     }

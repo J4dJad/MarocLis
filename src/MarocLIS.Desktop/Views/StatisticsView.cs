@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Statistics;
 using MarocLIS.Desktop.Infrastructure;
@@ -77,39 +76,44 @@ public sealed class StatisticsView : LocalizedView
         Controls.Add(_bar);
     }
 
-    private static void AddColumn(DataGridView grid, string name, int weight, bool numeric = false) =>
-        ReportGrids.AddColumn(grid, name, weight, numeric);
+    // The share of each column, in the rules' order of the columns.
+    private static readonly IReadOnlyDictionary<StatisticsTab, int[]> Weights = new Dictionary<StatisticsTab, int[]>
+    {
+        [StatisticsTab.ByDepartment] = [8, 24, 9, 9, 10, 10, 12],
+        [StatisticsTab.ByTest] = [8, 30, 9, 10, 12],
+        [StatisticsTab.ByPayer] = [28, 9, 9, 12, 12, 12],
+        [StatisticsTab.ByDay] = [12, 10, 10]
+    };
+
+    private DataGridView GridOf(StatisticsTab tab) => tab switch
+    {
+        StatisticsTab.ByTest => _tests,
+        StatisticsTab.ByPayer => _payers,
+        StatisticsTab.ByDay => _days,
+        _ => _departments
+    };
+
+    private TabPage PageOf(StatisticsTab tab) => tab switch
+    {
+        StatisticsTab.ByTest => _testPage,
+        StatisticsTab.ByPayer => _payerPage,
+        StatisticsTab.ByDay => _dayPage,
+        _ => _departmentPage
+    };
 
     private void BuildColumns()
     {
-        AddColumn(_departments, "code", 8);
-        AddColumn(_departments, "name", 24);
-        AddColumn(_departments, "tests", 9, numeric: true);
-        AddColumn(_departments, "validated", 9, numeric: true);
-        AddColumn(_departments, "tat", 10, numeric: true);
-        AddColumn(_departments, "onTime", 10, numeric: true);
-        AddColumn(_departments, "amount", 12, numeric: true);
-
-        AddColumn(_tests, "code", 8);
-        AddColumn(_tests, "name", 30);
-        AddColumn(_tests, "tests", 9, numeric: true);
-        AddColumn(_tests, "tat", 10, numeric: true);
-        AddColumn(_tests, "amount", 12, numeric: true);
-
-        AddColumn(_payers, "name", 28);
-        AddColumn(_payers, "orders", 9, numeric: true);
-        AddColumn(_payers, "tests", 9, numeric: true);
-        AddColumn(_payers, "amount", 12, numeric: true);
-        AddColumn(_payers, "payerShare", 12, numeric: true);
-        AddColumn(_payers, "patientShare", 12, numeric: true);
-
-        AddColumn(_days, "date", 12);
-        AddColumn(_days, "orders", 10, numeric: true);
-        AddColumn(_days, "tests", 10, numeric: true);
-
-        // Codes and dates in the fixed-pitch face, as everywhere an identifier is read off a list.
-        foreach (var column in new[] { _departments.Column("code"), _tests.Column("code"), _days.Column("date") })
-            column.DefaultCellStyle.Font = UiTheme.Monospace;
+        foreach (var tab in Enum.GetValues<StatisticsTab>())
+        {
+            var grid = GridOf(tab);
+            var columns = StatisticsScreenRules.Columns(tab);
+            for (var c = 0; c < columns.Count; c++)
+            {
+                ReportGrids.AddColumn(grid, columns[c].Name, Weights[tab][c], columns[c].Numeric);
+                // Codes and dates in the fixed-pitch face, as everywhere an identifier is read off a list.
+                if (StatisticsScreenRules.IsIdentifier(columns[c].Name)) grid.Column(columns[c].Name).DefaultCellStyle.Font = UiTheme.Monospace;
+            }
+        }
     }
 
     private void WireBehaviour()
@@ -123,35 +127,12 @@ public sealed class StatisticsView : LocalizedView
         _bar.ApplyTexts();
         _bar.Heading.Text = T("Statistics.Title");
 
-        _departmentPage.Text = T("Statistics.ByDepartment");
-        _testPage.Text = T("Statistics.ByTest");
-        _payerPage.Text = T("Statistics.ByPayer");
-        _dayPage.Text = T("Statistics.ByDay");
-
-        _departments.Column("code").HeaderText = T("Field.Code");
-        _departments.Column("name").HeaderText = T("Field.Department");
-        _departments.Column("tests").HeaderText = T("Statistics.Tests");
-        _departments.Column("validated").HeaderText = T("Statistics.Validated");
-        _departments.Column("tat").HeaderText = T("Statistics.AverageTat");
-        _departments.Column("onTime").HeaderText = T("Statistics.OnTime");
-        _departments.Column("amount").HeaderText = T("Statistics.Charged");
-
-        _tests.Column("code").HeaderText = T("Field.Code");
-        _tests.Column("name").HeaderText = T("Field.Name");
-        _tests.Column("tests").HeaderText = T("Statistics.Tests");
-        _tests.Column("tat").HeaderText = T("Statistics.AverageTat");
-        _tests.Column("amount").HeaderText = T("Statistics.Charged");
-
-        _payers.Column("name").HeaderText = T("Statistics.Payer");
-        _payers.Column("orders").HeaderText = T("Statistics.Orders");
-        _payers.Column("tests").HeaderText = T("Statistics.Tests");
-        _payers.Column("amount").HeaderText = T("Statistics.Charged");
-        _payers.Column("payerShare").HeaderText = T("Statistics.PayerShare");
-        _payers.Column("patientShare").HeaderText = T("Statistics.PatientShare");
-
-        _days.Column("date").HeaderText = T("Field.Date");
-        _days.Column("orders").HeaderText = T("Statistics.Orders");
-        _days.Column("tests").HeaderText = T("Statistics.Tests");
+        foreach (var tab in Enum.GetValues<StatisticsTab>())
+        {
+            PageOf(tab).Text = T(StatisticsScreenRules.TabKey(tab));
+            foreach (var column in StatisticsScreenRules.Columns(tab))
+                GridOf(tab).Column(column.Name).HeaderText = T(column.CaptionKey);
+        }
 
         Render();
     }
@@ -189,10 +170,6 @@ public sealed class StatisticsView : LocalizedView
         }
     }
 
-    private static string Amount(decimal value) => value.ToString("N2", CultureInfo.CurrentCulture);
-    private static string Hours(double? value) => value is { } h ? $"{h:0.0} h" : "—";
-    private static string Percent(double? value) => value is { } p ? $"{p:0.0} %" : "—";
-
     private void Render()
     {
         foreach (var grid in new[] { _departments, _tests, _payers, _days }) grid.Rows.Clear();
@@ -205,75 +182,35 @@ public sealed class StatisticsView : LocalizedView
             return;
         }
 
-        var s = stats.Summary;
-        var language = Localizer.CurrentLanguage;
+        var culture = CultureInfo.CurrentCulture;
+        string Money(decimal value) => Domain.Common.Money.Of(value).Format(Localizer.CurrentLanguage);
 
-        string Figure(string key, string value) => $"{T(key)}\n{value}";
+        var tiles = StatisticsScreenRules.Tiles(stats, T, Money, culture);
+        for (var i = 0; i < _figures.Length; i++)
+        {
+            if (i < tiles.Count) ReportGrids.Show(_figures[i], tiles[i]);
+            else _figures[i].Text = string.Empty;
+        }
 
-        _figures[0].Text = Figure("Statistics.Orders", s.OrderCount.ToString("N0", CultureInfo.CurrentCulture));
-        _figures[1].Text = Figure("Statistics.Patients", s.PatientCount.ToString("N0", CultureInfo.CurrentCulture));
-        _figures[2].Text = Figure("Statistics.Tests",
-            s.CancelledTestCount > 0
-                ? $"{s.TestCount:N0}  ({T("Statistics.Cancelled")} {s.CancelledTestCount:N0})"
-                : s.TestCount.ToString("N0", CultureInfo.CurrentCulture));
-        _figures[3].Text = Figure("Statistics.TurnaroundLine",
-                                  $"{Hours(s.AverageTurnaroundHours)} · {Percent(s.OnTimePercent)}");
-        _figures[4].Text = Figure("Statistics.Charged", $"{Amount(s.ChargedAmount)} MAD");
-        _figures[5].Text = Figure("Statistics.Invoiced", $"{Amount(s.InvoicedAmount)} MAD");
-        _figures[6].Text = Figure("Statistics.Credited", $"{Amount(s.CreditedAmount)} MAD");
-        _figures[7].Text = Figure("Statistics.Collected", $"{Amount(s.CollectedAmount)} MAD");
+        foreach (var tab in Enum.GetValues<StatisticsTab>())
+            ReportGrids.Fill(GridOf(tab), StatisticsScreenRules.Rows(stats, tab, Localizer.CurrentLanguage, T, ReportGrids.Amount, culture));
 
-        foreach (var d in stats.Departments)
-            _departments.Rows.Add(d.Code, d.Name.For(language), d.TestCount, d.ValidatedCount,
-                                  Hours(d.AverageTurnaroundHours), Percent(d.OnTimePercent),
-                                  Amount(d.ChargedAmount));
-
-        foreach (var t in stats.Tests)
-            _tests.Rows.Add(t.Code, t.Name.For(language), t.TestCount, Hours(t.AverageTurnaroundHours),
-                            Amount(t.ChargedAmount));
-
-        foreach (var p in stats.Payers)
-            _payers.Rows.Add(p.Name?.For(language) ?? T("Statistics.SelfPaying"), p.OrderCount,
-                             p.TestCount, Amount(p.ChargedAmount), Amount(p.PayerShare),
-                             Amount(p.PatientShare));
-
-        foreach (var day in stats.Days)
-            _days.Rows.Add(day.Date.ToString("ddd dd/MM/yy", CultureInfo.CurrentCulture),
-                           day.OrderCount, day.TestCount);
-
-        _bar.Subtitle.Text = $"{ReportGrids.Date(stats.From)} → {ReportGrids.Date(stats.To)}";
+        _bar.Subtitle.Text = StatisticsScreenRules.Subtitle(stats);
         _bar.Export.Enabled = true;
     }
 
     /// <summary>
     /// The visible table as CSV, semicolon-separated with a BOM: what a French-locale Excel opens
-    /// directly into columns, accents intact.
+    /// directly into columns, accents intact (ReportGrids.ExportAsync, the shared rules' CSV).
     /// </summary>
     private async Task ExportAsync()
     {
         var grid = Pilotage.GridOf(_tabs.SelectedTab);
         if (grid is null || grid.Rows.Count == 0) return;
 
-        // Patient, prescriber and test names come from the database: the shared cell neutralises
-        // formulas for Excel.
-        static string Cell(object? value) =>
-            MarocLIS.Application.Inventory.CsvCell.Of(Convert.ToString(value, CultureInfo.CurrentCulture));
-
-        var csv = new StringBuilder();
-        csv.AppendLine(string.Join(';', grid.Columns.Cast<DataGridViewColumn>()
-                                            .OrderBy(c => c.DisplayIndex)
-                                            .Select(c => Cell(c.HeaderText))));
-
-        foreach (DataGridViewRow row in grid.Rows)
-            csv.AppendLine(string.Join(';', grid.Columns.Cast<DataGridViewColumn>()
-                                                .OrderBy(c => c.DisplayIndex)
-                                                .Select(c => Cell(row.Cells[c.Index].Value))));
-
         try
         {
-            var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
-            var opened = await _output.OpenAsync(bytes, "csv");
-            if (opened.IsFailure) _dialogs.ShowFailure(opened, _bar.Export.Text);
+            await ReportGrids.ExportAsync(grid, _output, _dialogs, _bar.Export.Text, Localizer);
         }
         catch (Exception ex)
         {

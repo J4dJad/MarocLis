@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using MarocLIS.Application.Input;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Domain.Common;
@@ -13,16 +12,6 @@ namespace MarocLIS.Application.Steering;
 /// the workstation shows that button to no one else.
 /// </summary>
 public sealed record CostMarginActions(bool Compute, bool Export, bool Allocation);
-
-/// <summary>The period chips of the steering screens.</summary>
-public enum PeriodPreset
-{
-    ThisMonth,
-    LastMonth,
-    ThisYear,
-    LastYear,
-    Custom
-}
 
 /// <summary>The three tables of the screen.</summary>
 public enum MarginTab
@@ -67,21 +56,10 @@ public static class CostMarginScreenRules
         return new CostMarginActions(view, view && result is not null, has(Permissions.Steering.ManageCosts));
     }
 
-    public static string PresetKey(PeriodPreset preset) => $"Statistics.Preset{preset}";
+    public static string PresetKey(PeriodPreset preset) => PeriodReport.PresetKey(preset);
 
-    /// <summary>The days a chip gives: this month or last, this year or last, up to today; none for « Personnalisée ».</summary>
-    public static (DateOnly From, DateOnly To)? Range(PeriodPreset preset, DateOnly today)
-    {
-        var month = new DateOnly(today.Year, today.Month, 1);
-        return preset switch
-        {
-            PeriodPreset.ThisMonth => (month, today),
-            PeriodPreset.LastMonth => (month.AddMonths(-1), month.AddDays(-1)),
-            PeriodPreset.ThisYear => (new DateOnly(today.Year, 1, 1), today),
-            PeriodPreset.LastYear => (new DateOnly(today.Year - 1, 1, 1), new DateOnly(today.Year - 1, 12, 31)),
-            _ => null
-        };
-    }
+    /// <summary>The days a chip gives (<see cref="PeriodReport.Range"/>).</summary>
+    public static (DateOnly From, DateOnly To)? Range(PeriodPreset preset, DateOnly today) => PeriodReport.Range(preset, today);
 
     public static string TabKey(MarginTab tab) => $"Steering.{tab}";
 
@@ -94,13 +72,12 @@ public static class CostMarginScreenRules
             _ => result.ByAnalysis
         };
 
-    public static string Count(int value, IFormatProvider culture) => value.ToString("N0", culture);
+    public static string Count(int value, IFormatProvider culture) => PeriodReport.Count(value, culture);
 
     /// <summary>« 42,5 % », or a dash where nothing was charged.</summary>
-    public static string Share(double? value, IFormatProvider culture) =>
-        value is { } p ? string.Format(culture, "{0:0.0} %", p) : "—";
+    public static string Share(double? value, IFormatProvider culture) => PeriodReport.Share(value, culture);
 
-    public static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+    public static string Date(DateOnly date) => PeriodReport.Date(date);
 
     /// <summary>« Coût de revient et marge — 01/10/2026 → 26/10/2026 ».</summary>
     public static string Heading(MarginAnalysis? result, ScreenText text)
@@ -168,12 +145,7 @@ public static class CostMarginScreenRules
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(text);
-        if (rows.Count == 0) return null;
-
-        var csv = new StringBuilder();
-        csv.AppendLine(string.Join(';', Columns.Select(c => CsvCell.Of(text(ColumnKey(c))))));
-        foreach (var row in rows) csv.AppendLine(string.Join(';', Cells(row, amount, culture).Select(CsvCell.Of)));
-        return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];
+        return PeriodReport.Csv([.. Columns.Select(c => text(ColumnKey(c)))], rows.Select(row => Cells(row, amount, culture)));
     }
 
     /// <summary>« marge-par-analyse-20261001-20261026.csv ».</summary>
@@ -181,16 +153,14 @@ public static class CostMarginScreenRules
     {
         ArgumentNullException.ThrowIfNull(result);
         var what = tab switch { MarginTab.BySite => "par-site", MarginTab.ByInstrument => "par-automate", _ => "par-analyse" };
-        return $"marge-{what}-{result.From.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}-{result.To.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.csv";
+        return $"marge-{what}-{PeriodReport.FileStamp(result.From, result.To)}.csv";
     }
 
     /// <summary>The box a refusal of CostMarginService names: the period, or the allocation.</summary>
-    public static string? FieldOf(Error? error) => error?.ResourceKey switch
-    {
-        "Stats_PeriodReversed" or "Stats_PeriodTooLong" => PeriodField,
-        "Steering_AllocationOutOfRange" => AllocationField,
-        _ => null
-    };
+    public static string? FieldOf(Error? error) =>
+        PeriodReport.IsPeriodRefusal(error) ? PeriodField
+        : error?.ResourceKey == "Steering_AllocationOutOfRange" ? AllocationField
+        : null;
 
     // ---- The allocation of indirect costs --------------------------------------------------------
 

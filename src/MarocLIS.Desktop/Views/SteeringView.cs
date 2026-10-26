@@ -44,21 +44,9 @@ public sealed class SteeringView : LocalizedView
         _bar = new PeriodBar(localizer);
         Padding = new Padding(24, 16, 24, 16);
 
-        foreach (var grid in new[] { _days, _sites, _payers, _prescribers })
-        {
-            AddColumn(grid, "label", 30);
-            AddColumn(grid, "orders", 10, numeric: true);
-            AddColumn(grid, "tests", 10, numeric: true);
-            AddColumn(grid, "revenue", 14, numeric: true);
-            AddColumn(grid, "share", 9, numeric: true);
-        }
-
-        AddColumn(_ageing, "band", 30);
-        AddColumn(_ageing, "invoices", 12, numeric: true);
-        AddColumn(_ageing, "amount", 16, numeric: true);
-
-        AddColumn(_quality, "indicator", 40);
-        AddColumn(_quality, "value", 20, numeric: true);
+        foreach (var tab in Enum.GetValues<SteeringTab>())
+            foreach (var column in SteeringScreenRules.Columns(tab))
+                AddColumn(GridOf(tab), column.Name, Weight(column.Name), column.Numeric);
 
         _pages = [.. new[] { _days, _sites, _payers, _prescribers, _ageing, _quality }.Select(Pilotage.CardPage)];
         _tabs.TabPages.AddRange(_pages);
@@ -76,20 +64,40 @@ public sealed class SteeringView : LocalizedView
 
     public override string Title => T("Nav.Steering");
 
+    private DataGridView GridOf(SteeringTab tab) => tab switch
+    {
+        SteeringTab.BySite => _sites,
+        SteeringTab.ByPayer => _payers,
+        SteeringTab.ByPrescriber => _prescribers,
+        SteeringTab.Receivables => _ageing,
+        SteeringTab.Quality => _quality,
+        _ => _days
+    };
+
+    // The share of each column of the tables.
+    private static int Weight(string column) => column switch
+    {
+        "label" or "band" => 30,
+        "orders" or "tests" => 10,
+        "revenue" => 14,
+        "share" => 9,
+        "invoices" => 12,
+        "owed" => 16,
+        "indicator" => 40,
+        "value" => 20,
+        _ => 10
+    };
+
     protected override void ApplyTexts()
     {
         _bar.ApplyTexts();
         _bar.Heading.Text = T("Steering.Title");
-        _pages[0].Text = T("Steering.ByDay");
-        _pages[1].Text = T("Steering.BySite");
-        _pages[2].Text = T("Steering.ByPayer");
-        _pages[3].Text = T("Steering.ByPrescriber");
-        _pages[4].Text = T("Steering.Receivables");
-        _pages[5].Text = T("Steering.Quality");
-
-        foreach (var grid in new[] { _days, _sites, _payers, _prescribers, _ageing, _quality })
-            foreach (DataGridViewColumn column in grid.Columns)
-                column.HeaderText = T($"Steering.Column.{column.Name}");
+        foreach (var tab in Enum.GetValues<SteeringTab>())
+        {
+            _pages[(int)tab].Text = T(SteeringScreenRules.TabKey(tab));
+            foreach (var column in SteeringScreenRules.Columns(tab))
+                GridOf(tab).Column(column.Name).HeaderText = T(column.CaptionKey);
+        }
 
         Render();
     }
@@ -130,59 +138,21 @@ public sealed class SteeringView : LocalizedView
             return;
         }
 
-        string Tile(string key, string value) => $"{T(key)}\n{value}";
-        string Mad(decimal value) => $"{Amount(value)} MAD";
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        string Money(decimal value) => Domain.Common.Money.Of(value).Format(Localizer.CurrentLanguage);
 
-        _tiles[0].Text = Tile("Steering.Revenue", $"{Mad(d.Revenue)} · {Count(d.Orders)} {T("Steering.OrdersUnit")}");
-        _tiles[1].Text = Tile("Steering.InvoicedCollected", $"{Mad(d.Invoiced - d.Credited)} / {Mad(d.Collected)}");
-        _tiles[2].Text = Tile("Steering.Column.reagentCost", Mad(d.Margin.ReagentCost));
-        _tiles[3].Text = Tile("Steering.Column.margin", $"{Mad(d.Margin.Margin)} · {Share(d.Margin.MarginPercent)}");
-        _tiles[4].Text = Tile("Steering.OverdueReceivables", $"{Mad(d.Overdue)} / {Mad(d.Outstanding)}");
-        _tiles[4].Emphasis = d.Overdue > 0m ? UiTheme.Overdue : null;
-
-        // Without the salary right the payroll tile is not shown at all, not shown empty.
-        _tiles[5].Visible = d.Payroll is not null;
-        if (d.Payroll is { } p)
-            _tiles[5].Text = Tile("Steering.PayrollRatio",
-                p.SiteMonths == 0 ? T("Steering.NoClosedPayroll")
-                                  : $"{Mad(p.EmployerCost)} · {Share(p.EmployerCostToRevenuePercent)}");
-
-        _tiles[6].Text = Tile("Steering.Turnaround",
-            $"{(d.AverageTurnaroundHours is { } h ? $"{h:0.0} h" : "—")} · {Share(d.OnTimePercent)}");
-        _tiles[7].Text = Tile("Steering.QcRejections",
-            $"{Count(d.Quality.QcRejected)} / {Count(d.Quality.QcResults)} · {Share(d.Quality.QcRejectedPercent)}");
-
-        void Fill(DataGridView grid, IEnumerable<RevenueRow> rows, string emptyKey)
+        // Without the salary right the payroll tile is not shown at all, not shown empty: the rules
+        // leave it out, and the last tile of the row stays free.
+        var tiles = SteeringScreenRules.Tiles(d, T, Money, culture);
+        for (var i = 0; i < _tiles.Length; i++)
         {
-            foreach (var r in rows)
-                grid.Rows.Add(r.Label.Length == 0 ? T(emptyKey) : r.Label, Count(r.Orders), Count(r.Tests),
-                              Amount(r.Revenue), Share(r.SharePercent));
+            _tiles[i].Visible = i < tiles.Count;
+            if (i < tiles.Count) ReportGrids.Show(_tiles[i], tiles[i]);
         }
 
-        Fill(_days, d.ByDay, "Steering.NoLabel");
-        Fill(_sites, d.BySite, "Steering.NoLabel");
-        Fill(_payers, d.ByPayer, "Statistics.SelfPaying");
-        Fill(_prescribers, d.ByPrescriber, "Relations.NoPrescriber");
+        foreach (var tab in Enum.GetValues<SteeringTab>())
+            ReportGrids.Fill(GridOf(tab), SteeringScreenRules.Rows(d, tab, T, Amount, culture));
 
-        foreach (var a in d.Ageing)
-        {
-            var i = _ageing.Rows.Add(T($"AgeingBand.{a.Band}"), Count(a.Invoices), Amount(a.Amount));
-            if (a.Band >= AgeingBand.Days61To90 && a.Amount > 0m) _ageing.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Overdue;
-        }
-
-        var q = d.Quality;
-        _quality.Rows.Add(T("Steering.QcResults"), Count(q.QcResults));
-        _quality.Rows.Add(T("Steering.QcRejections"), $"{Count(q.QcRejected)} ({Share(q.QcRejectedPercent)})");
-        _quality.Rows.Add(T("Steering.OpenNonConformities"), Count(q.OpenNonConformities));
-        _quality.Rows.Add(T("Steering.NonConformitiesOpened"), Count(q.NonConformitiesOpened));
-        _quality.Rows.Add(T("Steering.EqaSatisfactory"), Count(q.EqaSatisfactory));
-        _quality.Rows.Add(T("Steering.EqaQuestionable"), Count(q.EqaQuestionable));
-        _quality.Rows.Add(T("Steering.EqaUnsatisfactory"), Count(q.EqaUnsatisfactory));
-        _quality.Rows.Add(T("Steering.EqaNotSubmitted"), Count(q.EqaNotSubmitted));
-        _quality.Rows.Add(T("Steering.Turnaround"),
-                          d.AverageTurnaroundHours is { } tat ? $"{tat:0.0} h" : "—");
-        _quality.Rows.Add(T("Statistics.OnTime"), Share(d.OnTimePercent));
-
-        _bar.Subtitle.Text = $"{Date(d.From)} → {Date(d.To)} · {T("Steering.Sites", d.SiteCount)}";
+        _bar.Subtitle.Text = SteeringScreenRules.Subtitle(d, T);
     }
 }
