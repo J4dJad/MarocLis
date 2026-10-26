@@ -72,7 +72,7 @@ public sealed class CashForecastView : LocalizedView
         _patients.Margin = new Padding(0, 8, 16, 0);
         _overdue.Margin = new Padding(0, 8, 16, 0);
 
-        BankReconciliationView.AddColumns(_grid, ("week", 5), ("from", 9), ("to", 9), ("opening", 11), ("payers", 11),
+        BankReconciliationView.AddColumns(_grid, ("week", 7), ("from", 9), ("to", 9), ("opening", 11), ("payers", 11),
                                           ("patients", 11), ("suppliers", 11), ("payroll", 11), ("other", 10),
                                           ("net", 11), ("closing", 12));
         foreach (DataGridViewColumn column in _grid.Columns)
@@ -85,7 +85,7 @@ public sealed class CashForecastView : LocalizedView
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not ForecastWeek week) return;
-            if (week.ClosingMad < 0m)
+            if (CashForecastScreenRules.IsShortfall(week))
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
@@ -111,12 +111,7 @@ public sealed class CashForecastView : LocalizedView
         Controls.Add(header);
     }
 
-    private IReadOnlyList<string> Headers() =>
-    [
-        T("Treasury.Week"), T("Field.From"), T("Field.To"), T("Treasury.Opening"), T("Treasury.PayerReceipts"),
-        T("Treasury.PatientReceipts"), T("Treasury.SupplierPayments"), T("Treasury.Payroll"), T("Treasury.OtherFlows"),
-        T("Treasury.Net"), T("Treasury.Closing")
-    ];
+    private IReadOnlyList<string> Headers() => CashForecastScreenRules.Headers(T);
 
     protected override void ApplyTexts()
     {
@@ -140,12 +135,12 @@ public sealed class CashForecastView : LocalizedView
     {
         try
         {
-            var result = await _treasury.GetForecastAsync(new CashForecastOptions
+            var result = await _treasury.GetForecastAsync(CashForecastScreenRules.Options(new CashForecastForm
             {
                 IncludePatientReceipts = _patients.Checked,
                 IncludeOverduePayerReceipts = _overdue.Checked,
                 PayrollDay = (int)_payDay.Value
-            }, ct);
+            }), ct);
 
             if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
@@ -169,35 +164,25 @@ public sealed class CashForecastView : LocalizedView
         _grid.Rows.Clear();
         if (_forecast is null) { _notes.Text = string.Empty; _count.Text = string.Empty; return; }
 
-        _count.Text = $"{T("Treasury.LowestClosing")} : {Amount(_forecast.LowestClosingMad)}";
-        _count.ForeColor = _forecast.LowestClosingMad < 0m ? UiTheme.Critical : UiTheme.TextSecondary;
+        var lowest = CashForecastScreenRules.LowestClosing(_forecast, T, Amount);
+        _count.Text = lowest.Text;
+        _count.ForeColor = lowest.Critical ? UiTheme.Critical : UiTheme.TextSecondary;
 
         foreach (var w in _forecast.Weeks)
         {
-            var index = _grid.Rows.Add(w.Number.ToString(CultureInfo.InvariantCulture),
-                                       w.Start.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                                       w.End.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                                       Amount(w.OpeningMad), Amount(w.PayerReceiptsMad), Amount(w.PatientReceiptsMad),
-                                       Amount(w.SupplierPaymentsMad), Amount(w.PayrollMad), Amount(w.OtherMad),
-                                       Amount(w.NetMad), Amount(w.ClosingMad));
+            var index = _grid.Rows.Add([w.Number.ToString(CultureInfo.InvariantCulture),
+                                        CashForecastScreenRules.Date(w.Start), CashForecastScreenRules.Date(w.End),
+                                        .. CashForecastScreenRules.Amounts(w).Select(Amount)]);
             _grid.Rows[index].Tag = w;
         }
 
-        var openings = _forecast.Openings.Count == 0
-            ? T("Treasury.NoBankAccount")
-            : string.Join("   ·   ", _forecast.Openings.Select(o => o.IsRecordedNotOnStatement
-                // What the opening adds to the statements, so the director sees what it opens on.
-                ? T("Treasury.OpeningRecordedNotOnStatement",
-                    (o.AsOf ?? _forecast.From).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), Amount(o.BalanceMad))
-                : $"{o.Account} : {Amount(o.BalanceMad)}" +
-                  (o.AsOf is { } asOf ? $" ({asOf.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)})" : string.Empty)));
+        // What the opening adds to the statements, so the director sees what it opens on.
+        var openings = string.Join("   ·   ", CashForecastScreenRules.Openings(_forecast, T, Amount));
 
         _notes.Text = string.Join(Environment.NewLine,
             $"{T("Treasury.Opening")} : {openings}",
-            T("Treasury.ForecastNotes", Amount(_forecast.OverduePayerReceiptsMad),
-              Amount(_forecast.UnapprovedSupplierInvoicesMad), Amount(_forecast.LastPayrollNetMad),
-              Amount(_forecast.WeeklyPatientAverageMad)),
-            $"{T("Treasury.LowestClosing")} : {Amount(_forecast.LowestClosingMad)}",
+            CashForecastScreenRules.Notes(_forecast, T, Amount),
+            lowest.Text,
             T("Treasury.ForecastMethod"));
     }
 
@@ -213,7 +198,7 @@ public sealed class CashForecastView : LocalizedView
     {
         if (_forecast is null) return;
 
-        var opened = await _output.OpenAsync(CashForecastCalculator.ToCsv(_forecast, Headers()), "csv");
+        var opened = await _output.OpenAsync(CashForecastScreenRules.Csv(_forecast, T), "csv");
         if (opened.IsFailure) _dialogs.ShowFailure(opened, _csv.Text);
     }
 }

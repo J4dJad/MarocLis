@@ -1,4 +1,6 @@
+using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Steering;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Identity;
@@ -50,27 +52,19 @@ public sealed class CostMarginView : LocalizedView
         _bar = new PeriodBar(localizer);
         Padding = new Padding(UiTheme.Gutter);
 
+        int[] weights = [8, 20, 7, 10, 8, 10, 9, 8, 8, 10, 7, 7];
         foreach (var grid in new[] { _byAnalysis, _bySite, _byInstrument })
-        {
-            AddColumn(grid, "code", 8);
-            AddColumn(grid, "name", 20);
-            AddColumn(grid, "tests", 7, numeric: true);
-            AddColumn(grid, "revenue", 10, numeric: true);
-            AddColumn(grid, "averagePrice", 8, numeric: true);
-            AddColumn(grid, "reagentCost", 10, numeric: true);
-            AddColumn(grid, "allocation", 9, numeric: true);
-            AddColumn(grid, "costPerTest", 8, numeric: true);
-            AddColumn(grid, "marginPerTest", 8, numeric: true);
-            AddColumn(grid, "margin", 10, numeric: true);
-            AddColumn(grid, "marginPercent", 7, numeric: true);
-            AddColumn(grid, "withoutCost", 7, numeric: true);
-        }
+            for (var c = 0; c < CostMarginScreenRules.Columns.Count; c++)
+            {
+                var column = CostMarginScreenRules.Columns[c];
+                AddColumn(grid, column, weights[c], numeric: CostMarginScreenRules.IsNumeric(column));
+            }
 
         _pages = [CardPage(_byAnalysis), CardPage(_bySite), CardPage(_byInstrument)];
         _tabs.TabPages.AddRange(_pages);
 
         _allocation.AutoSize = true;
-        _allocation.Visible = currentUser.Has(Permissions.Steering.ManageCosts);
+        _allocation.Visible = CostMarginScreenRules.Actions(currentUser.Has, null).Allocation;
         _bar.Extra.Controls.Add(_allocation);
 
         Controls.Add(_tabs);
@@ -129,15 +123,15 @@ public sealed class CostMarginView : LocalizedView
     {
         _bar.ApplyTexts();
         _bar.Heading.Text = T("Steering.CostMarginTitle");
-        _pages[0].Text = T("Steering.ByAnalysis");
-        _pages[1].Text = T("Steering.BySite");
-        _pages[2].Text = T("Steering.ByInstrument");
+        _pages[0].Text = T(CostMarginScreenRules.TabKey(MarginTab.ByAnalysis));
+        _pages[1].Text = T(CostMarginScreenRules.TabKey(MarginTab.BySite));
+        _pages[2].Text = T(CostMarginScreenRules.TabKey(MarginTab.ByInstrument));
         _allocation.Text = T("Steering.Allocation");
         _method.Text = T("Steering.CostMethod");
 
         foreach (var grid in new[] { _byAnalysis, _bySite, _byInstrument })
             foreach (DataGridViewColumn column in grid.Columns)
-                column.HeaderText = T($"Steering.Column.{column.Name}");
+                column.HeaderText = T(CostMarginScreenRules.ColumnKey(column.Name));
 
         Render();
     }
@@ -177,30 +171,34 @@ public sealed class CostMarginView : LocalizedView
             return;
         }
 
-        void Tile(int i, string key, string value) => (_tiles[i].Caption.Text, _tiles[i].Value.Text) = (T(key), value);
-        Tile(0, "Steering.Column.revenue", $"{Amount(r.Totals.Revenue)} MAD · {Count(r.Totals.Tests)} {T("Steering.TestsUnit")}");
-        Tile(1, "Steering.Column.reagentCost", $"{Amount(r.Totals.ReagentCost)} MAD");
-        Tile(2, "Steering.Column.allocation", $"{Amount(r.Totals.Allocation)} MAD ({Amount(r.AllocationPerTest)} {T("Steering.PerTest")})");
-        Tile(3, "Steering.Column.margin", $"{Amount(r.Totals.Margin)} MAD · {Share(r.Totals.MarginPercent)}");
-        _tiles[1].Value.ForeColor = r.Totals.TestsWithoutCost > 0 ? UiTheme.Abnormal : UiTheme.TextPrimary;
-
-        void Fill(DataGridView grid, IEnumerable<MarginRow> rows)
+        // The figures written with their currency (« DH »), no longer « MAD » fixed in the text.
+        string Money(decimal value) => Domain.Common.Money.Of(value).Format(Localizer.CurrentLanguage);
+        var tiles = CostMarginScreenRules.Tiles(r, T, Money, CultureInfo.CurrentCulture);
+        for (var t = 0; t < tiles.Count; t++)
         {
-            foreach (var m in rows)
+            (_tiles[t].Caption.Text, _tiles[t].Value.Text) = (T(tiles[t].CaptionKey), tiles[t].Value);
+            _tiles[t].Value.ForeColor = tiles[t].Ink switch
             {
-                var i = grid.Rows.Add(m.Code, m.Name, Count(m.Tests), Amount(m.Revenue), Amount(m.AverageNetPrice),
-                                      Amount(m.ReagentCost), Amount(m.Allocation), Amount(m.CostPerTest),
-                                      Amount(m.MarginPerTest), Amount(m.Margin), Share(m.MarginPercent),
-                                      m.TestsWithoutCost == 0 ? string.Empty : Count(m.TestsWithoutCost));
-                if (m.Margin < 0m) grid.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
-                else if (m.TestsWithoutCost > 0) grid.Rows[i].Cells["withoutCost"].Style.ForeColor = UiTheme.Abnormal;
+                StockInk.Abnormal => UiTheme.Abnormal,
+                StockInk.Critical => UiTheme.Critical,
+                _ => UiTheme.TextPrimary
+            };
+        }
+
+        void Fill(DataGridView grid, MarginTab tab)
+        {
+            foreach (var m in CostMarginScreenRules.Rows(r, tab))
+            {
+                var i = grid.Rows.Add([.. CostMarginScreenRules.Cells(m, Amount, CultureInfo.CurrentCulture)]);
+                if (CostMarginScreenRules.IsLoss(m)) grid.Rows[i].DefaultCellStyle.ForeColor = UiTheme.Critical;
+                else if (CostMarginScreenRules.WarnsWithoutCost(m)) grid.Rows[i].Cells["withoutCost"].Style.ForeColor = UiTheme.Abnormal;
             }
         }
 
-        Fill(_byAnalysis, r.ByAnalysis);
-        Fill(_bySite, r.BySite);
-        Fill(_byInstrument, r.ByInstrument);
-        _bar.Heading.Text = $"{T("Steering.CostMarginTitle")} — {Date(r.From)} → {Date(r.To)}";
+        Fill(_byAnalysis, MarginTab.ByAnalysis);
+        Fill(_bySite, MarginTab.BySite);
+        Fill(_byInstrument, MarginTab.ByInstrument);
+        _bar.Heading.Text = CostMarginScreenRules.Heading(r, T);
     }
 
     private async Task EditAllocationAsync()
@@ -211,10 +209,14 @@ public sealed class CostMarginView : LocalizedView
         // The window title is the action without its access-key mark and its ellipsis.
         using var dialog = new FieldDialog(Localizer, UserDialogs.CaptionOf(_allocation.Text, _allocation.Text), height: 260);
         dialog.Note(T("Steering.AllocationHelp"));
-        var amount = dialog.Number(T("Steering.AllocationPerTest"), current.Value.AllocationPerTestMad, 0m, 100000m, 2);
+        var amount = dialog.Number(T("Steering.AllocationPerTest"), current.Value.AllocationPerTestMad, 0m,
+                                   CostSettings.MaximumAllocationPerTestMad, 2);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        var saved = await _costs.SaveSettingsAsync(new CostSettings { AllocationPerTestMad = amount.Value });
+        var (refusal, settings) = CostMarginScreenRules.Check(amount.Value.ToString(CultureInfo.InvariantCulture));
+        if (refusal is not null) { _dialogs.Warn(T(refusal.Key, refusal.Typed), _allocation.Text); return; }
+
+        var saved = await _costs.SaveSettingsAsync(settings!);
         if (saved.IsFailure) { _dialogs.ShowFailure(saved, _allocation.Text); return; }
         await LoadAsync();
     }

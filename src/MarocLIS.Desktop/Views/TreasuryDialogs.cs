@@ -83,7 +83,7 @@ internal sealed class BankAccountsDialog : Form
         {
             var index = _grid.Rows.Add(a.BankName, a.Label, a.Rib, a.AccountingAccount,
                                        Money.Of(a.StatementBalanceMad).Format(_localizer.CurrentLanguage),
-                                       a.LastLineDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "—",
+                                       BankReconciliationScreenRules.LastLine(a),
                                        a.IsActive ? _localizer["Action.Yes"] : _localizer["Action.No"]);
             _grid.Rows[index].Tag = a;
         }
@@ -155,23 +155,20 @@ internal sealed class BankAccountEditor : MasterDataEditor
 
     protected override void Accept()
     {
-        // The RIB check the domain makes, ahead of the round trip.
-        if (!Domain.HumanResources.Employee.IsValidRib(BankAccount.NormalizeRib(_rib.Text)))
+        // The RIB check the domain makes, ahead of the round trip, and an opening balance that is an amount.
+        var (refusal, input) = BankReconciliationScreenRules.Check(new BankAccountForm
         {
-            Dialogs.Warn(Localizer["BankAccount_RibInvalid"], Text);
-            _rib.Focus();
+            Id = _id, BankName = _bank.Text, Label = _label.Text, Rib = _rib.Text, AccountingAccount = _accounting.Text,
+            Opening = _opening.Text, OpeningDate = DateOnly.FromDateTime(_openingDate.Value.Date), IsActive = _active.Checked
+        });
+        if (refusal is not null)
+        {
+            Dialogs.Warn(refusal.Typed is { } typed ? Localizer.Format(refusal.Key, typed) : Localizer[refusal.Key], Text);
+            (refusal.Field == BankReconciliationScreenRules.RibField ? _rib : _opening).Focus();
             return;
         }
 
-        if (DecimalOrNull(_opening) is not { } opening)
-        {
-            Dialogs.Warn(Localizer.Format("Result_NotANumber", _opening.Text), Text);
-            _opening.Focus();
-            return;
-        }
-
-        Input = new BankAccountInput(_id, _bank.Text.Trim(), _label.Text.Trim(), _rib.Text, _accounting.Text.Trim(),
-                                     opening, DateOnly.FromDateTime(_openingDate.Value.Date), _active.Checked);
+        Input = input;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -228,7 +225,7 @@ internal sealed class BankStatementImportDialog : Form
         _content = content;
         _fileName = fileName;
 
-        Text = $"{localizer["Treasury.ImportStatement"]} — {account.Display} — {Path.GetFileName(fileName)}";
+        Text = BankReconciliationScreenRules.ImportTitle(account, fileName, localizer.Format);
         FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
@@ -321,10 +318,10 @@ internal sealed class BankStatementImportDialog : Form
         _parsed.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _parsed.Rows[e.RowIndex].Tag is not ImportPreviewLine line) return;
-            e.CellStyle!.ForeColor = line.Status switch
+            e.CellStyle!.ForeColor = BankReconciliationScreenRules.LineInk(line) switch
             {
-                ImportLineStatus.Invalid => UiTheme.Critical,
-                ImportLineStatus.Duplicate => UiTheme.TextMuted,
+                TreasuryInk.Critical => UiTheme.Critical,
+                TreasuryInk.Muted => UiTheme.TextMuted,
                 _ => UiTheme.TextPrimary
             };
         };
@@ -350,25 +347,26 @@ internal sealed class BankStatementImportDialog : Form
         FinanceDialogFrame.Apply(this, _localizer["Finance.Dialog.StatementImport"], [], _cancel, _import);
     }
 
-    private void Apply(BankStatementCsvMapping m)
+    private void Apply(BankStatementCsvMapping mapping)
     {
-        _delimiter.SelectedIndex = m.Delimiter switch { ';' => 1, ',' => 2, '\t' => 3, _ => 0 };
-        _skip.Value = Math.Clamp(m.SkipLines, 0, 100);
+        var m = BankReconciliationScreenRules.MappingForm(mapping);
+        _delimiter.SelectedIndex = m.Delimiter;
+        _skip.Value = m.SkipLines;
         _header.Checked = m.HasHeader;
-        _date.Value = Math.Clamp(m.DateColumn, 0, 60);
-        _valueDate.Value = Math.Clamp(m.ValueDateColumn, 0, 60);
-        _label.Value = Math.Clamp(m.LabelColumn, 0, 60);
-        _reference.Value = Math.Clamp(m.ReferenceColumn, 0, 60);
-        _amount.Value = Math.Clamp(m.AmountColumn, 0, 60);
-        _debit.Value = Math.Clamp(m.DebitColumn, 0, 60);
-        _credit.Value = Math.Clamp(m.CreditColumn, 0, 60);
+        _date.Value = m.DateColumn;
+        _valueDate.Value = m.ValueDateColumn;
+        _label.Value = m.LabelColumn;
+        _reference.Value = m.ReferenceColumn;
+        _amount.Value = m.AmountColumn;
+        _debit.Value = m.DebitColumn;
+        _credit.Value = m.CreditColumn;
         _dateFormat.Text = m.DateFormat;
-        _decimal.SelectedIndex = m.DecimalSeparator switch { ',' => 1, '.' => 2, _ => 0 };
+        _decimal.SelectedIndex = m.DecimalSeparator;
     }
 
-    private BankStatementCsvMapping Mapping() => new()
+    private BankStatementCsvMapping Mapping() => BankReconciliationScreenRules.Mapping(new StatementMappingForm
     {
-        Delimiter = _delimiter.SelectedIndex switch { 1 => ';', 2 => ',', 3 => '\t', _ => '\0' },
+        Delimiter = _delimiter.SelectedIndex,
         SkipLines = (int)_skip.Value,
         HasHeader = _header.Checked,
         DateColumn = (int)_date.Value,
@@ -378,9 +376,9 @@ internal sealed class BankStatementImportDialog : Form
         AmountColumn = (int)_amount.Value,
         DebitColumn = (int)_debit.Value,
         CreditColumn = (int)_credit.Value,
-        DateFormat = string.IsNullOrWhiteSpace(_dateFormat.Text) ? "dd/MM/yyyy" : _dateFormat.Text.Trim(),
-        DecimalSeparator = _decimal.SelectedIndex switch { 1 => ',', 2 => '.', _ => '\0' }
-    };
+        DateFormat = _dateFormat.Text,
+        DecimalSeparator = _decimal.SelectedIndex
+    });
 
     private void MappingChanged()
     {
@@ -404,7 +402,7 @@ internal sealed class BankStatementImportDialog : Form
 
         // The raw cells, numbered as the mapping counts them.
         _raw.Columns.Clear();
-        var width = _result.RawRows.Count == 0 ? 0 : _result.RawRows.Max(r => r.Count);
+        var width = BankReconciliationScreenRules.RawWidth(_result);
         for (var c = 1; c <= width; c++)
             _raw.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -418,12 +416,7 @@ internal sealed class BankStatementImportDialog : Form
         foreach (var line in _result.Lines)
         {
             var l = line.Line;
-            var status = line.Status switch
-            {
-                ImportLineStatus.New => _localizer["Treasury.LineNew"],
-                ImportLineStatus.Duplicate => _localizer["Treasury.LineDuplicate"],
-                _ => _localizer[l.ErrorKey ?? "BankStatement_DateUnreadable"]
-            };
+            var status = _localizer[BankReconciliationScreenRules.LineStatusKey(line)];
             var index = _parsed.Rows.Add(l.LineNumber.ToString(CultureInfo.InvariantCulture),
                                          l.OperationDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "?",
                                          l.ValueDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? string.Empty,
@@ -433,15 +426,13 @@ internal sealed class BankStatementImportDialog : Form
             _parsed.Rows[index].Tag = line;
         }
 
-        var valid = mapping.Validate();
-        _summary.Text = valid.IsFailure
-            ? _localizer.Describe(valid.Errors)
-            : _localizer.Format("Treasury.ImportSummary", _result.NewCount, _result.DuplicateCount, _result.InvalidCount,
-                                Money.Of(_result.NewTotalMad).Format(_localizer.CurrentLanguage));
-        _summary.ForeColor = valid.IsFailure ? UiTheme.Critical : UiTheme.TextSecondary;
+        var summary = BankReconciliationScreenRules.ImportSummary(_result, mapping, _localizer.Describe, _localizer.Format,
+                                                                  a => Money.Of(a).Format(_localizer.CurrentLanguage));
+        _summary.Text = summary.Text;
+        _summary.ForeColor = summary.Critical ? UiTheme.Critical : UiTheme.TextSecondary;
         // A field changed while the preview was being read: it is already out of date.
         _previewed = Mapping() == mapping ? mapping : null;
-        _import.Enabled = _previewed is not null && valid.IsSuccess && _result.NewCount > 0;
+        _import.Enabled = BankReconciliationScreenRules.CanImport(_result, _previewed, Mapping());
     }
 
     private async Task ImportAsync()
@@ -449,8 +440,8 @@ internal sealed class BankStatementImportDialog : Form
         if (_result is null || _result.NewCount == 0 || _previewed is null) return;
         if (Mapping() != _previewed) { MappingChanged(); return; }
 
-        if (_result.InvalidCount > 0
-            && !_dialogs.Confirm(_localizer.Format("Treasury.ImportWithInvalid", _result.InvalidCount), Text))
+        if (BankReconciliationScreenRules.ImportWithInvalidQuestion(_result, _localizer.Format) is { } question
+            && !_dialogs.Confirm(question, Text))
             return;
 
         _import.Enabled = false;
@@ -459,8 +450,7 @@ internal sealed class BankStatementImportDialog : Form
             var imported = await _treasury.ImportAsync(_account.Id, _content, _fileName, _previewed);
             if (imported.IsFailure) { _dialogs.ShowFailure(imported, Text); return; }
 
-            _dialogs.Info(_localizer.Format("Treasury.Imported", imported.Value.Imported, imported.Value.Duplicates,
-                                            imported.Value.Invalid), Text);
+            _dialogs.Info(BankReconciliationScreenRules.Imported(imported.Value, _localizer.Format), Text);
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -620,16 +610,21 @@ internal sealed class ForecastItemEditor : MasterDataEditor
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_amount) is not { } amount || amount == 0m)
+        var end = DateOrNull(_end.Toggle, _end.Picker);
+        var (refusal, input) = CashForecastScreenRules.Check(new ForecastItemForm
         {
-            Dialogs.Warn(Localizer["TreasuryItem_AmountRequired"], Text);
+            Id = _id, Label = _label.Text, Amount = _amount.Text, Recurrence = Selected<ForecastRecurrence>(_recurrence),
+            StartDate = DateOnly.FromDateTime(_start.Value.Date), HasEndDate = end is not null, EndDate = end ?? default,
+            IsActive = _active.Checked
+        });
+        if (refusal is not null)
+        {
+            Dialogs.Warn(Localizer[refusal.Key], Text);
             _amount.Focus();
             return;
         }
 
-        Input = new ForecastItemInput(_id, _label.Text.Trim(), amount, Selected<ForecastRecurrence>(_recurrence),
-                                      DateOnly.FromDateTime(_start.Value.Date), DateOrNull(_end.Toggle, _end.Picker),
-                                      _active.Checked);
+        Input = input;
         DialogResult = DialogResult.OK;
         Close();
     }

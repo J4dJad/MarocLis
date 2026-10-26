@@ -64,9 +64,9 @@ public sealed class BankReconciliationView : LocalizedView
         _dialogs = dialogs;
         _logger = logger;
 
-        var today = DateTime.Today;
-        _from.Value = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
-        _to.Value = today;
+        var (from, to) = BankReconciliationScreenRules.DefaultPeriod(DateOnly.FromDateTime(DateTime.Today));
+        _from.Value = from.ToDateTime(TimeOnly.MinValue);
+        _to.Value = to.ToDateTime(TimeOnly.MinValue);
 
         BuildLayout();
 
@@ -166,8 +166,7 @@ public sealed class BankReconciliationView : LocalizedView
 
     private void RenderChip()
     {
-        var open = _data?.Lines.Count(l => !l.IsReconciled);
-        _openChip.Text = open is { } count ? $"{T("Treasury.OpenOnly")} · {count}" : T("Treasury.OpenOnly");
+        _openChip.Text = BankReconciliationScreenRules.OpenOnlyChip(_data, T);
         _openChip.Selected = _openOnly.Checked;
     }
 
@@ -252,8 +251,8 @@ public sealed class BankReconciliationView : LocalizedView
         foreach (var a in _accountRows) _account.Items.Add(a.Display);
         _account.EndUpdate();
 
-        var index = _accountRows.ToList().FindIndex(a => a.Id == previous);
-        if (_accountRows.Count > 0) _account.SelectedIndex = index >= 0 ? index : 0;
+        if (BankReconciliationScreenRules.Keep(_accountRows, previous) is { } kept)
+            _account.SelectedIndex = _accountRows.ToList().IndexOf(kept);
     }
 
     /// <summary>
@@ -294,7 +293,7 @@ public sealed class BankReconciliationView : LocalizedView
 
     private string Amount(decimal value) => Money.Of(value).Format(Localizer.CurrentLanguage);
 
-    private string Kind(TreasuryMovementKind kind) => T($"TreasuryMovementKind.{kind}");
+    private string Kind(TreasuryMovementKind kind) => T(BankReconciliationScreenRules.KindKey(kind));
 
     private void Render()
     {
@@ -314,15 +313,11 @@ public sealed class BankReconciliationView : LocalizedView
         _lines.RebuildKeeping<StatementLineRow, Guid>(r => r.Id, () =>
         {
             _lines.Rows.Clear();
-            foreach (var line in _data.Lines.Where(l => !_openOnly.Checked || !l.IsReconciled))
+            foreach (var line in BankReconciliationScreenRules.Visible(_data, _openOnly.Checked))
             {
-                var status = !line.IsReconciled
-                    ? T("Treasury.Unreconciled")
-                    : string.Join(", ", line.MatchKinds.Select(Kind))
-                      + (line.IsAutomatic ? $" ({T("Treasury.Automatic")})" : string.Empty)
-                      + (line.DifferenceMad != 0m ? $" — {T("Treasury.Difference")} {Amount(line.DifferenceMad)}" : string.Empty);
+                var status = BankReconciliationScreenRules.LineStatus(line, T, Amount);
 
-                var index = _lines.Rows.Add(line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                var index = _lines.Rows.Add(BankReconciliationScreenRules.Date(line.OperationDate),
                                             line.Label, line.Reference ?? string.Empty, Amount(line.AmountMad), status);
                 _lines.Rows[index].Tag = line;
                 if (line.MatchComment is { } comment) _lines.Rows[index].Cells["status"].ToolTipText = comment;
@@ -331,36 +326,33 @@ public sealed class BankReconciliationView : LocalizedView
 
         foreach (var movement in _data.UnmatchedMovements)
         {
-            var label = movement.Kind == TreasuryMovementKind.CardBatch
-                ? T("Treasury.CardBatchLabel", movement.Label)
-                : movement.Label;
+            var label = BankReconciliationScreenRules.MovementLabel(movement, T);
 
-            var index = _movements.Rows.Add(movement.Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            var index = _movements.Rows.Add(BankReconciliationScreenRules.Date(movement.Date),
                                             Kind(movement.Kind), label, movement.Reference ?? string.Empty,
                                             Amount(movement.AmountMad));
             _movements.Rows[index].Tag = movement;
         }
 
         var s = _data.Summary;
-        string Row(string key, decimal value) => $"{T(key),-38}{Amount(value),18}";
+        var b = BankReconciliationScreenRules.Balances(s);
+        string Row(ReconciliationBalance balance) => $"{T(balance.Key),-38}{Amount(balance.Amount),18}";
         _summary.Text = string.Join(Environment.NewLine,
-            $"{Row("Treasury.StatementBalance", s.StatementBalanceMad)}    {Row("Treasury.ReconciledBalance", s.ReconciledBalanceMad)}",
-            $"{Row("Treasury.UnmatchedLines", s.UnmatchedStatementMad)}    {Row("Treasury.UnmatchedMovementsSiteTotal", s.UnmatchedMovementsMad)}",
-            $"{T("Treasury.OpeningAsOf", s.OpeningBalanceDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), Amount(s.OpeningBalanceMad))}   ·   " +
-            $"{T("Treasury.UnmatchedCounts", s.UnmatchedStatementCount, s.UnmatchedMovementCount)}");
+            $"{Row(b[0])}    {Row(b[1])}",
+            $"{Row(b[2])}    {Row(b[3])}",
+            $"{BankReconciliationScreenRules.OpeningLine(s, T, Amount)}   ·   {BankReconciliationScreenRules.CountsLine(s, T)}");
 
         RefreshButtons();
     }
 
     private void RefreshButtons()
     {
-        var line = CurrentLine;
-        var manage = PermissionGate.Allows(Permissions.Treasury.Manage);
-        _auto.Enabled = manage && _data is not null;
-        _match.Enabled = manage && line is { IsReconciled: false } && _movements.SelectedRows.Count > 0;
-        _justify.Enabled = manage && line is { IsReconciled: false };
-        _unmatch.Enabled = manage && line is { IsReconciled: true };
-        _withdrawImport.Enabled = manage && line is not null;
+        var actions = BankReconciliationScreenRules.Actions(p => PermissionGate.Allows(p), _data, CurrentLine, _movements.SelectedRows.Count);
+        _auto.Enabled = actions.AutoMatch;
+        _match.Enabled = actions.Match;
+        _justify.Enabled = actions.Justify;
+        _unmatch.Enabled = actions.Unmatch;
+        _withdrawImport.Enabled = actions.WithdrawImport;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------
@@ -393,9 +385,9 @@ public sealed class BankReconciliationView : LocalizedView
         try
         {
             var info = new FileInfo(picker.FileName);
-            if (info.Length > 10 * 1024 * 1024)
+            if (BankReconciliationScreenRules.CheckFile(info.Length) is { } refusal)
             {
-                _dialogs.Warn(T("BankStatement_FileTooLarge"), _import.Text);
+                _dialogs.Warn(T(refusal.Key), _import.Text);
                 return;
             }
             content = await File.ReadAllBytesAsync(info.FullName);
@@ -436,18 +428,18 @@ public sealed class BankReconciliationView : LocalizedView
 
         // The service refuses a movement going the other way than the line; said before the
         // difference is asked for, not after the operator has explained it.
-        if (movements.Any(m => Math.Sign(m.AmountMad) != Math.Sign(line.AmountMad)))
+        var check = BankReconciliationScreenRules.CheckMatch(line, movements);
+        if (check.RefusalKey is { } refused)
         {
-            _dialogs.Warn(T("BankMatch_DirectionMismatch"), _match.Text);
+            _dialogs.Warn(T(refused), _match.Text);
             return;
         }
 
-        var difference = Money.Round(line.AmountMad - movements.Sum(m => m.AmountMad));
         string? comment = null;
-        if (difference != 0m)
+        if (check.NeedsReason)
         {
-            comment = _dialogs.PromptForReason(T("Treasury.MatchDifferencePrompt", Amount(difference)), _match.Text,
-                                               maxLength: BankMatch.CommentMaxLength);
+            comment = _dialogs.PromptForReason(BankReconciliationScreenRules.MatchDifferencePrompt(check.Difference, T, Amount), _match.Text,
+                                               maxLength: BankReconciliationScreenRules.CommentMaxLength);
             if (comment is null) return;
         }
 
@@ -461,8 +453,8 @@ public sealed class BankReconciliationView : LocalizedView
     {
         if (CurrentLine is not { IsReconciled: false } line) return;
 
-        var comment = _dialogs.PromptForReason(T("Treasury.JustifyPrompt", line.Label, Amount(line.AmountMad)),
-                                               _justify.Text, maxLength: BankMatch.CommentMaxLength);
+        var comment = _dialogs.PromptForReason(BankReconciliationScreenRules.JustifyPrompt(line, T, Amount),
+                                               _justify.Text, maxLength: BankReconciliationScreenRules.CommentMaxLength);
         if (comment is null) return;
 
         var result = await _treasury.JustifyAsync(line.Id, comment);
@@ -478,9 +470,7 @@ public sealed class BankReconciliationView : LocalizedView
     private async Task WithdrawImportAsync()
     {
         if (CurrentLine is not { } line) return;
-        if (!_dialogs.Confirm(T("Treasury.WithdrawImportConfirm",
-                                line.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), line.Label,
-                                Amount(line.AmountMad)), _withdrawImport.Text)) return;
+        if (!_dialogs.Confirm(BankReconciliationScreenRules.WithdrawQuestion(line, T, Amount), _withdrawImport.Text)) return;
 
         var result = await _treasury.WithdrawImportAsync(line.Id);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _withdrawImport.Text); return; }
@@ -493,7 +483,7 @@ public sealed class BankReconciliationView : LocalizedView
     private async Task UnmatchAsync()
     {
         if (CurrentLine is not { IsReconciled: true } line) return;
-        if (!_dialogs.Confirm(T("Treasury.UnmatchConfirm", line.Label, Amount(line.AmountMad)), _unmatch.Text)) return;
+        if (!_dialogs.Confirm(BankReconciliationScreenRules.UnmatchQuestion(line, T, Amount), _unmatch.Text)) return;
 
         var result = await _treasury.UnmatchAsync(line.Id);
         if (result.IsFailure) { _dialogs.ShowFailure(result, _unmatch.Text); return; }
