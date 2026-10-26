@@ -244,6 +244,33 @@ public sealed class WebMenuTests
         missing.Should().BeEmpty("each glyph of the shell's menu and of the web pages has its PNG in wwwroot/icons");
     }
 
+    /// <summary>
+    /// In Arabic « Tableau de bord » and « Pilotage » were both « لوحة القيادة »: two entries of the
+    /// menu read the same. Each screen of the menu is named apart, in each language.
+    /// </summary>
+    [Theory]
+    [InlineData("fr")]
+    [InlineData("en")]
+    [InlineData("ar")]
+    public void EachScreenOfTheMenu_IsNamedApart(string language)
+    {
+        var resources = Path.Combine(RepositoryRoot(), "src", "MarocLIS.Localization", "Resources");
+        using var catalogue = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(resources, language + ".json")));
+        string Label(string key)
+        {
+            var dot = key.IndexOf('.', StringComparison.Ordinal);
+            return catalogue.RootElement.GetProperty(key[..dot]).GetProperty(key[(dot + 1)..]).GetString()!;
+        }
+
+        var twins = NavigationMenu.Entries.Where(e => !e.IsGroupHeader)
+            .GroupBy(e => Label(e.LabelKey))
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key}: {string.Join(", ", g.Select(e => e.Key))}")
+            .ToList();
+
+        twins.Should().BeEmpty();
+    }
+
     internal static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
