@@ -303,7 +303,7 @@ public sealed class CashSessionReviewView : LocalizedView
         var lines = new List<string>();
         if (ownTill) lines.Add(T("CashSession_ReconcilerIsOperator"));
         if (!string.IsNullOrWhiteSpace(row.VarianceExplanation))
-            lines.Add($"{T("Payment.VarianceExplanation")} : {row.VarianceExplanation}");
+            lines.Add($"{T("App.LabelValue", T("Payment.VarianceExplanation"), row.VarianceExplanation)}");
         if (row.IsReconciled)
             lines.Add(T("Treasury.ReconciledBy", row.ReconciledByName ?? "?", When(row.ReconciledAt),
                         row.ReconciliationComment ?? "—"));

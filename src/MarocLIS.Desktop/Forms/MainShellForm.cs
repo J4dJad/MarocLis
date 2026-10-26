@@ -304,7 +304,7 @@ public sealed partial class MainShellForm : LocalizedForm
     private void ShowStatusBar()
     {
         _statusSession.Text = $"●  {T("App.ConnectedAs")} {_currentUser.FullName}     " +
-                              $"{T("App.Site")} : {_currentUser.SiteCode}";
+                              $"{T("App.LabelValue", T("App.Site"), _currentUser.SiteCode)}";
 
         // Only shortcuts that exist, written with the keys this user has.
         var shortcuts = new (string Action, string Label)[]
@@ -666,8 +666,8 @@ public sealed partial class MainShellForm : LocalizedForm
         if (_navigation.Current is { } view) _viewTitle.Text = HelpService.CurrentTitle = view.Title;
         _print.Text = WithShortcut(T("Action.Print"), ActionPrint);
         _help.Text = HelpButtonText();
-        _siteInfo.Text = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   " +
-                         $"{T("App.Workstation")} : {_currentUser.Workstation}";
+        _siteInfo.Text = $"{T("App.LabelValue", T("App.Site"), _currentUser.SiteCode)}   ·   " +
+                         $"{T("App.LabelValue", T("App.Workstation"), _currentUser.Workstation)}";
         ShowStatusBar();
         ShowBackupWarning();
         ShowBreadcrumb();
@@ -698,7 +698,7 @@ public sealed partial class MainShellForm : LocalizedForm
 
         try
         {
-            var caption = $"{T("App.Site")} : {_currentUser.SiteCode}   ·   {_currentUser.FullName}   ·   " +
+            var caption = $"{T("App.LabelValue", T("App.Site"), _currentUser.SiteCode)}   ·   {_currentUser.FullName}   ·   " +
                           $"{DateTime.Now:g}   ·   {T("Print.RowCount", grid.Rows.Count)}";
 
             var document = ListPrinting.Capture(grid, view.Title, caption,

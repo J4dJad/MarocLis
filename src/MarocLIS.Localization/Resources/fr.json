@@ -2849,6 +2849,7 @@
   },
 
   "App": {
+    "LabelValue": "{0} : {1}",
     "Title": "Système de gestion de laboratoire",
     "ShortTitle": "MarocLIS",
     "Language": "Langue",

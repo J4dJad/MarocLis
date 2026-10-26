@@ -411,7 +411,7 @@
             _ => Texts["Collection.FastingBandQuestion"]
         };
 
-        return $"{Texts["Catalog.FastingRequired"]} : {Texts.T("Catalog.HoursValue", required)}{forWhat}. {verdict}";
+        return $"{Texts.T("App.LabelValue", Texts["Catalog.FastingRequired"], Texts.T("Catalog.HoursValue", required))}{forWhat}. {verdict}";
     }
 
     private string TubeTip(CollectionWorklistEntry tube)
@@ -425,7 +425,7 @@
         if (handling.Count > 0) tip.Add(string.Join(" · ", handling));
 
         if (tube.MinimumVolumeMl is { } minimum) tip.Add($"{Texts["Sample.Volume"]} ≥ {minimum.ToString("N1", Texts.Culture)} mL");
-        if (tube.AnalysisCodes.Count > 0) tip.Add($"{Texts["Catalog.Analyses"]} : {string.Join(" ", tube.AnalysisCodes)}");
+        if (tube.AnalysisCodes.Count > 0) tip.Add($"{Texts.T("App.LabelValue", Texts["Catalog.Analyses"], string.Join(" ", tube.AnalysisCodes))}");
         return string.Join(Environment.NewLine, tip);
     }
 

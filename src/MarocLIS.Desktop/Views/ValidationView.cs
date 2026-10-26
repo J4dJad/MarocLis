@@ -1877,7 +1877,7 @@ public sealed class ValidationView : LocalizedView
             // Within the notification's columns: a longer name or read-back failed the save and
             // left the call open with the value unreleasable.
             var recipient = _dialogs.PromptForText(
-                $"{parameterName} : {value}\n\n{callLine}{T("Notification_RecipientNameRequired")}",
+                $"{T("App.LabelValue", parameterName, value)}\n\n{callLine}{T("Notification_RecipientNameRequired")}",
                 T("Nav.CriticalResults"), maxLength: 200);
 
             if (recipient is null)

@@ -1131,7 +1131,7 @@ public sealed class CollectionView : LocalizedView
             _ => T("Collection.FastingBandQuestion")
         };
 
-        _fastingBanner.Text = $"{T("Catalog.FastingRequired")} : {T("Catalog.HoursValue", fasting)}{forWhat}. {verdict}";
+        _fastingBanner.Text = $"{T("App.LabelValue", T("Catalog.FastingRequired"), T("Catalog.HoursValue", fasting))}{forWhat}. {verdict}";
         _fastingBanner.Font = UiTheme.BodyBold;
         _fastingBanner.ForeColor = answer is false ? UiTheme.Critical : UiTheme.Abnormal;
         _tips.SetToolTip(_fastingBanner, _fastingBanner.Text);
@@ -1196,7 +1196,7 @@ public sealed class CollectionView : LocalizedView
                 tooltip.Add($"{T("Sample.Volume")} ≥ {minimum:N1} mL");
 
             if (entry.AnalysisCodes.Count > 0)
-                tooltip.Add($"{T("Catalog.Analyses")} : {string.Join(" ", entry.AnalysisCodes)}");
+                tooltip.Add($"{T("App.LabelValue", T("Catalog.Analyses"), string.Join(" ", entry.AnalysisCodes))}");
 
             if (tooltip.Count > 0)
                 row.Cells[ColTube].ToolTipText = string.Join(Environment.NewLine, tooltip);

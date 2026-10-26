@@ -343,7 +343,7 @@
                 return;
             }
 
-            Show(Texts["Payment.CloseSession"], $"{Texts["Payment.Variance"]} : {Amount(result.Value)}");
+            Show(Texts["Payment.CloseSession"], $"{Texts.T("App.LabelValue", Texts["Payment.Variance"], Amount(result.Value))}");
             _counted = _explanation = string.Empty;
             _refusal = null;
             await ActivateAsync();

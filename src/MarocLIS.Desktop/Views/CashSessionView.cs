@@ -510,7 +510,7 @@ public sealed class CashSessionView : LocalizedView
             }
 
             _dialogs.Info(
-                $"{T("Payment.Variance")} : {Money.Of(result.Value).Format(Localizer.CurrentLanguage)}",
+                $"{T("App.LabelValue", T("Payment.Variance"), Money.Of(result.Value).Format(Localizer.CurrentLanguage))}",
                 T("Payment.CloseSession"));
 
             _counted.Clear();

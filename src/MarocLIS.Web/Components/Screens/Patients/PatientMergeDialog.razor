@@ -8,7 +8,7 @@
 *@
 <Modal Name="merge" Title="@Texts["Patient.Merge"]" Hint="@Texts["PatientDialog.MergeHint"]" OnCancel="CancelAsync">
     <ChildContent>
-        <p class="strong">@($"{Texts["Patient.FileToMerge"]} : {Duplicate.MedicalRecordNumber} — {Duplicate.FullName} ({Duplicate.OrderCount} {Texts["Order.Plural"]})")</p>
+        <p class="strong">@($"{Texts.T("App.LabelValue", Texts["Patient.FileToMerge"], Duplicate.MedicalRecordNumber)} — {Duplicate.FullName} ({Duplicate.OrderCount} {Texts["Order.Plural"]})")</p>
         <label class="field">
             <span class="field-label">@Texts["Patient.SurvivingFile"]</span>
             <select class="input" data-field="survivor" @bind="_survivorId">

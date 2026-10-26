@@ -2849,6 +2849,7 @@
   },
 
   "App": {
+    "LabelValue": "{0} : {1}",
     "Title": "نظام تدبير مختبر التحاليل الطبية",
     "ShortTitle": "MarocLIS",
     "Language": "اللغة",

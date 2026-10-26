@@ -1417,7 +1417,7 @@ public sealed class ResultEntryView : LocalizedView
                 if (order.ReceivedAt is { } received)
                     tip.Add($"{T("ResultEntry.Received")} {received.ToLocalTime():dd/MM HH:mm}");
                 if (order.DueAt is { } due) tip.Add($"{T("Order.DueAt")} {due.ToLocalTime():dd/MM HH:mm}");
-                if (order.Departments.Length > 0) tip.Add($"{T("ResultEntry.Departments")} : {order.Departments}");
+                if (order.Departments.Length > 0) tip.Add($"{T("App.LabelValue", T("ResultEntry.Departments"), order.Departments)}");
                 row.Cells[0].ToolTipText = string.Join("\n", tip);
             }
 
@@ -1639,7 +1639,7 @@ public sealed class ResultEntryView : LocalizedView
 
             // The analyser's own flags, on hover; the validation screen shows them as a column.
             if (!string.IsNullOrEmpty(row.InstrumentFlags))
-                gridRow.Cells[ColumnFlag].ToolTipText = $"{T("Result.InstrumentFlags")} : {row.InstrumentFlags}";
+                gridRow.Cells[ColumnFlag].ToolTipText = $"{T("App.LabelValue", T("Result.InstrumentFlags"), row.InstrumentFlags)}";
 
             var locked = !ResultEntryRules.TakesValue(row);
             gridRow.Cells[ColumnValue].ReadOnly = locked;
@@ -1693,10 +1693,10 @@ public sealed class ResultEntryView : LocalizedView
         var tip = new List<string>();
 
         if (row.SampleDefects != Domain.Samples.SampleDefect.None)
-            tip.Add($"{T("Sample.Defects")} : {row.SampleDefects}");
+            tip.Add($"{T("App.LabelValue", T("Sample.Defects"), row.SampleDefects)}");
 
         if (gridRow.Cells[ColumnComment].Value is string comment && !string.IsNullOrWhiteSpace(comment))
-            tip.Add($"{T("Result.TechnicalComment")} : {comment}");
+            tip.Add($"{T("App.LabelValue", T("Result.TechnicalComment"), comment)}");
 
         gridRow.Cells[ColumnParameter].ToolTipText = string.Join("\n", tip);
     }
@@ -2158,7 +2158,7 @@ public sealed class ResultEntryView : LocalizedView
     private void ShowCriticalFindings(ResultEntryOutcome outcome)
     {
         var lines = outcome.CriticalFindings
-            .Select(f => $"• {f.ParameterName} : {f.Value}   ({T($"Interpretation.{f.Interpretation}")})");
+            .Select(f => $"• {T("App.LabelValue", f.ParameterName, f.Value)}   ({T($"Interpretation.{f.Interpretation}")})");
 
         _dialogs.Warn(
             $"{T("Dashboard.CriticalPending")}\n\n{string.Join('\n', lines)}\n\n" +

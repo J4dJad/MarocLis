@@ -15,7 +15,7 @@
 *@
 <Modal Name="payment" Title="@Title" OnCancel="CancelAsync">
     <ChildContent>
-        <p class="strong accent" data-state="ceiling">@CeilingCaption : @Money.Of(Ceiling).Format(Texts.Language, Texts.Culture)</p>
+        <p class="strong accent" data-state="ceiling">@Texts.T("App.LabelValue", CeilingCaption, Money.Of(Ceiling).Format(Texts.Language, Texts.Culture))</p>
 
         <div class="form-grid">
             <label class="field">

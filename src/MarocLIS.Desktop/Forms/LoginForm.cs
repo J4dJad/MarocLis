@@ -290,7 +290,7 @@ public sealed class LoginForm : LocalizedForm
         _heading.Text = T("Login.Title");
         _prompt.Text = T("Login.Prompt");
         _subtitle.Text = T("Login.Subtitle");
-        _workstation.Text = $"{T("App.Workstation")} : {Environment.MachineName}{Environment.NewLine}"
+        _workstation.Text = $"{T("App.LabelValue", T("App.Workstation"), Environment.MachineName)}{Environment.NewLine}"
                             + $"{T("App.Version")} {Version()}";
         _showPassword.Text = T(_password.UseSystemPasswordChar ? "Login.ShowPassword" : "Login.HidePassword");
         _capsLock.Text = "! " + T("Login.CapsLockOn");

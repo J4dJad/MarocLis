@@ -2500,20 +2500,20 @@ public sealed class OrderRegistrationView : LocalizedView
 
         var lines = new List<string>
         {
-            $"{T("Order.AccessionNumber")} : {registered.AccessionNumber}",
+            $"{T("App.LabelValue", T("Order.AccessionNumber"), registered.AccessionNumber)}",
             string.Empty,
-            $"{T("Billing.Gross")} : {pricing.Gross.Format(language)}"
+            $"{T("App.LabelValue", T("Billing.Gross"), pricing.Gross.Format(language))}"
         };
 
         if (!pricing.Discount.IsZero)
-            lines.Add($"{T("Billing.Discount")} : {pricing.Discount.Format(language)}");
+            lines.Add($"{T("App.LabelValue", T("Billing.Discount"), pricing.Discount.Format(language))}");
 
-        lines.Add($"{T("Billing.TotalDue")} : {pricing.Total.Format(language)}");
+        lines.Add($"{T("App.LabelValue", T("Billing.TotalDue"), pricing.Total.Format(language))}");
 
         if (!pricing.PayerShare.IsZero)
         {
-            lines.Add($"{T("Billing.PayerShare")} : {pricing.PayerShare.Format(language)}");
-            lines.Add($"{T("Billing.PatientShare")} : {pricing.PatientShare.Format(language)}");
+            lines.Add($"{T("App.LabelValue", T("Billing.PayerShare"), pricing.PayerShare.Format(language))}");
+            lines.Add($"{T("App.LabelValue", T("Billing.PatientShare"), pricing.PatientShare.Format(language))}");
         }
 
         if (!pricing.ExcessOverReferenceTariff.IsZero)
@@ -2524,7 +2524,7 @@ public sealed class OrderRegistrationView : LocalizedView
         }
 
         lines.Add(string.Empty);
-        lines.Add($"{T("Payment.Title")} : {pricing.DueAtCounter.Format(language)}");
+        lines.Add($"{T("App.LabelValue", T("Payment.Title"), pricing.DueAtCounter.Format(language))}");
 
         _dialogs.Info(string.Join(Environment.NewLine, lines), T("OrderEntry.RegisteredTitle"));
     }

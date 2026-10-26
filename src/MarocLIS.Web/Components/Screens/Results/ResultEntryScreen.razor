@@ -182,7 +182,7 @@
                                                        @oninput="e => _typed[id] = e.Value?.ToString()" @onfocus="() => Focused(row)" />
                                             }
                                         </td>
-                                        <td title="@(string.IsNullOrEmpty(row.InstrumentFlags) ? null : $"{Texts["Result.InstrumentFlags"]} : {row.InstrumentFlags}")">
+                                        <td title="@(string.IsNullOrEmpty(row.InstrumentFlags) ? null : $"{Texts.T("App.LabelValue", Texts["Result.InstrumentFlags"], row.InstrumentFlags)}")">
                                             @if (indicator is not null)
                                             {
                                                 <Pill Text="@($"{indicator.Arrow} {Texts[indicator.Key]}")" Tone="@indicator.Tone.ToString()" />
@@ -494,7 +494,7 @@
             tip.Add($"{Texts["ResultEntry.Received"]} {received.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)}");
         if (order.DueAt is { } due)
             tip.Add($"{Texts["Order.DueAt"]} {due.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)}");
-        if (order.Departments.Length > 0) tip.Add($"{Texts["ResultEntry.Departments"]} : {order.Departments}");
+        if (order.Departments.Length > 0) tip.Add($"{Texts.T("App.LabelValue", Texts["ResultEntry.Departments"], order.Departments)}");
         return string.Join("\n", tip);
     }
 
@@ -691,9 +691,9 @@
     {
         var tip = new List<string>();
         if (row.SampleDefects != MarocLIS.Domain.Samples.SampleDefect.None)
-            tip.Add($"{Texts["Sample.Defects"]} : {row.SampleDefects}");
+            tip.Add($"{Texts.T("App.LabelValue", Texts["Sample.Defects"], row.SampleDefects)}");
         if (_comments.GetValueOrDefault(row.TestResultId) is { } comment && !string.IsNullOrWhiteSpace(comment))
-            tip.Add($"{Texts["Result.TechnicalComment"]} : {comment}");
+            tip.Add($"{Texts.T("App.LabelValue", Texts["Result.TechnicalComment"], comment)}");
         return tip.Count == 0 ? null : string.Join("\n", tip);
     }
 
@@ -1001,7 +1001,7 @@
         if (outcome.CriticalFindings.Count == 0) return;
 
         var lines = outcome.CriticalFindings
-            .Select(f => $"• {f.ParameterName} : {f.Value}   ({Texts[$"Interpretation.{f.Interpretation}"]})");
+            .Select(f => $"• {Texts.T("App.LabelValue", f.ParameterName, f.Value)}   ({Texts[$"Interpretation.{f.Interpretation}"]})");
 
         Show(Texts["Nav.CriticalResults"],
              $"{Texts["Dashboard.CriticalPending"]}\n\n{string.Join('\n', lines)}\n\n{Texts["Result_CriticalMustBeCommunicated"]}",

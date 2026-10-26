@@ -42,7 +42,7 @@ else
                         <span class="who-initials" aria-hidden="true">@MarocLIS.Application.Orders.OrderRegistrationRules.Initials(Context.User.FullName)</span>
                         <span class="who">
                             <span class="who-name">@Context.User.FullName</span>
-                            <span class="who-place">@Texts["App.Site"] : @Context.User.SiteCode · @Texts["App.Workstation"] : <bdi>@session.Workstation</bdi></span>
+                            <span class="who-place">@Texts.T("App.LabelValue", Texts["App.Site"], Context.User.SiteCode) · @Texts.T("App.LabelValue", Texts["App.Workstation"], "")<bdi>@session.Workstation</bdi></span>
                         </span>
                         <span class="user-menu-caret" aria-hidden="true">▾</span>
                     </summary>

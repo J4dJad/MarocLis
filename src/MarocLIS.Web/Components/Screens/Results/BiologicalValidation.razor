@@ -288,7 +288,7 @@
 
     case ValidationDialog.CallRecipient when _call is { } call:
         <TextPrompt Name="critical-recipient" Title="@Texts["Nav.CriticalResults"]" MaxLength="200"
-                    Prompt="@($"{call.ParameterName} : {call.Value}\n\n{call.CallLine}{Texts["Notification_RecipientNameRequired"]}")"
+                    Prompt="@($"{Texts.T("App.LabelValue", call.ParameterName, call.Value)}\n\n{call.CallLine}{Texts["Notification_RecipientNameRequired"]}")"
                     OnConfirm="RecipientGivenAsync" OnCancel="RecipientRefusedAsync" />
         break;
 

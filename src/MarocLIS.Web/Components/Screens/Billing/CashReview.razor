@@ -100,7 +100,7 @@
                 }
                 @if (!string.IsNullOrWhiteSpace(till.VarianceExplanation))
                 {
-                    <p class="small muted" data-state="explanation">@Texts["Payment.VarianceExplanation"] : @till.VarianceExplanation</p>
+                    <p class="small muted" data-state="explanation">@Texts.T("App.LabelValue", Texts["Payment.VarianceExplanation"], till.VarianceExplanation)</p>
                 }
                 @if (till.IsReconciled)
                 {

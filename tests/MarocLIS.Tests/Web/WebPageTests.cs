@@ -102,6 +102,52 @@ public sealed class WebPageTests : BunitContext
     }
 
     /// <summary>
+    /// « Label : value » with the space of French typography, written into the code, read
+    /// « Accession no. : 2610-000014 » and « Site : PRINCIPAL » in English: the screens of the day,
+    /// on the web and at the workstation, join a label and its value with App.LabelValue, which each
+    /// language writes its own way.
+    /// </summary>
+    [Fact]
+    public void TheScreensOfTheDay_JoinALabelAndItsValueAsTheLanguageWritesIt()
+    {
+        var root = WebMenuTests.RepositoryRoot();
+        var web = Path.Combine(root, "src", "MarocLIS.Web", "Components");
+        var desktop = Path.Combine(root, "src", "MarocLIS.Desktop");
+        var files = new[]
+        {
+            Path.Combine(web, "Layout", "MainLayout.razor"),
+            Path.Combine(web, "Screens", "Orders", "OrderRegistration.razor"),
+            Path.Combine(web, "Screens", "Samples", "Collection.razor"),
+            Path.Combine(web, "Screens", "Results", "ResultEntryScreen.razor"),
+            Path.Combine(web, "Screens", "Results", "BiologicalValidation.razor"),
+            Path.Combine(web, "Screens", "Billing", "CashDesk.razor"),
+            Path.Combine(web, "Screens", "Billing", "CashReview.razor"),
+            Path.Combine(web, "Screens", "Billing", "PaymentDialog.razor"),
+            Path.Combine(web, "Screens", "Patients", "PatientMergeDialog.razor"),
+            Path.Combine(desktop, "Views", "OrderRegistrationView.cs"),
+            Path.Combine(desktop, "Views", "CollectionView.cs"),
+            Path.Combine(desktop, "Views", "ResultEntryView.cs"),
+            Path.Combine(desktop, "Views", "ValidationView.cs"),
+            Path.Combine(desktop, "Views", "CashSessionView.cs"),
+            Path.Combine(desktop, "Views", "CashSessionReviewView.cs"),
+            Path.Combine(desktop, "Forms", "MainShellForm.cs"),
+            Path.Combine(desktop, "Forms", "LoginForm.cs")
+        };
+        var joined = new Regex(@"\} : \{|""\] : @");
+
+        var wrong = files.SelectMany(f => File.ReadAllLines(f)
+                .Select((line, i) => (line, i))
+                .Where(x => joined.IsMatch(x.line))
+                .Select(x => $"{Path.GetFileName(f)}:{x.i + 1}: {x.line.Trim()}"))
+            .ToList();
+
+        wrong.Should().BeEmpty("a label and its value are joined with App.LabelValue");
+        var texts = new JsonLocalizer(new LocalizationOptions { MarkMissingKeys = true });
+        texts.Format(AppLanguage.English, "App.LabelValue", "Accession no.", "2610-000014").Should().Be("Accession no.: 2610-000014");
+        texts.Format(AppLanguage.French, "App.LabelValue", "Site", "PRINCIPAL").Should().Be("Site : PRINCIPAL");
+    }
+
+    /// <summary>
     /// A text parameter given a field without its « @ » receives the field's name, not its value: the
     /// invoice dialog showed « _approvalRefused » in red on every invoice issued.
     /// </summary>
