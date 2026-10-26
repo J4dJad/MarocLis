@@ -146,6 +146,27 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheLeaveThePlanningThePayAndTheAccidents_AreInTheMenu_ByTheirRights()
+    {
+        var employee = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.RequestLeave), FullStatus())).ToList();
+        employee.Should().Contain("leave").And.NotContain(["planning", "payroll", "accidents"]);
+
+        var files = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.View), FullStatus())).ToList();
+        files.Should().Contain(["leave", "planning", "accidents"]).And.NotContain("payroll", "the pay is the salary right's");
+
+        var pay = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.Salary), FullStatus())).ToList();
+        pay.Should().Contain("payroll").And.NotContain(["leave", "planning", "accidents"]);
+
+        var planner = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.ManagePlanning), FullStatus())).ToList();
+        planner.Should().Contain("planning");
+        var duty = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.Accidents), FullStatus())).ToList();
+        duty.Should().Contain("accidents");
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["leave", "planning", "payroll", "accidents"]);
+    }
+
+    [Fact]
     public void TheDashboard_IsEveryonesAndTheStatisticsAndSteering_AreInTheMenu_ByTheirRights()
     {
         var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();

@@ -7,7 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace MarocLIS.Tests.Web;
 
 /// <summary>
-/// The HR screens rendered in memory: PersonnelService, HrDocumentService and SettlementService over
+/// The HR screens rendered in memory: PersonnelService, HrDocumentService, SettlementService, and the
+/// leave, planning, payroll and accident services over
 /// fakes of their queries and repositories, and the staff files built from the domain itself, so
 /// what the file shows and what a save changes is what the services really do.
 /// </summary>
@@ -19,6 +20,13 @@ public abstract class WebHumanResourcesContext : WebScreenContext
     protected readonly Fake<IRepository<Employee>> EmployeeStore = Fake<IRepository<Employee>>.Create();
     protected readonly Fake<IDepartedAccounts> Accounts = Fake<IDepartedAccounts>.Create();
     protected readonly Fake<IUnitOfWork> Work = Fake<IUnitOfWork>.Create();
+    protected readonly Fake<ILeaveQueries> LeaveQueries = Fake<ILeaveQueries>.Create();
+    protected readonly Fake<IPlanningQueries> PlanningQueries = Fake<IPlanningQueries>.Create();
+    protected readonly Fake<IAccidentQueries> AccidentQueries = Fake<IAccidentQueries>.Create();
+    protected readonly Fake<IRepository<LeaveRequest>> LeaveStore = Fake<IRepository<LeaveRequest>>.Create();
+    protected readonly Fake<IRepository<PayrollPeriod>> PeriodStore = Fake<IRepository<PayrollPeriod>>.Create();
+    protected readonly Fake<IRepository<WorkAccident>> AccidentStore = Fake<IRepository<WorkAccident>>.Create();
+    protected readonly Fake<IRepository<ShiftAssignment>> ShiftStore = Fake<IRepository<ShiftAssignment>>.Create();
 
     /// <summary>The files the repository holds, by id.</summary>
     protected readonly Dictionary<Guid, Employee> Staff = [];
@@ -34,15 +42,27 @@ public abstract class WebHumanResourcesContext : WebScreenContext
         Services.AddSingleton(Fake<IRepository<CredentialFile>>.Create().Object);
         Services.AddSingleton(Fake<IRepository<FinalSettlement>>.Create().Object);
         Services.AddSingleton(Fake<IRepository<LeaveLedgerEntry>>.Create().Object);
-        Services.AddSingleton(Fake<IRepository<LeaveRequest>>.Create().Object);
-        Services.AddSingleton(Fake<IRepository<PayrollPeriod>>.Create().Object);
+        Services.AddSingleton(LeaveStore.Object);
+        Services.AddSingleton(PeriodStore.Object);
+        Services.AddSingleton(AccidentStore.Object);
+        Services.AddSingleton(LeaveQueries.Object);
+        Services.AddSingleton(PlanningQueries.Object);
+        Services.AddSingleton(AccidentQueries.Object);
+        Services.AddSingleton(Fake<IRepository<PublicHoliday>>.Create().Object);
+        Services.AddSingleton(ShiftStore.Object);
         Services.AddSingleton(Fake<IRepository<PayrollParameters>>.Create().Object);
         Services.AddSingleton(Fake<ISequenceAllocator>.Create().Object);
         Services.AddSingleton(Fake<IHrDocumentRenderer>.Create().Object);
+        Services.AddSingleton(Fake<IPayslipRenderer>.Create().Object);
+        Services.AddSingleton(Fake<IAccidentRenderer>.Create().Object);
 
         Services.AddScoped<PersonnelService>();
         Services.AddScoped<HrDocumentService>();
         Services.AddScoped<SettlementService>();
+        Services.AddScoped<LeaveService>();
+        Services.AddScoped<PlanningService>();
+        Services.AddScoped<PayrollService>();
+        Services.AddScoped<AccidentService>();
 
         EmployeeStore.On(nameof(IRepository<Employee>.GetByIdAsync), args => Staff.GetValueOrDefault((Guid)args[0]!))
                      .On(nameof(IRepository<Employee>.GetByIdWithDetailsAsync), args => Staff.GetValueOrDefault((Guid)args[0]!));

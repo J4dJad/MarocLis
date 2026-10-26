@@ -142,6 +142,10 @@ public sealed class WebPageTests : BunitContext
     [InlineData("personnel", "Dossiers du personnel")]
     [InlineData("habilitations", "Habilitations")]
     [InlineData("hrdeadlines", "Échéances RH")]
+    [InlineData("leave", "Congés et absences")]
+    [InlineData("planning", "Planning des gardes")]
+    [InlineData("payroll", "Paie")]
+    [InlineData("accidents", "Accidents du travail")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);

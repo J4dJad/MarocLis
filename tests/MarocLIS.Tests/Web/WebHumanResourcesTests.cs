@@ -152,7 +152,7 @@ public sealed class WebHumanResourcesTests : WebHumanResourcesContext
         page.Find(".action-bar [data-action='Personnel.Edit']").Click();
         page.FindAll("[role=tab][data-tab=Pay]").Should().BeEmpty();
         page.Find("[role=tab][data-tab=Contract]").Click();
-        page.Find("[data-state=salary-hidden]").TextContent.Should().Contain("Salaire et RIB");
+        page.Find("[data-state=salary-hidden]").TextContent.Should().Contain("Le salaire et le RIB ne sont visibles que des personnes autorisées à consulter les salaires");
         page.Markup.Should().NotContain("7400").And.NotContain("Banque Populaire");
 
         page.Find("[data-modal=employee-file] [data-action='Action.Save']").Click();
