@@ -153,4 +153,23 @@ public sealed class WebOrderRegistrationTests : WebScreenContext
         page.Find("[data-action='Action.Save']").TextContent.Should().MatchRegex("[؀-ۿ]");
         page.Find("[data-field=patient-search]").GetAttribute("placeholder").Should().MatchRegex("[؀-ۿ]");
     }
+
+    /// <summary>
+    /// In Arabic the tube was named in French (« Tube gel séparateur ») and the turnaround read
+    /// « h 4 »: both now follow the screen's language, as the collection screen already did.
+    /// </summary>
+    [Fact]
+    public void InArabic_TheBasketNamesTheTubeAndTheHoursInArabic()
+    {
+        SignIn(AppLanguage.Arabic, Counter);
+        var page = Open();
+
+        page.Find("[data-grid=catalogue] tr[data-code=GLY] [data-action=add]").Click();
+
+        var line = page.Find("[data-grid=basket] tbody tr[data-code=GLY]").TextContent;
+        line.Should().Contain("أنبوب جاف").And.NotContain("Sec");
+        line.Should().MatchRegex("4\u2069? سا").And.NotContain("4 h");
+        page.Find("[data-grid=catalogue] tr[data-code=GLY]").TextContent.Should().Contain("أنبوب جاف").And.MatchRegex("4\u2069? سا");
+        page.Find("[data-state=status]").TextContent.Should().NotContain(" h");
+    }
 }

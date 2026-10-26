@@ -200,7 +200,7 @@
                                     <td class="mono">@item.Code</td>
                                     <td class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</td>
                                     <td>@(item.IsPanel ? "—" : item.DepartmentName?.For(Texts.Language) ?? string.Empty)</td>
-                                    <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
+                                    <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName?.For(Texts.Language) ?? "—")</td>
                                     <td class="num">@Texts.T("Catalog.HoursValue", item.TurnaroundHours)</td>
                                     <td class="num">@Price(item.Price)</td>
                                     <td class="cell-action">
@@ -253,7 +253,7 @@
                                     <div class="@(item.IsPanel ? "strong" : null)">@item.Name.For(Texts.Language)</div>
                                     <div class="muted small">@Subline(item)@(BasketNotes(item) is { Length: > 0 } notes ? $" · {notes}" : string.Empty)</div>
                                 </td>
-                                <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName ?? "—")</td>
+                                <td>@(item.IsPanel ? Texts["OrderEntry.SeveralTubes"] : item.ContainerName?.For(Texts.Language) ?? "—")</td>
                                 <td class="num">@Price(item.Price)</td>
                                 <td class="cell-action">
                                     <button type="button" class="btn btn-secondary btn-small" title="@Texts["Action.Remove"]" data-action="remove"

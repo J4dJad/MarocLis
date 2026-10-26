@@ -198,7 +198,7 @@ public sealed class CatalogQueries(LisDbContext db) : ICatalogQueries
             t.IsAvailableUrgently,
             t.ConsentRequirement,
             t.IsSubcontracted,
-            t.ContainerName?.Fr, t.ContainerColour,
+            t.ContainerName, t.ContainerColour,
             t.ParameterCount)));
 
         // Panels first: they are what a prescriber most often writes.

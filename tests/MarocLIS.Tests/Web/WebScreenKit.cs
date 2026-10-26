@@ -162,7 +162,7 @@ public abstract class WebScreenContext : BunitContext
     internal static CatalogPickerItem Analysis(string code, string name, decimal price = 50m, string department = "BIO",
                                                int? fasting = null, Guid? id = null) =>
         new(id ?? Guid.NewGuid(), false, code, new MultilingualText(name), department, new MultilingualText("Biochimie"),
-            price, fasting, 4, true, ConsentRequirement.None, false, "Sec", "#E74C3C", 0);
+            price, fasting, 4, true, ConsentRequirement.None, false, new MultilingualText("Sec", "أنبوب جاف"), "#E74C3C", 0);
 
     internal static CatalogPickerItem Panel(string code, string name, decimal price, params CatalogPickerItem[] members) =>
         new(Guid.NewGuid(), true, code, new MultilingualText(name), null, null, price, null, 24, true,

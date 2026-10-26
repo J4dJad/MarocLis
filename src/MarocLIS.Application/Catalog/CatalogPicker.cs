@@ -24,7 +24,7 @@ public sealed record CatalogPickerItem(
     bool IsAvailableUrgently,
     ConsentRequirement ConsentRequirement,
     bool IsSubcontracted,
-    string? ContainerName,
+    MultilingualText? ContainerName,
     string? ContainerColourHex,
     int ComponentCount,
     IReadOnlyList<PickerComponent>? Components = null,

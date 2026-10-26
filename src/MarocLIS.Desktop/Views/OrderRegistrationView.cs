@@ -1709,7 +1709,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 item.Code,
                 item.Name.For(language),
                 item.IsPanel ? "—" : item.DepartmentName?.For(language) ?? string.Empty,
-                item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName ?? "—",
+                item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName?.For(Localizer.CurrentLanguage) ?? "—",
                 T("Catalog.HoursValue", item.TurnaroundHours),
                 Price(item.Price),
                 string.Empty);
@@ -1848,7 +1848,7 @@ public sealed class OrderRegistrationView : LocalizedView
         foreach (var item in _basketItems.Items)
         {
             var index = _basket.Rows.Add(item.Name.For(language),
-                                         item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName ?? "—",
+                                         item.IsPanel ? T("OrderEntry.SeveralTubes") : item.ContainerName?.For(Localizer.CurrentLanguage) ?? "—",
                                          Price(item.Price), "✕");
             var row = _basket.Rows[index];
             row.Tag = new BasketLine(item);
@@ -2101,7 +2101,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 else
                 {
                     TubeSwatch.Dot(g, bounds with { Width = 10 }, item.ContainerColourHex);
-                    TextRenderer.DrawText(g, item.ContainerName, UiTheme.GridBody,
+                    TextRenderer.DrawText(g, item.ContainerName.For(Localizer.CurrentLanguage), UiTheme.GridBody,
                                           new Rectangle(bounds.X + 16, bounds.Y, bounds.Width - 16, bounds.Height),
                                           ink, Flags(CellText));
                 }
@@ -2183,7 +2183,7 @@ public sealed class OrderRegistrationView : LocalizedView
                 else
                 {
                     TubeSwatch.Dot(g, bounds with { Width = 10 }, item.ContainerColourHex);
-                    TextRenderer.DrawText(g, item.ContainerName, UiTheme.GridBody,
+                    TextRenderer.DrawText(g, item.ContainerName.For(Localizer.CurrentLanguage), UiTheme.GridBody,
                                           new Rectangle(bounds.X + 16, bounds.Y, bounds.Width - 16, bounds.Height),
                                           UiTheme.TextPrimary, Flags(CellText));
                 }
