@@ -172,6 +172,9 @@ public sealed partial class DemoDataSeeder
                 LastName = "Clinique Les Orangers (démo)", FirstName = string.Empty,
                 Kind = PrescriberKind.Institution,
                 InstitutionName = "Clinique Les Orangers (démo)",
+                // An establishment has its INPE too; without it, the CNSS claim of its orders is
+                // refused (Invoice_ClaimRequiresPrescriberInpe).
+                Inpe = "102030855",
                 Phone = "0522990505", AddressLine = "3, rue des Orangers, Racine",
                 City = "Casablanca", DeliveryPreference = ReportDeliveryPreference.Courier,
                 SendPartialReports = true, DiscountPercent = 10m, Notes = DemoMarker

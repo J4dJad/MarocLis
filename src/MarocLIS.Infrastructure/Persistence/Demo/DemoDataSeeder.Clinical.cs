@@ -581,13 +581,28 @@ public sealed partial class DemoDataSeeder
         {
             samples = await SamplesAsync();
 
+            // A retention already over cannot be chosen when a tube is shelved (Sample_KeepUntilInPast):
+            // such a tube is shelved until today, as it was on its day, and its date is then set back,
+            // so the purge list has its expired tube.
+            var shelvedUntil = clock.Today.AddDays(Math.Max(plan.KeepUntilDays, 0));
+
             foreach (var sample in samples.Where(s => s.StorageLocation is null
                                                       && s.Status is SampleStatus.Received or SampleStatus.InAnalysis))
             {
-                Check(await AsAsync<SampleWorkflowService, Result>(DemoActor.Technician,
+                var shelved = Check(await AsAsync<SampleWorkflowService, Result>(DemoActor.Technician,
                           s => s.MoveToStorageAsync(sample.Id, "Sérothèque — réfrigérateur S1", position,
-                                                    clock.Today.AddDays(plan.KeepUntilDays), ct), ct),
+                                                    shelvedUntil, ct), ct),
                       $"{step} — sérothèque");
+
+                if (shelved && plan.KeepUntilDays < 0)
+                {
+                    var expired = clock.Today.AddDays(plan.KeepUntilDays);
+                    await WriteAsync(async db =>
+                    {
+                        var tube = await db.Samples.IgnoreQueryFilters().FirstAsync(x => x.Id == sample.Id, ct);
+                        tube.KeepUntil = expired;
+                    }, ct);
+                }
             }
         }
 

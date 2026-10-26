@@ -1,6 +1,8 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Licensing;
 using MarocLIS.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -122,6 +124,8 @@ public sealed partial class DemoDataSeeder(
                 return [.. _problems];
             }
 
+            await EvaluateLicenceAsync(ct);
+
             if (!await ResolveSiteAndAdministratorAsync(ct)) return [.. _problems];
 
             await RunSectionAsync("Utilisateurs", SeedUsersAsync, ct);
@@ -166,6 +170,30 @@ public sealed partial class DemoDataSeeder(
         }
 
         return [.. _problems];
+    }
+
+    /// <summary>
+    /// Evaluates the licence before the first step when nobody has yet. The seeder runs at start-up,
+    /// before the workstation's or the web host's first evaluation: the status was still pending —
+    /// read-only — and a licensed laboratory's demonstration was refused its files, its site
+    /// settings and its analysers at every start, never completed.
+    /// </summary>
+    private async Task EvaluateLicenceAsync(CancellationToken ct)
+    {
+        using var scope = NewScope();
+        var holder = scope.ServiceProvider.GetService<LicenceStatusHolder>();
+        var licence = scope.ServiceProvider.GetService<LicenceService>();
+        if (holder is null || licence is null || holder.Current.State != LicenceState.Pending) return;
+
+        try
+        {
+            await licence.RefreshAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Left pending: the steps the licence keeps are then refused and listed, as before.
+            logger?.LogWarning(ex, "The licence could not be evaluated before the demonstration data.");
+        }
     }
 
     private async Task RunSectionAsync(string name, Func<CancellationToken, Task> section,
