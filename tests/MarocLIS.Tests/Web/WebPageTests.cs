@@ -57,11 +57,11 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void AScreenOfTheMenu_SaysItIsNotYetInTheWebVersion()
     {
-        SignIn(AppLanguage.French, Permissions.Steering.View);
+        SignIn(AppLanguage.French, Permissions.Relations.View);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "steering"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "prescriberstats"));
 
-        page.Find("h1").TextContent.Should().Contain("Pilotage");
+        page.Find("h1").TextContent.Should().Contain("Statistiques prescripteurs");
         page.Find("[data-state=unavailable]").TextContent.Should()
             .Contain("Cet écran n'est pas encore disponible dans la version Web. Utilisez la version Windows.");
         _auditor.Events.Should().BeEmpty();
@@ -135,6 +135,8 @@ public sealed class WebPageTests : BunitContext
     [InlineData("bankreconciliation", "Rapprochement bancaire")]
     [InlineData("cashforecast", "Prévision de trésorerie")]
     [InlineData("costmargin", "Coût de revient et marge")]
+    [InlineData("statistics", "Statistiques d'activité")]
+    [InlineData("steering", "Pilotage")]
     public void ThePurchasingScreens_TypedWithoutTheRight_AreRefused(string key, string title)
     {
         SignIn(AppLanguage.French, Permissions.Samples.Collect);
@@ -144,6 +146,19 @@ public sealed class WebPageTests : BunitContext
         page.FindAll($"[data-screen={key}]").Should().BeEmpty();
         page.Find("[data-state=refused]").TextContent.Should().Contain("Vous n'avez pas le droit");
         page.Find("h1").TextContent.Should().NotContain(title, "a screen refused is not named");
+    }
+
+    [Fact]
+    public void TheHome_LeadsToTheDashboard_TheScreenTheWorkstationOpensOn()
+    {
+        SignIn(AppLanguage.French, Permissions.Billing.View);
+
+        var home = Render<Home>();
+
+        var link = home.Find("[data-action=open-dashboard]");
+        link.GetAttribute("href").Should().Be("ecran/dashboard");
+        link.TextContent.Should().Contain("Tableau de bord");
+        home.Find("h1").TextContent.Should().Contain("Bienvenue, Nadia", "the home keeps the session's facts");
     }
 
     [Fact]
@@ -175,9 +190,9 @@ public sealed class WebPageTests : BunitContext
     [Fact]
     public void TheArabicPlaceholder_IsInArabic()
     {
-        SignIn(AppLanguage.Arabic, Permissions.Steering.View);
+        SignIn(AppLanguage.Arabic, Permissions.Relations.View);
 
-        var page = Render<Screen>(p => p.Add(x => x.Key, "steering"));
+        var page = Render<Screen>(p => p.Add(x => x.Key, "prescriberstats"));
 
         page.Find("[data-state=unavailable]").TextContent.Should().Contain("نسخة الويب");
         Services.GetRequiredService<WebTexts>().Direction.Should().Be("rtl");

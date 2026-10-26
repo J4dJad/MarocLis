@@ -120,6 +120,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheDashboard_IsEveryonesAndTheStatisticsAndSteering_AreInTheMenu_ByTheirRights()
+    {
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().Contain("dashboard").And.NotContain(["statistics", "steering"]);
+
+        var statistician = Keys(WebMenu.Build(new User(permissions: Permissions.Statistics.View), FullStatus())).ToList();
+        statistician.Should().Contain(["dashboard", "statistics"]).And.NotContain("steering");
+
+        var director = Keys(WebMenu.Build(new User(permissions: Permissions.Steering.View), FullStatus())).ToList();
+        director.Should().Contain(["dashboard", "steering", "costmargin"]).And.NotContain("statistics");
+    }
+
+    [Fact]
     public void EveryScreen_LinksToItsPlaceholder_WithTheShellsIcon()
     {
         var items = WebMenu.Build(new User(permissions: [.. Permissions.All]), FullStatus()).SelectMany(g => g.Items).ToList();
