@@ -634,6 +634,17 @@ public sealed class ReportRegisterView : LocalizedView
 
     // ---- Tabs ---------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Opens on a tab by its name, before the screen loads: the dashboard's « Comptes rendus à
+    /// émettre » opens « À émettre » (DashboardScreenRules.TabOf). An unknown name keeps the default.
+    /// </summary>
+    public void OpenOnTab(string name)
+    {
+        if (!Enum.TryParse<ReportTab>(name, ignoreCase: true, out var tab) || !Enum.IsDefined(tab)) return;
+        _tab = tab;
+        ShowTab();
+    }
+
     private async Task SelectTabAsync(ReportTab tab)
     {
         if (_tab == tab) return;

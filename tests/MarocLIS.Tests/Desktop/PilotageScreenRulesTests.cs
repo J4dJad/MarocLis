@@ -265,6 +265,26 @@ public sealed class PilotageScreenRulesTests
         board.Pending.Should().OnlyContain(a => DashboardScreenRules.TabOf(a.Metric) == null);
     }
 
+    /// <summary>
+    /// The workstation's dashboard opens a figure on the tab the rule names, as the web does: its
+    /// « Comptes rendus à émettre » opened the reports on « Émis ». The views cannot be built off
+    /// Windows, so their source is read.
+    /// </summary>
+    [Fact]
+    public void The_workstation_dashboard_opens_the_reports_to_issue_on_their_tab_like_the_web()
+    {
+        var views = Path.Combine(MarocLIS.Tests.Web.WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Desktop", "Views");
+        var dashboard = File.ReadAllText(Path.Combine(views, "DashboardView.cs"));
+        var reports = File.ReadAllText(Path.Combine(views, "ReportRegisterView.cs"));
+
+        dashboard.Should().Contain("DashboardScreenRules.TabOf(metric)").And.Contain("view.OpenOnTab(tab)");
+        reports.Should().Contain("public void OpenOnTab(string name)").And.Contain("Enum.TryParse<ReportTab>(name");
+        Enum.TryParse<ReportTab>(DashboardScreenRules.TabOf(DashboardScreenRules.Board(Snapshot(), new User(true, [.. Permissions.All]), Text, Fr)
+                                     .Steps.Single(s => s.Metric.LabelKey == "Dashboard.ReportsToRelease").Metric), out var tab)
+            .Should().BeTrue();
+        tab.Should().Be(ReportTab.ToIssue);
+    }
+
     [Fact]
     public void A_cashier_sees_only_the_figures_of_their_rights_and_no_way_to_a_screen_they_may_not_open()
     {

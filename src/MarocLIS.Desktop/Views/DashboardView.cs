@@ -667,15 +667,15 @@ public sealed class DashboardView : LocalizedView
                 Margin = new Padding(0),
                 UseMnemonic = false
             };
-            link.LinkClicked += async (_, _) => await OpenAsync(key);
+            link.LinkClicked += async (_, _) => await OpenAsync(key, metric);
             tile.Controls.Add(link, 0, 2);
 
             tile.Cursor = Cursors.Hand;
-            tile.Click += async (_, _) => await OpenAsync(key);
+            tile.Click += async (_, _) => await OpenAsync(key, metric);
             foreach (var label in (Label[])[caption, value])
             {
                 label.Cursor = Cursors.Hand;
-                label.Click += async (_, _) => await OpenAsync(key);
+                label.Click += async (_, _) => await OpenAsync(key, metric);
             }
         }
 
@@ -808,7 +808,7 @@ public sealed class DashboardView : LocalizedView
             action.Height = 28;
             action.Anchor = AnchorStyles.Right;
             action.Margin = new Padding(UiTheme.Gutter, 0, 0, 0);
-            action.Click += async (_, _) => await OpenAsync(key);
+            action.Click += async (_, _) => await OpenAsync(key, alert.Metric);
             _alerts.Controls.Add(action, 3, row);
         }
     }
@@ -827,9 +827,17 @@ public sealed class DashboardView : LocalizedView
     /// highlighted entry, the breadcrumb and F1 follow as if the operator had clicked the menu;
     /// otherwise — the entry folded away in its group — straight through the navigation service.
     /// </summary>
-    private async Task OpenAsync(string key)
+    private async Task OpenAsync(string key, DashboardMetric? metric = null)
     {
         if (!CanOpen(key) || !Targets.TryGetValue(key, out var open)) return;
+
+        // A figure counted on a tab other than the screen's first opens that tab, as on the web:
+        // « Comptes rendus à émettre » opened the reports on those already issued.
+        if (metric is not null && DashboardScreenRules.TabOf(metric) is { } tab && key == "reports")
+        {
+            await _navigation.NavigateToAsync<ReportRegisterView>(view => view.OpenOnTab(tab));
+            return;
+        }
 
         if (FindForm() is { } shell && FindMenuEntry(shell, key) is { CanSelect: true } entry)
         {
