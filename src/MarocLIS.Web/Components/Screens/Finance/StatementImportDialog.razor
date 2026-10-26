@@ -1,0 +1,316 @@
+@using System.Globalization
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject ILogger<StatementImportDialog> Logger
+
+@*
+    « Importer un relevé », the workstation's BankStatementImportDialog: the bank's file sent by the
+    browser, its columns picked against the file itself, every line shown with what the import will
+    do with it (new, already imported, unreadable), and nothing written until the operator confirms.
+    The import is offered only for the mapping the preview on screen was read with
+    (BankReconciliationScreenRules.CanImport); TreasuryService reads, classifies and imports.
+*@
+<Modal Name="statement-import" Title="@Title" Hint="@Texts["Finance.Dialog.StatementImport"]" Large="true" OnCancel="CancelAsync">
+    <ChildContent>
+        <div class="file-pick">
+            <label class="btn btn-secondary @(_busy ? "is-disabled" : null)" data-action="statement-pick-file">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FolderOpen" />
+                @Texts["Web.TreasuryChooseFile"]
+                <InputFile class="file-input" accept="@BankReconciliationScreenRules.FileAccept" disabled="@_busy" OnChange="PickAsync" />
+            </label>
+            <span class="small muted cell-wrap" data-state="file">@(_fileName ?? $"{Texts["Treasury.CsvFiles"]} ({BankReconciliationScreenRules.FileAccept})")</span>
+        </div>
+        <FieldMessage Refusal="_fileRefusal" Field="@BankReconciliationScreenRules.FileField" />
+
+        @if (_content is not null)
+        {
+            var m = _form;
+            <div class="import-mapping" data-state="mapping">
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.Delimiter"]</span>
+                    <select class="input" data-field="import-delimiter" value="@m.Delimiter" @onchange="e => Change(() => m.Delimiter = Int(e))">
+                        @for (var i = 0; i < BankReconciliationScreenRules.DelimiterChoices.Count; i++)
+                        {
+                            var choice = BankReconciliationScreenRules.DelimiterChoices[i];
+                            <option value="@i" selected="@(i == m.Delimiter)">@(choice.IsKey ? Texts[choice.Text] : choice.Text)</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.SkipLines"]</span>
+                    <input class="input mono num" type="number" dir="ltr" min="0" max="@BankReconciliationScreenRules.MaximumSkipLines" data-field="import-skip"
+                           value="@m.SkipLines" @onchange="e => Change(() => m.SkipLines = Int(e))" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.DateFormat"]</span>
+                    <input class="input mono" type="text" dir="ltr" autocomplete="off" maxlength="@BankReconciliationScreenRules.DateFormatMaxLength" data-field="import-date-format"
+                           value="@m.DateFormat" @onchange="e => Change(() => m.DateFormat = e.Value as string)" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.DecimalSeparator"]</span>
+                    <select class="input" data-field="import-decimal" value="@m.DecimalSeparator" @onchange="e => Change(() => m.DecimalSeparator = Int(e))">
+                        @for (var i = 0; i < BankReconciliationScreenRules.DecimalChoices.Count; i++)
+                        {
+                            var choice = BankReconciliationScreenRules.DecimalChoices[i];
+                            <option value="@i" selected="@(i == m.DecimalSeparator)">@(choice.IsKey ? Texts[choice.Text] : choice.Text)</option>
+                        }
+                    </select>
+                </label>
+                <label class="check import-header">
+                    <input type="checkbox" checked="@m.HasHeader" data-field="import-header" @onchange="e => Change(() => m.HasHeader = e.Value is true)" />
+                    @Texts["Treasury.HasHeader"]
+                </label>
+                @foreach (var (key, field, get, set) in Columns(m))
+                {
+                    <label class="field">
+                        <span class="field-label">@Texts[key]</span>
+                        <input class="input mono num" type="number" dir="ltr" min="0" max="@BankReconciliationScreenRules.MaximumColumn" data-field="@field"
+                               value="@get()" @onchange="e => Change(() => set(Int(e)))" />
+                    </label>
+                }
+                <div class="import-preview-button">
+                    <ActionButton Key="Action.Preview" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Eye" Disabled="_busy" OnClick="PreviewAsync" />
+                </div>
+            </div>
+            <p class="small muted" data-state="import-notice">@Texts["Treasury.ImportNotice"]</p>
+
+            @if (_preview is { } preview)
+            {
+                var width = BankReconciliationScreenRules.RawWidth(preview);
+                <div class="table-scroll import-raw">
+                    <table class="grid" data-grid="raw">
+                        <thead>
+                            <tr>
+                                @for (var c = 1; c <= width; c++)
+                                {
+                                    <th class="mono" dir="ltr">@c.ToString(CultureInfo.InvariantCulture)</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in preview.RawRows)
+                            {
+                                <tr>
+                                    @for (var c = 0; c < width; c++)
+                                    {
+                                        var cell = c < row.Count ? row[c] : string.Empty;
+                                        <td class="small"><span class="cell-wrap" title="@cell">@cell</span></td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-scroll import-parsed">
+                    <table class="grid" data-grid="parsed">
+                        <thead>
+                            <tr>
+                                <th class="num">@Texts["Treasury.FileLine"]</th>
+                                <th>@Texts["Field.Date"]</th>
+                                <th>@Texts["Treasury.ValueDate"]</th>
+                                <th>@Texts["Treasury.Label"]</th>
+                                <th>@Texts["Payment.Reference"]</th>
+                                <th class="num">@Texts["Payment.Amount"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in preview.Lines)
+                            {
+                                var l = line.Line;
+                                <tr class="@RowClass(BankReconciliationScreenRules.LineInk(line))" data-row="@l.LineNumber" data-status="@line.Status">
+                                    <td class="num mono small">@l.LineNumber.ToString(CultureInfo.InvariantCulture)</td>
+                                    <td class="mono nowrap small" dir="ltr">@(l.OperationDate is { } d ? BankReconciliationScreenRules.Date(d) : "?")</td>
+                                    <td class="mono nowrap small" dir="ltr">@(l.ValueDate is { } v ? BankReconciliationScreenRules.Date(v) : null)</td>
+                                    <td><span class="list-name" title="@l.Label">@l.Label</span></td>
+                                    <td class="mono small" dir="ltr"><span class="cell-wrap">@l.Reference</span></td>
+                                    <td class="num nowrap">@(l.Amount is { } a ? Mad(a) : "?")</td>
+                                    <td class="small"><span class="cell-wrap">@Texts[BankReconciliationScreenRules.LineStatusKey(line)]</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        @if (_refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_summary is { } summary)
+        {
+            <span class="footer-status small @(summary.Critical ? "critical" : "muted")" data-state="import-summary" title="@summary.Text">@summary.Text</span>
+        }
+        <ActionButton Key="Action.Cancel" OnClick="CancelAsync" />
+        <ActionButton Key="Action.Import" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Disabled="@(!CanImport || _busy)" OnClick="AskImportAsync" />
+    </Footer>
+</Modal>
+
+@if (_askInvalid is { } question)
+{
+    <ConfirmPrompt Title="@Texts["Action.Import"]" Message="@question" OnYes="ImportAsync" OnNo="() => _askInvalid = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public BankAccountRow Account { get; set; } = default!;
+
+    /// <summary>The import done: what it brought in, said by the screen.</summary>
+    [Parameter] public EventCallback<string> OnImported { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private StatementMappingForm _form = new();
+    private byte[]? _content;
+    private string? _fileName;
+    private ImportPreview? _preview;
+    private BankStatementCsvMapping? _previewed;
+    private ImportSummaryLine? _summary;
+    private FieldRefusal? _fileRefusal;
+    private string? _refusal, _askInvalid;
+    private bool _busy;
+
+    private string Title => _fileName is null
+        ? Texts["Treasury.ImportStatement"].TrimEnd('…', '.', ' ') + $" — {Account.Display}"
+        : BankReconciliationScreenRules.ImportTitle(Account, _fileName, Texts.T);
+
+    private bool CanImport => BankReconciliationScreenRules.CanImport(_preview, _previewed, BankReconciliationScreenRules.Mapping(_form));
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private static string? RowClass(TreasuryInk ink) => ink switch
+    {
+        TreasuryInk.Critical => "critical",
+        TreasuryInk.Muted => "is-muted",
+        _ => null
+    };
+
+    private static int Int(ChangeEventArgs e) =>
+        int.TryParse(e.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : 0;
+
+    private static IEnumerable<(string Key, string Field, Func<int> Get, Action<int> Set)> Columns(StatementMappingForm m) =>
+    [
+        ("Web.TreasuryDateColumn", "import-date", () => m.DateColumn, v => m.DateColumn = v),
+        ("Web.TreasuryValueDateColumn", "import-value-date", () => m.ValueDateColumn, v => m.ValueDateColumn = v),
+        ("Web.TreasuryLabelColumn", "import-label", () => m.LabelColumn, v => m.LabelColumn = v),
+        ("Web.TreasuryReferenceColumn", "import-reference", () => m.ReferenceColumn, v => m.ReferenceColumn = v),
+        ("Web.TreasuryAmountColumn", "import-amount", () => m.AmountColumn, v => m.AmountColumn = v),
+        ("Web.TreasuryDebitColumn", "import-debit", () => m.DebitColumn, v => m.DebitColumn = v),
+        ("Web.TreasuryCreditColumn", "import-credit", () => m.CreditColumn, v => m.CreditColumn = v)
+    ];
+
+    protected override void OnInitialized() =>
+        _form = BankReconciliationScreenRules.MappingForm(BankStatementCsvMapping.FromJson(Account.CsvMapping));
+
+    /// <summary>A box changed: the preview on screen no longer says what an import would do, until it is redone.</summary>
+    private void Change(Action set)
+    {
+        set();
+        if (_previewed is null || BankReconciliationScreenRules.Mapping(_form) == _previewed) return;
+        _previewed = null;
+        _summary = new ImportSummaryLine(Texts["Treasury.PreviewOutdated"], true);
+    }
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy) return;
+        _refusal = null;
+        _fileRefusal = BankReconciliationScreenRules.CheckFile(e.File.Size);
+        if (_fileRefusal is not null) return;
+
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: BankReconciliationScreenRules.MaximumFileBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _content = buffer.ToArray();
+            _fileName = e.File.Name;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            Logger.LogWarning(ex, "Reading a bank statement sent by the browser failed.");
+            _refusal = $"{Texts["Documents.FileUnreadable"]} {ex.Message}";
+            return;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await PreviewAsync();
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (_busy || _content is null) return;
+        _busy = true;
+        try
+        {
+            var mapping = BankReconciliationScreenRules.Mapping(_form);
+            _previewed = null;
+            var (accountId, content) = (Account.Id, _content);
+            var result = await Scopes.RunAsync<TreasuryService, Result<ImportPreview>>(s => s.PreviewImportAsync(accountId, content, mapping));
+            if (result.IsFailure)
+            {
+                _refusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            _refusal = null;
+            _preview = result.Value;
+            _summary = BankReconciliationScreenRules.ImportSummary(_preview, mapping, Texts.Describe, Texts.T, Mad);
+            // A box changed while the preview was being read: it is already out of date.
+            _previewed = BankReconciliationScreenRules.Mapping(_form) == mapping ? mapping : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Previewing a bank statement failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task AskImportAsync()
+    {
+        if (!CanImport || _preview is null) return Task.CompletedTask;
+        _askInvalid = BankReconciliationScreenRules.ImportWithInvalidQuestion(_preview, Texts.T);
+        return _askInvalid is null ? ImportAsync() : Task.CompletedTask;
+    }
+
+    private async Task ImportAsync()
+    {
+        _askInvalid = null;
+        if (_busy || !CanImport || _content is null || _previewed is null) return;
+        _busy = true;
+        try
+        {
+            var (accountId, content, name, mapping) = (Account.Id, _content, _fileName, _previewed);
+            var imported = await Scopes.RunAsync<TreasuryService, Result<ImportResult>>(s => s.ImportAsync(accountId, content, name, mapping));
+            if (imported.IsFailure)
+            {
+                _refusal = Texts.Describe(imported.Errors);
+                return;
+            }
+
+            await OnImported.InvokeAsync(BankReconciliationScreenRules.Imported(imported.Value, Texts.T));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Importing a bank statement failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelAsync() => OnCancel.InvokeAsync();
+}

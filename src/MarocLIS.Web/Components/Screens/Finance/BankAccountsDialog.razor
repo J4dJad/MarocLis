@@ -1,0 +1,219 @@
+@using System.Globalization
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Treasury
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<BankAccountsDialog> Logger
+
+@*
+    « Comptes bancaires », the workstation's BankAccountsDialog and BankAccountEditor: the site's
+    accounts — bank, label, RIB, accounting account, last statement balance and line — declared,
+    corrected and closed. The account typed is refused box by box (BankReconciliationScreenRules.Check,
+    then TreasuryService's own refusals next to the box they name).
+*@
+@if (_form is null)
+{
+    <Modal Name="bank-accounts" Title="@Texts["Treasury.BankAccounts"]" Hint="@Texts["Finance.Dialog.BankAccounts"]" Large="true" OnCancel="CloseAsync">
+        <ChildContent>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="bank-accounts">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Treasury.BankName"]</th>
+                            <th>@Texts["Treasury.Rib"]</th>
+                            <th>@Texts["Treasury.AccountingAccount"]</th>
+                            <th class="num">@Texts["Treasury.StatementBalance"]</th>
+                            <th>@Texts["Treasury.LastLine"]</th>
+                            <th>@Texts["Field.Active"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _rows)
+                        {
+                            <tr class="@(a.Id == _selectedId ? "is-selected" : null) @(a.IsActive ? null : "is-tone-muted")" data-row="@a.Label"
+                                @onclick="() => _selectedId = a.Id" @ondblclick="() => Edit(a)">
+                                <td>
+                                    <span class="list-name strong" title="@a.BankName">@a.BankName</span>
+                                    <span class="cell-sub cell-wrap" title="@Texts["Treasury.AccountLabel"]">@a.Label</span>
+                                </td>
+                                <td class="mono small" dir="ltr"><span class="cell-wrap">@a.Rib</span></td>
+                                <td class="mono small" dir="ltr">@a.AccountingAccount</td>
+                                <td class="num nowrap">@Mad(a.StatementBalanceMad)</td>
+                                <td class="mono nowrap small" dir="ltr">@BankReconciliationScreenRules.LastLine(a)</td>
+                                <td class="small">@Texts[a.IsActive ? "Action.Yes" : "Action.No"]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-account">@Texts["Treasury.NoBankAccount"]</p>
+                }
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Edit" Class="modal-footer-start" Disabled="@(Selected is null)" OnClick="() => Edit(Selected)" />
+            <ActionButton Key="Action.Close" OnClick="CloseAsync" />
+            <ActionButton Key="Action.New" Primary="true" OnClick="() => Edit(null)" />
+        </Footer>
+    </Modal>
+}
+else
+{
+    var form = _form;
+    <Modal Name="bank-account" Title="@(form.Id is null ? Texts["Treasury.BankAccount"] : $"{Texts["Treasury.BankAccount"]} — {form.BankName} — {form.Label}")"
+           Hint="@Texts["Finance.Dialog.BankAccount"]" Wide="true" OnCancel="BackToList">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.BankName"]</span>
+                    <input class="input @Refused(BankReconciliationScreenRules.BankNameField)" type="text" autocomplete="off" maxlength="@BankAccount.NameMaxLength"
+                           data-field="@BankReconciliationScreenRules.BankNameField" title="@form.BankName" @bind="form.BankName" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@BankReconciliationScreenRules.BankNameField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.AccountLabel"]</span>
+                    <input class="input @Refused(BankReconciliationScreenRules.LabelField)" type="text" autocomplete="off" maxlength="@BankAccount.NameMaxLength"
+                           data-field="@BankReconciliationScreenRules.LabelField" title="@form.Label" @bind="form.Label" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@BankReconciliationScreenRules.LabelField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.Rib"]</span>
+                    <input class="input mono @Refused(BankReconciliationScreenRules.RibField)" type="text" dir="ltr" autocomplete="off" maxlength="@BankReconciliationScreenRules.RibMaxLength"
+                           data-field="@BankReconciliationScreenRules.RibField" @bind="form.Rib" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@BankReconciliationScreenRules.RibField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.AccountingAccount"]</span>
+                    <input class="input mono @Refused(BankReconciliationScreenRules.AccountingField)" type="text" dir="ltr" autocomplete="off" maxlength="@BankReconciliationScreenRules.AccountingMaxLength"
+                           data-field="@BankReconciliationScreenRules.AccountingField" @bind="form.AccountingAccount" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@BankReconciliationScreenRules.AccountingField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.OpeningBalance"]</span>
+                    <input class="input mono num @Refused(BankReconciliationScreenRules.OpeningField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                           maxlength="@TypedNumber.AmountMaxLength" data-field="@BankReconciliationScreenRules.OpeningField" @bind="form.Opening" @bind:event="oninput" />
+                    <FieldMessage Refusal="Shown" Field="@BankReconciliationScreenRules.OpeningField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.OpeningBalanceDate"]</span>
+                    <input class="input" type="date" data-field="bank-opening-date" @bind="form.OpeningDate" @bind:format="yyyy-MM-dd" />
+                </label>
+                <label class="check field-span-2">
+                    <input type="checkbox" data-field="bank-active" @bind="form.IsActive" />
+                    @Texts["Field.Active"]
+                </label>
+                <p class="field-span-2 small muted" data-state="bank-notice">@Texts["Treasury.BankAccountNotice"]</p>
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="BackToList" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="SaveAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<BankAccountRow> _rows = [];
+    private Guid? _selectedId;
+    private BankAccountForm? _form;
+    private FieldRefusal? _fieldRefusal;
+    private string? _refusal;
+    private bool _busy, _loaded;
+
+    private BankAccountRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private FieldRefusal? Shown => _fieldRefusal;
+
+    private string? Refused(string field) => _fieldRefusal?.Field == field ? "is-refused" : null;
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<TreasuryService, Result<IReadOnlyList<BankAccountRow>>>(s => s.GetBankAccountsAsync(true));
+            if (rows.IsFailure)
+            {
+                _refusal = Texts.Describe(rows.Errors);
+                return;
+            }
+
+            _rows = rows.Value;
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the bank accounts failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+    }
+
+    // Without a row, « Modifier » opened an empty form that saved a new account.
+    private void Edit(BankAccountRow? row)
+    {
+        _fieldRefusal = null;
+        _refusal = null;
+        _form = BankReconciliationScreenRules.AccountForm(row, Clock.Today, Texts.Culture);
+    }
+
+    private void BackToList()
+    {
+        _form = null;
+        _fieldRefusal = null;
+        _refusal = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || _form is null) return;
+        var (refused, input) = BankReconciliationScreenRules.Check(_form);
+        _fieldRefusal = refused;
+        _refusal = null;
+        if (input is null) return;
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<TreasuryService, Result<Guid>>(s => s.SaveBankAccountAsync(input));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                if (BankReconciliationScreenRules.FieldOf(error) is { } field) _fieldRefusal = FieldRefusal.Of(field, error);
+                else _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _selectedId = saved.Value;
+            BackToList();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a bank account failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

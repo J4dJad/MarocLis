@@ -171,6 +171,18 @@
             <MarocLIS.Web.Components.Screens.Finance.FixedAssets />
             break;
 
+        case ScreenDecision.Open when Key == "bankreconciliation":
+            <MarocLIS.Web.Components.Screens.Finance.BankReconciliation />
+            break;
+
+        case ScreenDecision.Open when Key == "cashforecast":
+            <MarocLIS.Web.Components.Screens.Finance.CashForecast />
+            break;
+
+        case ScreenDecision.Open when Key == "costmargin":
+            <MarocLIS.Web.Components.Screens.Finance.CostMargin />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

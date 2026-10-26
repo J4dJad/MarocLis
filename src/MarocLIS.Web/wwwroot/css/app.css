@@ -1210,3 +1210,47 @@ html[dir=rtl] :is([data-screen=accountingexport], [data-screen=accountingsetting
 [data-grid=assets] { font-size: 13px; }
 [data-grid=assets] :is(th, td) { padding-inline: 5px; }
 [data-grid=assets] :is(th, td):first-child { padding-inline-start: 8px; }
+/* A dialog's footer action that is not its answer (« Modifier »): at the start, apart from « Fermer » and the main one. */
+.modal-footer > .modal-footer-start { margin-inline-end: auto; }
+/* « Rapprochement bancaire »: the statement and the movements side by side taking the height, the balances under them. */
+.recon-account { min-inline-size: 240px; max-inline-size: 340px; }
+.screen-body > .recon-panes { flex: 1 1 auto; min-block-size: 300px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); }
+.recon-pane { display: flex; flex-direction: column; min-inline-size: 0; min-block-size: 0; overflow: hidden; }
+.recon-pane > .card-heading { margin: 0; padding-block: 10px; }
+.recon-pane > .table-scroll { flex: 1 1 auto; min-block-size: 0; max-block-size: none; border: 0; border-block-start: 1px solid var(--border); border-radius: 0; }
+.recon-pane > .table-scroll > .card-pad { border: 0; }
+.recon-balances { padding-block: 12px; }
+.recon-balance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 16px; margin: 0; }
+.recon-balance { min-inline-size: 0; }
+.recon-balance dt { color: var(--text-secondary); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.recon-balance dd { margin: 2px 0 0; font-size: 16px; text-align: start; }
+.recon-balance-notes { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 8px 0 0; }
+:is([data-grid=lines], [data-grid=movements]) { font-size: 13px; }
+:is([data-grid=lines], [data-grid=movements]) :is(th, td) { padding-inline: 6px; }
+[data-grid=lines] td:last-child { min-inline-size: 120px; }
+/* The statement's import: its columns picked in a grid of boxes, the file's raw lines and their reading under it. */
+.import-mapping { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 12px; align-items: end; margin-block: 12px 4px; }
+.import-mapping .field-label { white-space: normal; }
+.import-mapping .check { min-block-size: var(--control-height); }
+.import-raw { max-block-size: 150px; margin-block: 8px; }
+.import-parsed { max-block-size: 240px; }
+.import-raw .grid td { max-inline-size: 220px; }
+/* « Prévision de trésorerie »: the thirteen weeks in one table, the closing in bold, a week below zero in red. */
+.forecast-payday { inline-size: 80px; }
+[data-grid=weeks] { font-size: 13px; }
+[data-grid=weeks] :is(th, td) { padding-inline: 6px; }
+.forecast-notes { margin-block: 8px; }
+.forecast-notes dd { display: flex; flex-direction: column; gap: 2px; font-weight: 400; }
+/* « Coût de revient et marge »: the four key figures in a row, then the tables by tab. */
+.margin-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.margin-tile { background: var(--surface-raised); border: 1px solid var(--border); min-inline-size: 0; }
+.margin-tile-value { font-size: 17px; overflow-wrap: anywhere; }
+.margin-method { margin: 0; }
+[data-grid=margins] { font-size: 12.5px; }
+[data-grid=margins] :is(th, td) { padding-inline: 5px; }
+[data-grid=margins] th { white-space: normal; vertical-align: bottom; }
+:is([data-screen=bankreconciliation], [data-screen=cashforecast], [data-screen=costmargin],
+    [data-modal=bank-accounts], [data-modal=statement-import], [data-modal=forecast-items]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=bankreconciliation], [data-screen=cashforecast], [data-screen=costmargin],
+    [data-modal=bank-accounts], [data-modal=statement-import], [data-modal=forecast-items]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+@media (max-width: 1100px) { .screen-body > .recon-panes { grid-template-columns: minmax(0, 1fr); } .import-mapping { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

@@ -1,0 +1,320 @@
+@using System.Globalization
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<CostMargin> Logger
+
+@*
+    « Coût de revient et marge », the workstation's CostMarginView: over a period, per analysis, per
+    site and per analyser, what was charged (net, at the price frozen on the order) against the
+    reagents the tests consumed and the allocation of indirect costs — the four key figures above,
+    a group sold at a loss in red, tests without a known cost in orange. Each table is downloaded as
+    CSV; the allocation per test is set by whoever manages the costs. What is shown, offered and
+    refused is CostMarginScreenRules'; the computation is CostMarginService's.
+*@
+<div class="screen cost-margin" data-screen="costmargin">
+    @{ var actions = Actions; var result = _result; }
+    <div class="list-tools" data-tools="filters">
+        <div class="chips" role="group">
+            @foreach (var preset in Enum.GetValues<PeriodPreset>())
+            {
+                <button type="button" class="chip @(preset == _preset ? "is-pressed" : null)" aria-pressed="@(preset == _preset ? "true" : "false")"
+                        data-filter="@preset" @onclick="() => ChooseAsync(preset)">@Texts[CostMarginScreenRules.PresetKey(preset)]</button>
+            }
+        </div>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.From"]</span>
+            <input class="input input-date @Refused(CostMarginScreenRules.PeriodField)" type="date" data-field="margin-from"
+                   value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="FromChanged" />
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.To"]</span>
+            <input class="input input-date @Refused(CostMarginScreenRules.PeriodField)" type="date" data-field="@CostMarginScreenRules.PeriodField"
+                   value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="ToChanged" />
+        </label>
+        <FieldMessage Refusal="_refusal" Field="@CostMarginScreenRules.PeriodField" />
+        @if (result is not null)
+        {
+            var heading = CostMarginScreenRules.Heading(result, Texts.T);
+            <span class="list-tools-end muted small list-name" data-state="heading" title="@heading">@heading</span>
+        }
+    </div>
+
+    <div class="screen-body">
+        @if (result is not null)
+        {
+            <div class="margin-tiles" data-state="tiles">
+                @foreach (var tile in CostMarginScreenRules.Tiles(result, Texts.T, Mad, Texts.Culture))
+                {
+                    <div class="tile margin-tile" data-tile="@tile.CaptionKey">
+                        <span class="field-label">@Texts[tile.CaptionKey]</span>
+                        <span class="tile-value margin-tile-value @StockTones.Ink(tile.Ink)" title="@tile.Value">@tile.Value</span>
+                    </div>
+                }
+            </div>
+        }
+        <p class="small muted margin-method" data-state="method">@Texts["Steering.CostMethod"]</p>
+
+        <section class="card card-flush card-fill" data-card="margins">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<MarginTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => _tab = tab">
+                        @Texts[CostMarginScreenRules.TabKey(tab)]
+                        @if (result is not null)
+                        {
+                            <span class="pill pill-waiting">@CostMarginScreenRules.Rows(result, tab).Count</span>
+                        }
+                    </button>
+                }
+            </div>
+            <div class="table-scroll">
+                <table class="grid" data-grid="margins">
+                    <thead>
+                        <tr>
+                            @foreach (var column in CostMarginScreenRules.Columns)
+                            {
+                                <th class="@(CostMarginScreenRules.IsNumeric(column) ? "num" : null)" data-column="@column">@Texts[CostMarginScreenRules.ColumnKey(column)]</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in CostMarginScreenRules.Rows(result, _tab))
+                        {
+                            var cells = CostMarginScreenRules.Cells(row, Mad, Texts.Culture);
+                            var loss = CostMarginScreenRules.IsLoss(row);
+                            <tr class="@(loss ? "margin-loss" : null)" data-row="@row.Code" data-loss="@(loss ? "true" : "false")">
+                                @for (var c = 0; c < cells.Count; c++)
+                                {
+                                    var column = CostMarginScreenRules.Columns[c];
+                                    var warn = column == "withoutCost" && CostMarginScreenRules.WarnsWithoutCost(row);
+                                    <td class="@Cell(column, loss, warn)" dir="@(column == "code" ? "ltr" : null)">
+                                        @if (column == "name")
+                                        {
+                                            <span class="list-name" title="@cells[c]">@cells[c]</span>
+                                        }
+                                        else
+                                        {
+                                            @cells[c]
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (result is not null && CostMarginScreenRules.Rows(result, _tab).Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["App.NoData"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+            <ActionButton Key="Steering.Allocation" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Wallet" Hidden="@(!actions.Allocation)" Disabled="_busy" OnClick="AskAllocationAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Statistics.Compute" Primary="true" Disabled="@(!actions.Compute || _busy)" OnClick="LoadAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@if (_allocation is not null)
+{
+    <Modal Name="margin-allocation" Title="@Texts["Steering.Allocation"].TrimEnd('…', '.', ' ')" Hint="@Texts["Steering.AllocationHelp"]" OnCancel="CloseAllocation">
+        <ChildContent>
+            <label class="field">
+                <span class="field-label">@Texts["Steering.AllocationPerTest"]</span>
+                <input class="input mono num input-amount @Refused(CostMarginScreenRules.AllocationField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.AmountMaxLength" data-field="@CostMarginScreenRules.AllocationField" @bind="_allocation" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="@CostMarginScreenRules.AllocationField" />
+            </label>
+            @if (_dialogRefusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="CloseAllocation" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="SaveAllocationAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private PeriodPreset _preset = PeriodPreset.ThisMonth;
+    private DateOnly _from, _to;
+    private MarginTab _tab = MarginTab.ByAnalysis;
+    private MarginAnalysis? _result;
+    private FieldRefusal? _refusal;
+    private string? _allocation, _dialogRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private CostMarginActions Actions => CostMarginScreenRules.Actions(Context.User.Has, _result);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    private static string Cell(string column, bool loss, bool warn) =>
+        string.Join(' ', new[]
+        {
+            CostMarginScreenRules.IsNumeric(column) ? "num nowrap" : null,
+            column == "code" ? "mono small" : null,
+            column == "margin" || column == "marginPercent" ? "strong" : null,
+            loss ? "critical" : warn ? "abnormal strong" : null
+        }.Where(c => c is not null));
+
+    protected override Task OnInitializedAsync()
+    {
+        (_from, _to) = CostMarginScreenRules.Range(_preset, Clock.Today)!.Value;
+        return LoadAsync();
+    }
+
+    private Task ChooseAsync(PeriodPreset preset)
+    {
+        _preset = preset;
+        if (CostMarginScreenRules.Range(preset, Clock.Today) is not { } range) return Task.CompletedTask;
+        (_from, _to) = range;
+        return LoadAsync();
+    }
+
+    // A date typed is a period of one's own: the chip « Personnalisée » takes over, as at the workstation.
+    private void FromChanged(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)) return;
+        _from = from;
+        _preset = PeriodPreset.Custom;
+    }
+
+    private void ToChanged(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to)) return;
+        _to = to;
+        _preset = PeriodPreset.Custom;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (from, to) = (_from, _to);
+            var result = await Scopes.RunAsync<CostMarginService, Result<MarginAnalysis>>(s => s.GetAsync(from, to));
+            if (result.IsFailure)
+            {
+                var error = result.FirstError;
+                if (CostMarginScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _status = null;
+            _result = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing cost and margin failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CsvAsync()
+    {
+        if (!Actions.Export || _result is not { } result) return;
+        var csv = CostMarginScreenRules.Csv(CostMarginScreenRules.Rows(result, _tab), Texts.T, Mad, Texts.Culture);
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        var name = CostMarginScreenRules.FileName(result, _tab);
+        await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+        _status = (Texts.T("Web.StockDownloaded", name), "muted");
+    }
+
+    private async Task AskAllocationAsync()
+    {
+        if (!Actions.Allocation || _busy) return;
+        try
+        {
+            var current = await Scopes.RunAsync<CostMarginService, Result<CostSettings>>(s => s.GetSettingsAsync());
+            if (current.IsFailure)
+            {
+                _status = (Texts.Describe(current.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _dialogRefusal = null;
+            _allocation = CostMarginScreenRules.AllocationText(current.Value, Texts.Culture);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the cost settings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task SaveAllocationAsync()
+    {
+        if (_busy) return;
+        var (refused, settings) = CostMarginScreenRules.Check(_allocation);
+        _refusal = refused;
+        _dialogRefusal = null;
+        if (settings is null) return;
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<CostMarginService, Result>(s => s.SaveSettingsAsync(settings));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                if (CostMarginScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _dialogRefusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _allocation = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving the cost settings failed.");
+            _dialogRefusal = Texts["Message.UnexpectedError"];
+            return;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+        _status = (Texts["Message.Saved"], "normal");
+    }
+
+    private void CloseAllocation()
+    {
+        _allocation = null;
+        _refusal = null;
+        _dialogRefusal = null;
+    }
+}

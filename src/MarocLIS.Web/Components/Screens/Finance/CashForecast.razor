@@ -1,0 +1,189 @@
+@using System.Globalization
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject ILogger<CashForecast> Logger
+
+@*
+    « Prévision de trésorerie », the workstation's CashForecastView: the next thirteen weeks from
+    today, week by week — the bank balances it opens on, what the payers should pay on the batches
+    they have, the counter's takings when asked for, the supplier invoices falling due, the
+    salaries, the flows entered by hand — and the balance each week closes on, a week below zero in
+    red. Under it, what it opens on and what it leaves out on purpose. The flows entered by hand are
+    kept in their own dialog; the table is downloaded as CSV. What is shown and offered is
+    CashForecastScreenRules'; the forecast is TreasuryService's.
+*@
+<div class="screen cash-forecast" data-screen="cashforecast">
+    @{ var actions = Actions; var forecast = _forecast; }
+    <div class="list-tools" data-tools="filters">
+        <label class="check">
+            <input type="checkbox" checked="@_form.IncludePatientReceipts" data-field="forecast-patients" @onchange="e => OptionAsync(() => _form.IncludePatientReceipts = e.Value is true)" />
+            @Texts["Treasury.IncludePatients"]
+        </label>
+        <label class="check">
+            <input type="checkbox" checked="@_form.IncludeOverduePayerReceipts" data-field="forecast-overdue" @onchange="e => OptionAsync(() => _form.IncludeOverduePayerReceipts = e.Value is true)" />
+            @Texts["Treasury.IncludeOverdue"]
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Treasury.PayDay"]</span>
+            <input class="input mono num forecast-payday" type="number" dir="ltr" min="0" max="@CashForecastScreenRules.PayrollDayMaximum" data-field="forecast-payday"
+                   value="@_form.PayrollDay" @onchange="PayDayChangedAsync" />
+        </label>
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        @if (forecast is not null)
+        {
+            var lowest = CashForecastScreenRules.LowestClosing(forecast, Texts.T, Mad);
+            <span class="list-tools-end small strong @(lowest.Critical ? "critical" : "muted")" data-state="lowest" title="@lowest.Text">@lowest.Text</span>
+        }
+    </div>
+
+    <div class="screen-body">
+        <section class="card card-flush" data-card="weeks">
+            <div class="card-heading card-pad">
+                <h2 class="card-title">@Texts["Finance.ForecastWeeks"]</h2>
+                @if (forecast is not null)
+                {
+                    <span class="muted small mono" dir="ltr" data-state="horizon">@CashForecastScreenRules.Date(forecast.From) → @CashForecastScreenRules.Date(forecast.To)</span>
+                }
+            </div>
+            <div class="table-scroll forecast-scroll">
+                <table class="grid" data-grid="weeks">
+                    <thead>
+                        <tr>
+                            @{ var headers = CashForecastScreenRules.Headers(Texts.T); }
+                            <th class="num">@headers[0]</th>
+                            <th>@headers[1]<span class="cell-sub">@headers[2]</span></th>
+                            @for (var h = 3; h < headers.Count; h++)
+                            {
+                                <th class="num">@headers[h]</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var w in forecast?.Weeks ?? [])
+                        {
+                            var shortfall = CashForecastScreenRules.IsShortfall(w);
+                            var amounts = CashForecastScreenRules.Amounts(w);
+                            <tr class="@(shortfall ? "stock-alarm" : null)" data-row="@w.Number" data-shortfall="@(shortfall ? "true" : "false")">
+                                <td class="num mono">@w.Number.ToString(CultureInfo.InvariantCulture)</td>
+                                <td class="mono nowrap small" dir="ltr">
+                                    @CashForecastScreenRules.Date(w.Start)
+                                    <span class="cell-sub">@CashForecastScreenRules.Date(w.End)</span>
+                                </td>
+                                @for (var a = 0; a < amounts.Count; a++)
+                                {
+                                    var last = a == amounts.Count - 1;
+                                    <td class="num nowrap small @(last ? "strong" : null) @(last && shortfall ? "critical" : null)">@Mad(amounts[a])</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        @if (forecast is not null)
+        {
+            <section class="card" data-card="assumptions">
+                <h2 class="card-title">@Texts["Finance.ForecastAssumptions"]</h2>
+                <dl class="facts facts-wide forecast-notes">
+                    <dt>@Texts["Treasury.Opening"]</dt>
+                    <dd data-state="openings">
+                        @foreach (var opening in CashForecastScreenRules.Openings(forecast, Texts.T, Mad))
+                        {
+                            <span class="forecast-opening">@opening</span>
+                        }
+                    </dd>
+                </dl>
+                <p class="small" data-state="notes">@CashForecastScreenRules.Notes(forecast, Texts.T, Mad)</p>
+                <p class="small muted" data-state="method">@Texts["Treasury.ForecastMethod"]</p>
+            </section>
+        }
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Treasury.Csv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSpreadsheet" Text="@Texts["Web.TreasuryCsv"]" Disabled="@(!actions.Csv || _busy)" OnClick="CsvAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Treasury.ForecastItems" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Repeat" Disabled="@(!actions.Items || _busy)" OnClick="() => _items = true" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@if (_items)
+{
+    <ForecastItemsDialog CanManage="actions.ManageRight" OnClose="ItemsClosedAsync" />
+}
+
+@code {
+    private readonly CashForecastForm _form = new();
+    private CashForecastResult? _forecast;
+    private (string Text, string Tone)? _status;
+    private bool _busy, _items;
+
+    private CashForecastActions Actions => CashForecastScreenRules.Actions(Context.User.Has, _forecast, null);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var options = CashForecastScreenRules.Options(_form);
+            var result = await Scopes.RunAsync<TreasuryService, Result<CashForecastResult>>(s => s.GetForecastAsync(options));
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _forecast = result.Value;
+            _status = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing the cash forecast failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task OptionAsync(Action set)
+    {
+        set();
+        return LoadAsync();
+    }
+
+    private Task PayDayChangedAsync(ChangeEventArgs e)
+    {
+        _form.PayrollDay = int.TryParse(e.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var day)
+            ? Math.Clamp(day, 0, CashForecastScreenRules.PayrollDayMaximum)
+            : 0;
+        return LoadAsync();
+    }
+
+    private async Task CsvAsync()
+    {
+        if (!Actions.Csv || _forecast is not { } forecast) return;
+        var name = CashForecastScreenRules.FileName(forecast);
+        await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", CashForecastScreenRules.Csv(forecast, Texts.T));
+        _status = (Texts.T("Web.StockDownloaded", name), "muted");
+    }
+
+    private Task ItemsClosedAsync()
+    {
+        _items = false;
+        return LoadAsync();
+    }
+}

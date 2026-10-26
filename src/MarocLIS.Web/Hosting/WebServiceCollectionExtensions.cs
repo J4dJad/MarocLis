@@ -137,6 +137,9 @@ public static class WebServiceCollectionExtensions
         // period across the sites, the settings of the export, the register and its instruments.
         services.AddScoped<Application.Accounting.IAccountingQueries, AccountingQueries>();
         services.AddScoped<Application.Assets.IFixedAssetQueries, FixedAssetQueries>();
+        // « Coût de revient et marge »: the tests of the period, their reagents and the analysers' contracts.
+        // (« Rapprochement bancaire » and « Prévision de trésorerie » read ITreasuryQueries, registered above.)
+        services.AddScoped<Application.Steering.ICostQueries, CostQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

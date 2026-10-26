@@ -1,0 +1,566 @@
+@using System.Globalization
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Treasury
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<BankReconciliation> Logger
+
+@*
+    « Rapprochement bancaire », the workstation's BankReconciliationView: one account over a period,
+    the statement's lines on one side, the movements the application recorded and no line holds yet
+    on the other, and the balances under them. The automatic match takes only what is certain; the
+    rest is matched — one line with one or several ticked movements, a difference explained by a
+    reason —, justified, or undone by hand. A statement is imported from a file the browser sends,
+    its columns picked against its preview; a whole import read wrong is withdrawn. What is shown,
+    offered and refused is BankReconciliationScreenRules'; every step goes through TreasuryService.
+*@
+<div class="screen bank-reconciliation" data-screen="bankreconciliation">
+    @{ var actions = Actions; var line = SelectedLine; var data = _data; }
+    <div class="list-tools" data-tools="filters">
+        <label class="field-inline">
+            <span class="field-label">@Texts["Treasury.BankAccount"]</span>
+            <select class="input recon-account" data-field="bank-account" title="@SelectedAccount?.Display" @onchange="AccountChangedAsync">
+                @foreach (var account in _accounts)
+                {
+                    <option value="@account.Id" selected="@(account.Id == _accountId)">@account.Display</option>
+                }
+            </select>
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.From"]</span>
+            <input class="input input-date" type="date" data-field="recon-from" value="@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="FromChangedAsync" />
+        </label>
+        <label class="field-inline">
+            <span class="field-label">@Texts["Field.To"]</span>
+            <input class="input input-date" type="date" data-field="recon-to" value="@_to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="ToChangedAsync" />
+        </label>
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_openOnly ? "is-pressed" : null)" aria-pressed="@(_openOnly ? "true" : "false")"
+                    data-filter="open" @onclick="ToggleOpenOnly">@BankReconciliationScreenRules.OpenOnlyChip(data, Texts.T)</button>
+        </div>
+        <FieldMessage Refusal="_periodRefusal" Field="recon-to" />
+    </div>
+
+    <div class="screen-body">
+        @if (_loaded && _accounts.Count == 0)
+        {
+            <p class="message is-warning" data-state="no-account">@Texts["Treasury.NoBankAccount"]</p>
+        }
+        <div class="recon-panes">
+            <section class="card card-flush recon-pane" data-card="lines">
+                <div class="card-heading card-pad">
+                    <h2 class="card-title">@Texts["Treasury.StatementLines"]</h2>
+                    <span class="muted small" data-state="line-count">@Texts.T("Web.TreasuryLineCount", BankReconciliationScreenRules.Visible(data, _openOnly).Count)</span>
+                </div>
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="lines">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Field.Date"]</th>
+                                <th>@Texts["Treasury.Label"]</th>
+                                <th class="num">@Texts["Payment.Amount"]</th>
+                                <th>@Texts["Field.Status"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in BankReconciliationScreenRules.Visible(data, _openOnly))
+                            {
+                                var status = BankReconciliationScreenRules.LineStatus(l, Texts.T, Mad);
+                                <tr class="@(l.Id == _lineId ? "is-selected" : null)" data-row="@l.Id" data-open="@(l.IsReconciled ? "false" : "true")" @onclick="() => SelectLine(l.Id)">
+                                    <td class="mono nowrap small" dir="ltr">@BankReconciliationScreenRules.Date(l.OperationDate)</td>
+                                    <td>
+                                        <span class="list-name" title="@l.Label">@l.Label</span>
+                                        @if (l.Reference is { Length: > 0 } reference)
+                                        {
+                                            <span class="cell-sub mono" dir="ltr" title="@Texts["Payment.Reference"]">@reference</span>
+                                        }
+                                    </td>
+                                    <td class="num nowrap strong @(l.AmountMad < 0m ? "abnormal" : null)">@Mad(l.AmountMad)</td>
+                                    <td class="small" title="@(l.MatchComment ?? status)">
+                                        @if (!l.IsReconciled)
+                                        {
+                                            <Pill Text="@StockLabel(status)" Tone="Warning" />
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-wrap @Ink(BankReconciliationScreenRules.LineInk(l))">@status</span>
+                                            @if (l.MatchComment is { Length: > 0 } comment)
+                                            {
+                                                <span class="cell-sub cell-wrap">@comment</span>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (data is not null && BankReconciliationScreenRules.Visible(data, _openOnly).Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="no-line">@Texts["Web.TreasuryNoLine"]</p>
+                    }
+                </div>
+            </section>
+
+            <section class="card card-flush recon-pane" data-card="movements">
+                <div class="card-heading card-pad">
+                    <h2 class="card-title">@Texts["Treasury.UnmatchedMovements"]</h2>
+                    <span class="muted small" data-state="ticked">@Texts.T("Web.TreasuryTicked", _ticked.Count, MovementsTotal)</span>
+                </div>
+                <div class="table-scroll">
+                    <table class="grid grid-select" data-grid="movements">
+                        <thead>
+                            <tr>
+                                <th class="col-check"><span class="sr-only">@Texts["Web.TreasuryTick"]</span></th>
+                                <th>@Texts["Field.Date"]</th>
+                                <th>@Texts["Treasury.MovementKind"]</th>
+                                <th>@Texts["Treasury.Label"]</th>
+                                <th class="num">@Texts["Payment.Amount"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in data?.UnmatchedMovements ?? [])
+                            {
+                                var id = BankReconciliationScreenRules.MovementId(m);
+                                var ticked = _ticked.Contains(id);
+                                var label = BankReconciliationScreenRules.MovementLabel(m, Texts.T);
+                                <tr class="@(ticked ? "is-selected" : null)" data-row="@id" @onclick="() => Toggle(id)">
+                                    <td class="col-check">
+                                        <input type="checkbox" checked="@ticked" aria-label="@label" data-tick="@id" @onclick:stopPropagation="true" @onchange="() => Toggle(id)" />
+                                    </td>
+                                    <td class="mono nowrap small" dir="ltr">@BankReconciliationScreenRules.Date(m.Date)</td>
+                                    <td class="small"><span class="cell-wrap">@Texts[BankReconciliationScreenRules.KindKey(m.Kind)]</span></td>
+                                    <td>
+                                        <span class="list-name" title="@label">@label</span>
+                                        @if (m.Reference is { Length: > 0 } reference)
+                                        {
+                                            <span class="cell-sub mono" dir="ltr" title="@Texts["Payment.Reference"]">@reference</span>
+                                        }
+                                    </td>
+                                    <td class="num nowrap strong @(m.AmountMad < 0m ? "abnormal" : null)">@Mad(m.AmountMad)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (data is { UnmatchedMovements.Count: 0 })
+                    {
+                        <p class="muted small card-pad" data-state="no-movement">@Texts["Web.TreasuryNoMovement"]</p>
+                    }
+                </div>
+            </section>
+        </div>
+
+        @if (data is not null)
+        {
+            var s = data.Summary;
+            <section class="card recon-balances" data-card="balances">
+                <dl class="recon-balance-grid">
+                    @foreach (var b in BankReconciliationScreenRules.Balances(s))
+                    {
+                        <div class="recon-balance" data-balance="@b.Key">
+                            <dt>@Texts[b.Key]</dt>
+                            <dd class="num strong">@Mad(b.Amount)</dd>
+                        </div>
+                    }
+                </dl>
+                <p class="small muted recon-balance-notes" data-state="balance-notes">
+                    <span>@BankReconciliationScreenRules.OpeningLine(s, Texts.T, Mad)</span>
+                    <span aria-hidden="true">·</span>
+                    <span>@BankReconciliationScreenRules.CountsLine(s, Texts.T)</span>
+                </p>
+            </section>
+        }
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="true">
+        <Secondary>
+            <ActionButton Key="Treasury.Match" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Merge" Title="@NoRight" Disabled="@(!actions.Match || _busy)" OnClick="AskMatchAsync" />
+            <ActionButton Key="Treasury.Justify" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePen" Title="@NoRight" Disabled="@(!actions.Justify || _busy)" OnClick="AskJustify" />
+            <ActionButton Key="Treasury.ImportStatement" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Title="@NoRight" Disabled="@(!actions.Import || _busy)" OnClick="AskImport" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Treasury.BankAccounts" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Landmark" Title="@NoRight" Disabled="@(!actions.Accounts || _busy)" OnClick="() => Open(Prompt.Accounts)" />
+            <ActionButton Key="Treasury.WithdrawImport" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileX" Title="@NoRight" Disabled="@(!actions.WithdrawImport || _busy)" OnClick="() => Open(Prompt.Withdraw)" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Treasury.Unmatch" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Undo2" Title="@NoRight" Disabled="@(!actions.Unmatch || _busy)" OnClick="() => Open(Prompt.Unmatch)" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Treasury.AutoMatch" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CheckCheck" Title="@NoRight" Disabled="@(!actions.AutoMatch || _busy)" OnClick="AutoMatchAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Accounts:
+        <BankAccountsDialog OnClose="AccountsClosedAsync" />
+        break;
+
+    case Prompt.Import when SelectedAccount is { } account:
+        <StatementImportDialog Account="account" OnImported="ImportedAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.MatchReason when _difference is { } difference:
+        <ReasonPrompt Title="@Texts["Treasury.Match"]" Prompt="@BankReconciliationScreenRules.MatchDifferencePrompt(difference, Texts.T, Mad)"
+                      MaxLength="BankReconciliationScreenRules.CommentMaxLength" OnConfirm="MatchAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Justify when line is { } l1:
+        <ReasonPrompt Title="@Texts["Treasury.Justify"]" Prompt="@BankReconciliationScreenRules.JustifyPrompt(l1, Texts.T, Mad)"
+                      MaxLength="BankReconciliationScreenRules.CommentMaxLength" OnConfirm="JustifyAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Unmatch when line is { IsReconciled: true } l2:
+        <ConfirmPrompt Title="@Texts["Treasury.Unmatch"]" Message="@BankReconciliationScreenRules.UnmatchQuestion(l2, Texts.T, Mad)"
+                       OnYes="UnmatchAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Withdraw when line is { } l3:
+        <ConfirmPrompt Title="@Texts["Treasury.WithdrawImport"]" Message="@BankReconciliationScreenRules.WithdrawQuestion(l3, Texts.T, Mad)"
+                       OnYes="WithdrawAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="recon-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full" data-state="recon-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Accounts, Import, MatchReason, Justify, Unmatch, Withdraw, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private IReadOnlyList<BankAccountRow> _accounts = [];
+    private Guid? _accountId;
+    private DateOnly _from, _to;
+    private bool _openOnly, _loaded;
+    private ReconciliationData? _data;
+    private Guid? _lineId;
+    private readonly HashSet<string> _ticked = new(StringComparer.Ordinal);
+    private FieldRefusal? _periodRefusal;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private decimal? _difference;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private BankAccountRow? SelectedAccount => _accounts.FirstOrDefault(a => a.Id == _accountId);
+
+    private StatementLineRow? SelectedLine => _data?.Lines.FirstOrDefault(l => l.Id == _lineId);
+
+    private IReadOnlyList<TreasuryMovement> TickedMovements =>
+        [.. (_data?.UnmatchedMovements ?? []).Where(m => _ticked.Contains(BankReconciliationScreenRules.MovementId(m)))];
+
+    private string MovementsTotal => Mad(TickedMovements.Sum(m => m.AmountMad));
+
+    private BankReconciliationActions Actions =>
+        BankReconciliationScreenRules.Actions(Context.User.Has, _data, SelectedLine, TickedMovements.Count);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    /// <summary>Why an action stays off for good: the workstation greys it for a user without the right to manage the treasury.</summary>
+    private string? NoRight => Actions.ManageRight ? null : Texts["Message.PermissionDenied"];
+
+    private static string StockLabel(string text) => MarocLIS.Application.Inventory.StockTones.Label(MarocLIS.Application.Inventory.StockTone.Warning, text);
+
+    private static string? Ink(TreasuryInk ink) => ink switch
+    {
+        TreasuryInk.Normal => "normal-ink",
+        TreasuryInk.Abnormal => "abnormal",
+        TreasuryInk.Critical => "critical",
+        TreasuryInk.Muted => "muted",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_from, _to) = BankReconciliationScreenRules.DefaultPeriod(Clock.Today);
+        await RunAsync(async () =>
+        {
+            await LoadAccountsAsync(null);
+            await LoadAsync();
+        });
+        _loaded = true;
+    }
+
+    private async Task LoadAccountsAsync(Guid? select)
+    {
+        var accounts = await Scopes.RunAsync<TreasuryService, Result<IReadOnlyList<BankAccountRow>>>(s => s.GetBankAccountsAsync(false));
+        if (accounts.IsFailure)
+        {
+            _status = (Texts.Describe(accounts.Errors), "critical");
+            return;
+        }
+
+        _accounts = accounts.Value;
+        _accountId = BankReconciliationScreenRules.Keep(_accounts, select ?? _accountId)?.Id;
+    }
+
+    /// <summary>The account's reconciliation over the period, the selected line kept — or the one that took its place.</summary>
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (_accountId is not { } accountId)
+            {
+                _data = null;
+                return;
+            }
+
+            _periodRefusal = null;
+            var (from, to) = (_from, _to);
+            var result = await Scopes.RunAsync<TreasuryService, Result<ReconciliationData>>(s => s.GetReconciliationAsync(accountId, from, to));
+            if (result.IsFailure)
+            {
+                if (result.FirstError.ResourceKey == "Treasury_PeriodInvalid") _periodRefusal = FieldRefusal.Of("recon-to", result.FirstError);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            var before = BankReconciliationScreenRules.Visible(_data, _openOnly).ToList();
+            var index = before.FindIndex(l => l.Id == _lineId);
+            _data = result.Value;
+            _lineId = BankReconciliationScreenRules.KeepLine(BankReconciliationScreenRules.Visible(_data, _openOnly), _lineId, index)?.Id;
+            var offered = _data.UnmatchedMovements.Select(BankReconciliationScreenRules.MovementId).ToHashSet(StringComparer.Ordinal);
+            _ticked.IntersectWith(offered);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the bank reconciliation failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task AccountChangedAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value as string, out var id)) return;
+        _accountId = id;
+        _lineId = null;
+        _ticked.Clear();
+        _data = null;
+        await LoadAsync();
+    }
+
+    private async Task FromChangedAsync(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)) return;
+        _from = from;
+        await LoadAsync();
+    }
+
+    private async Task ToChangedAsync(ChangeEventArgs e)
+    {
+        if (!DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var to)) return;
+        _to = to;
+        await LoadAsync();
+    }
+
+    private void ToggleOpenOnly()
+    {
+        var before = BankReconciliationScreenRules.Visible(_data, _openOnly).ToList();
+        var index = before.FindIndex(l => l.Id == _lineId);
+        _openOnly = !_openOnly;
+        _lineId = BankReconciliationScreenRules.KeepLine(BankReconciliationScreenRules.Visible(_data, _openOnly), _lineId, index)?.Id;
+    }
+
+    private void SelectLine(Guid id) => _lineId = id;
+
+    private void Toggle(string id)
+    {
+        if (!_ticked.Remove(id)) _ticked.Add(id);
+    }
+
+    // ---- The actions -----------------------------------------------------------------------------
+
+    private Task AutoMatchAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.AutoMatch || _accountId is not { } accountId) return;
+            var (from, to) = (_from, _to);
+            var matched = await Scopes.RunAsync<TreasuryService, Result<int>>(s => s.AutoMatchAsync(accountId, from, to));
+            if (matched.IsFailure)
+            {
+                Say(Texts["Treasury.AutoMatch"], Texts.Describe(matched.Errors));
+                return;
+            }
+
+            await LoadAsync();
+            Say(Texts["Treasury.AutoMatch"], Texts.T("Treasury.AutoMatched", matched.Value));
+        });
+
+    /// <summary>The ticked movements against the line: refused when one goes the other way, a reason asked when they leave a difference.</summary>
+    private Task AskMatchAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Match || SelectedLine is not { } line) return;
+            var check = BankReconciliationScreenRules.CheckMatch(line, TickedMovements);
+            if (check.RefusalKey is { } refused)
+            {
+                Say(Texts["Treasury.Match"], Texts[refused]);
+                return;
+            }
+
+            if (check.NeedsReason)
+            {
+                _difference = check.Difference;
+                Open(Prompt.MatchReason);
+                return;
+            }
+
+            await MatchCoreAsync(line, null);
+        });
+
+    private Task MatchAsync(string comment) =>
+        RunAsync(async () =>
+        {
+            if (SelectedLine is not { } line) return;
+            await MatchCoreAsync(line, comment);
+        });
+
+    private async Task MatchCoreAsync(StatementLineRow line, string? comment)
+    {
+        var movements = TickedMovements;
+        var lineId = line.Id;
+        var matched = await Scopes.RunAsync<TreasuryService, Result>(s => s.MatchAsync(lineId, movements, comment));
+        if (matched.IsFailure)
+        {
+            Say(Texts["Treasury.Match"], Texts.Describe(matched.Errors));
+            return;
+        }
+
+        ClosePrompt();
+        _ticked.Clear();
+        await LoadAsync();
+        _status = (Texts.T("Web.TreasuryMatched", line.Label), "normal");
+    }
+
+    private void AskJustify()
+    {
+        if (!Actions.Justify || _busy) return;
+        Open(Prompt.Justify);
+    }
+
+    private Task JustifyAsync(string comment) =>
+        RunAsync(async () =>
+        {
+            if (SelectedLine is not { IsReconciled: false } line) return;
+            var lineId = line.Id;
+            var justified = await Scopes.RunAsync<TreasuryService, Result>(s => s.JustifyAsync(lineId, comment));
+            if (justified.IsFailure)
+            {
+                Say(Texts["Treasury.Justify"], Texts.Describe(justified.Errors));
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            _status = (Texts.T("Web.TreasuryJustified", line.Label), "normal");
+        });
+
+    private Task UnmatchAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedLine is not { IsReconciled: true } line) return;
+            var lineId = line.Id;
+            var undone = await Scopes.RunAsync<TreasuryService, Result>(s => s.UnmatchAsync(lineId));
+            if (undone.IsFailure)
+            {
+                Say(Texts["Treasury.Unmatch"], Texts.Describe(undone.Errors));
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            _status = (Texts.T("Web.TreasuryUnmatched", line.Label), "normal");
+        });
+
+    private Task WithdrawAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedLine is not { } line) return;
+            var lineId = line.Id;
+            var withdrawn = await Scopes.RunAsync<TreasuryService, Result<int>>(s => s.WithdrawImportAsync(lineId));
+            if (withdrawn.IsFailure)
+            {
+                Say(Texts["Treasury.WithdrawImport"], Texts.Describe(withdrawn.Errors));
+                return;
+            }
+
+            await LoadAccountsAsync(_accountId);
+            await LoadAsync();
+            Say(Texts["Treasury.WithdrawImport"], Texts.T("Treasury.ImportWithdrawn", withdrawn.Value));
+        });
+
+    private void AskImport()
+    {
+        if (!Actions.Import || _busy) return;
+        if (SelectedAccount is null)
+        {
+            Say(Texts["Treasury.ImportStatement"], Texts["Treasury.NoBankAccount"]);
+            return;
+        }
+        Open(Prompt.Import);
+    }
+
+    private Task ImportedAsync(string message) =>
+        RunAsync(async () =>
+        {
+            await LoadAccountsAsync(_accountId);
+            await LoadAsync();
+            Say(Texts["Treasury.ImportStatement"], message);
+        });
+
+    private Task AccountsClosedAsync() =>
+        RunAsync(async () =>
+        {
+            ClosePrompt();
+            await LoadAccountsAsync(_accountId);
+            await LoadAsync();
+        });
+
+    // ---- Plumbing --------------------------------------------------------------------------------
+
+    private void Open(Prompt prompt) => _prompt = prompt;
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A bank reconciliation step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text)
+    {
+        _message = new Message(title, text);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _difference = null;
+    }
+}

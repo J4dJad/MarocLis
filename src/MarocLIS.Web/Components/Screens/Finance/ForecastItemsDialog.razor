@@ -1,0 +1,218 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Treasury
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Treasury
+@inject WebTexts Texts
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<ForecastItemsDialog> Logger
+
+@*
+    « Autres flux prévus », the workstation's ForecastItemsDialog and ForecastItemEditor: the flows
+    the forecast cannot read from the application — rent, leasing, CNSS and income tax paid over, a
+    loan — entered by hand, positive coming in, negative going out. Read by anyone who sees the
+    treasury; added and changed only with the right to manage it. The flow typed is refused box by
+    box (CashForecastScreenRules.Check, then TreasuryService's refusals).
+*@
+@if (_form is null)
+{
+    <Modal Name="forecast-items" Title="@Texts["Treasury.ForecastItems"].TrimEnd('…', '.', ' ')" Hint="@Texts["Finance.Dialog.ForecastItems"]" Large="true" OnCancel="CloseAsync">
+        <ChildContent>
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="forecast-items">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Treasury.Label"]</th>
+                            <th class="num">@Texts["Payment.Amount"]</th>
+                            <th>@Texts["Treasury.Recurrence"]</th>
+                            <th>@Texts["Treasury.StartDate"]</th>
+                            <th>@Texts["Treasury.EndDate"]</th>
+                            <th>@Texts["Field.Active"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _rows)
+                        {
+                            <tr class="@(item.Id == _selectedId ? "is-selected" : null) @(item.IsActive ? null : "is-tone-muted")" data-row="@item.Label"
+                                @onclick="() => _selectedId = item.Id" @ondblclick="() => Edit(item)">
+                                <td><span class="list-name" title="@item.Label">@item.Label</span></td>
+                                <td class="num nowrap strong @(item.AmountMad < 0m ? "abnormal" : null)">@Mad(item.AmountMad)</td>
+                                <td class="small">@Texts[CashForecastScreenRules.RecurrenceKey(item.Recurrence)]</td>
+                                <td class="mono nowrap small" dir="ltr">@CashForecastScreenRules.Date(item.StartDate)</td>
+                                <td class="mono nowrap small" dir="ltr">@(item.EndDate is { } end ? CashForecastScreenRules.Date(end) : "—")</td>
+                                <td class="small">@Texts[item.IsActive ? "Action.Yes" : "Action.No"]</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="no-item">@Texts["Web.TreasuryNoItem"]</p>
+                }
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Edit" Class="modal-footer-start" Title="@NoRight" Disabled="@(!CanManage || Selected is null)" OnClick="() => Edit(Selected)" />
+            <ActionButton Key="Action.Close" OnClick="CloseAsync" />
+            <ActionButton Key="Action.New" Primary="true" Title="@NoRight" Disabled="@(!CanManage)" OnClick="() => Edit(null)" />
+        </Footer>
+    </Modal>
+}
+else
+{
+    var form = _form;
+    <Modal Name="forecast-item" Title="@(form.Id is null ? Texts["Treasury.ForecastItem"] : $"{Texts["Treasury.ForecastItem"]} — {form.Label}")"
+           Hint="@Texts["Finance.Dialog.ForecastItem"]" Wide="true" OnCancel="BackToList">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.Label"]</span>
+                    <input class="input @Refused(CashForecastScreenRules.LabelField)" type="text" autocomplete="off" maxlength="@TreasuryForecastItem.LabelMaxLength"
+                           data-field="@CashForecastScreenRules.LabelField" title="@form.Label" @bind="form.Label" @bind:event="oninput" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@CashForecastScreenRules.LabelField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.SignedAmount"]</span>
+                    <input class="input mono num @Refused(CashForecastScreenRules.AmountField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                           maxlength="@TypedNumber.AmountMaxLength" data-field="@CashForecastScreenRules.AmountField" @bind="form.Amount" @bind:event="oninput" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@CashForecastScreenRules.AmountField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.Recurrence"]</span>
+                    <select class="input" data-field="item-recurrence" @bind="form.Recurrence">
+                        @foreach (var recurrence in CashForecastScreenRules.RecurrenceChoices)
+                        {
+                            <option value="@recurrence">@Texts[CashForecastScreenRules.RecurrenceKey(recurrence)]</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Treasury.StartDate"]</span>
+                    <input class="input" type="date" data-field="item-start" @bind="form.StartDate" @bind:format="yyyy-MM-dd" />
+                </label>
+                <div class="field">
+                    <label class="check">
+                        <input type="checkbox" data-field="item-has-end" @bind="form.HasEndDate" />
+                        @Texts["Treasury.EndDate"]
+                    </label>
+                    <input class="input @Refused(CashForecastScreenRules.EndField)" type="date" data-field="@CashForecastScreenRules.EndField" disabled="@(!form.HasEndDate)"
+                           aria-label="@Texts["Treasury.EndDate"]" @bind="form.EndDate" @bind:format="yyyy-MM-dd" />
+                    <FieldMessage Refusal="_fieldRefusal" Field="@CashForecastScreenRules.EndField" />
+                </div>
+                <label class="check item-active">
+                    <input type="checkbox" data-field="item-active" @bind="form.IsActive" />
+                    @Texts["Field.Active"]
+                </label>
+                <p class="field-span-2 small muted" data-state="item-notice">@Texts["Treasury.ForecastItemNotice"]</p>
+            </div>
+            @if (_refusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="BackToList" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="SaveAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    [Parameter] public bool CanManage { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private IReadOnlyList<ForecastItemRow> _rows = [];
+    private Guid? _selectedId;
+    private ForecastItemForm? _form;
+    private FieldRefusal? _fieldRefusal;
+    private string? _refusal;
+    private bool _busy, _loaded;
+
+    private ForecastItemRow? Selected => _rows.FirstOrDefault(r => r.Id == _selectedId);
+
+    private string? NoRight => CanManage ? null : Texts["Message.PermissionDenied"];
+
+    private string? Refused(string field) => _fieldRefusal?.Field == field ? "is-refused" : null;
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<TreasuryService, Result<IReadOnlyList<ForecastItemRow>>>(s => s.GetForecastItemsAsync());
+            if (rows.IsFailure)
+            {
+                _refusal = Texts.Describe(rows.Errors);
+                return;
+            }
+
+            _rows = rows.Value;
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the forecast items failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+    }
+
+    // Without a row, « Modifier » opened an empty form that saved a new flow; without the right, nothing opens.
+    private void Edit(ForecastItemRow? row)
+    {
+        if (!CanManage) return;
+        _fieldRefusal = null;
+        _refusal = null;
+        _form = CashForecastScreenRules.ItemForm(row, Clock.Today, Texts.Culture);
+    }
+
+    private void BackToList()
+    {
+        _form = null;
+        _fieldRefusal = null;
+        _refusal = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || _form is null) return;
+        var (refused, input) = CashForecastScreenRules.Check(_form);
+        _fieldRefusal = refused;
+        _refusal = null;
+        if (input is null) return;
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<TreasuryService, Result<Guid>>(s => s.SaveForecastItemAsync(input));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                if (CashForecastScreenRules.FieldOf(error) is { } field) _fieldRefusal = FieldRefusal.Of(field, error);
+                else _refusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            _selectedId = saved.Value;
+            BackToList();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a forecast item failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}
