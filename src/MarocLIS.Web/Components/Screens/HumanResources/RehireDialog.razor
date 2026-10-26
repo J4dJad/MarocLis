@@ -1,0 +1,55 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    A re-hire, the workstation's EmployeeRehireDialog: the day it starts, the day after the
+    departure at the earliest (DepartureRules.EarliestRehire, refused beside its date otherwise).
+*@
+<Modal Name="employee-rehire" Title="@($"{Texts["Personnel.Rehire"]} — {Employee}")" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Personnel.RehireDate"]</span>
+            <input class="input input-date @(Shown?.Field == DepartureRules.RehireDateField ? "is-refused" : null)" type="date"
+                   min="@DepartureRules.EarliestRehire(Exit).ToString("yyyy-MM-dd")" data-field="@DepartureRules.RehireDateField"
+                   @bind="_date" @bind:format="yyyy-MM-dd" />
+            <FieldMessage Refusal="Shown" Field="@DepartureRules.RehireDateField" />
+        </label>
+        <p class="message is-warning small text-full" data-state="rehire-notice">@Texts["Personnel.RehireNotice"]</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Employee { get; set; } = string.Empty;
+
+    /// <summary>The departure re-hired after.</summary>
+    [Parameter] public DateOnly Exit { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<DateOnly> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _date;
+    private FieldRefusal? _refusal;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    protected override void OnInitialized() => _date = DepartureRules.RehireDefault(Exit, Clock.Today);
+
+    private async Task SaveAsync()
+    {
+        _refusal = DepartureRules.CheckRehire(_date, Exit);
+        if (_refusal is null) await OnSave.InvokeAsync(_date);
+    }
+}

@@ -1,0 +1,172 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<PersonnelDeadlinesScreen> Logger
+
+@*
+    « Échéances RH », the workstation's PersonnelDeadlinesView: what falls due for the staff within
+    the horizon chosen — medical visits, vaccinations, contracts and trial periods ending,
+    habilitations to review, documents expiring — the overdue and the missing first, in the alarm's
+    colours, those within a month in the warning's. A line opens its file's documents, or the file
+    itself for whoever may edit it, in the same window as « Dossiers du personnel ». What is shown is
+    PersonnelDeadlineScreenRules'; the deadlines themselves, PersonnelService's.
+*@
+<div class="screen hrdeadlines" data-screen="hrdeadlines">
+    @{ var actions = Actions; var selected = Selected; }
+    <div class="list-tools">
+        <label class="field-inline">
+            <span class="small">@Texts["Web.DeadlineHorizon"]</span>
+            <select class="input" data-field="deadline-horizon" value="@_horizon" @onchange="HorizonChangedAsync">
+                @foreach (var days in PersonnelDeadlineScreenRules.Horizons)
+                {
+                    <option value="@days">@PersonnelDeadlineScreenRules.HorizonCaption(days, Texts.T)</option>
+                }
+            </select>
+        </label>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="hrdeadlines">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Field.Status"]</th>
+                            <th>@Texts["Deadline.DueOn"]</th>
+                            <th>@Texts["Personnel.Number"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Deadline.What"]</th>
+                            <th>@Texts["Deadline.Subject"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var ink = PersonnelDeadlineScreenRules.Ink(row, Today);
+                            <tr class="@(selected is not null && PersonnelDeadlineScreenRules.KeyOf(row) == PersonnelDeadlineScreenRules.KeyOf(selected) ? "is-selected" : null)"
+                                data-row="@row.Number" data-kind="@row.Kind" @onclick="() => _selectedKey = PersonnelDeadlineScreenRules.KeyOf(row)" @ondblclick="() => DoubleClick(row)">
+                                <td class="nowrap"><Pill Text="@PersonnelDeadlineScreenRules.State(row, Today, Texts.T)" Tone="@PersonnelDeadlineScreenRules.Tone(row, Today)" /></td>
+                                <td class="mono nowrap @HrTones.Due(ink)" dir="ltr">@PersonnelDeadlineScreenRules.Due(row)</td>
+                                <td class="mono nowrap" dir="ltr">@row.Number</td>
+                                <td>
+                                    <span class="list-name strong" title="@row.FullName">@row.FullName</span>
+                                    <span class="cell-sub cell-wrap">@Texts[$"EmployeeJob.{row.Job}"]</span>
+                                </td>
+                                <td><span class="list-name" title="@PersonnelDeadlineScreenRules.What(row, Texts.T)">@PersonnelDeadlineScreenRules.What(row, Texts.T)</span></td>
+                                <td class="small"><span class="list-name" title="@PersonnelDeadlineScreenRules.Subject(row, Texts.T)">@PersonnelDeadlineScreenRules.Subject(row, Texts.T)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts.T("Web.DeadlinesNone", _horizon)</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer muted" data-state="count">@PersonnelDeadlineScreenRules.Count(_rows, Texts.T)</p>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Personnel.Edit" Hidden="@(!MayManage)" Disabled="@(!actions.Edit || _busy)" OnClick="() => Open(selected, EmployeeFileTab.Identity)" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Personnel.Documents" Primary="true" Disabled="@(!actions.Documents || _busy)" OnClick="() => Open(selected, EmployeeFileTab.Documents)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@if (_fileId is { } fileId)
+{
+    <EmployeeFileDialog EmployeeId="fileId" StartTab="_fileTab" OnClose="FileClosedAsync" />
+}
+
+@code {
+    private IReadOnlyList<DeadlineRow> _rows = [];
+    private int _horizon = PersonnelDeadlineScreenRules.DefaultHorizon;
+    private (Guid, DeadlineKind, HabilitationActivity?, string?)? _selectedKey;
+    private bool _loaded, _busy;
+    private Guid? _fileId;
+    private EmployeeFileTab _fileTab;
+    private (string Text, string Tone)? _status;
+
+    private DateOnly Today => Clock.Today;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.Manage);
+
+    /// <summary>The deadline highlighted: the one clicked, kept across a reload, else the first.</summary>
+    private DeadlineRow? Selected =>
+        _rows.FirstOrDefault(r => _selectedKey is { } key && PersonnelDeadlineScreenRules.KeyOf(r) == key) ?? _rows.FirstOrDefault();
+
+    private (bool Documents, bool Edit) Actions => PersonnelDeadlineScreenRules.Actions(Selected, Context.User.Has);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var horizon = PersonnelDeadlineScreenRules.Horizon(_horizon);
+            var rows = await Scopes.RunAsync<PersonnelService, Result<IReadOnlyList<DeadlineRow>>>(s => s.GetDeadlinesAsync(horizon));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _status = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the personnel deadlines failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+            _loaded = true;
+        }
+    }
+
+    private async Task HorizonChangedAsync(ChangeEventArgs e)
+    {
+        _horizon = PersonnelDeadlineScreenRules.Horizon(int.TryParse(e.Value as string, out var days) ? days : 0);
+        await LoadAsync();
+    }
+
+    /// <summary>A double-click opens the documents, the usual answer to a deadline.</summary>
+    private void DoubleClick(DeadlineRow row)
+    {
+        _selectedKey = PersonnelDeadlineScreenRules.KeyOf(row);
+        Open(row, EmployeeFileTab.Documents);
+    }
+
+    private void Open(DeadlineRow? row, EmployeeFileTab tab)
+    {
+        if (_busy || row is null) return;
+        var actions = PersonnelDeadlineScreenRules.Actions(row, Context.User.Has);
+        if (tab == EmployeeFileTab.Documents ? !actions.Documents : !actions.Edit) return;
+        _fileTab = tab;
+        _fileId = row.EmployeeId;
+    }
+
+    /// <summary>The file closed: the deadlines read again when anything of it changed, the line kept selected.</summary>
+    private async Task FileClosedAsync(EmployeeFileClosed closed)
+    {
+        _fileId = null;
+        if (closed.Saved || closed.Changed) await LoadAsync();
+        if (closed.Saved) _status = (Texts["Personnel.Saved"], "normal");
+    }
+}

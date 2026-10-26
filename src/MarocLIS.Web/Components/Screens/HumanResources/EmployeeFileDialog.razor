@@ -1,0 +1,710 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@using MarocLIS.Domain.Patients
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<EmployeeFileDialog> Logger
+
+@*
+    A personnel file, the workstation's EmployeeEditorDialog and CredentialsDialog in one window:
+    the identity, the post, the contract and — for whoever holds the salary right — the pay, then
+    the file's documents. The personal data (CIN, CNSS number, address, family) are shown only to
+    whoever may edit files, as at the workstation where only they open the editor; the pay only to
+    whoever also holds the salary right. Opened from « Dossiers du personnel », « Échéances RH » and
+    the HR screens built on them. A refusal is said next to its box, on its tab (EmployeeFileRules).
+*@
+@if (_prompt == FilePrompt.None)
+{
+<Modal Name="employee-file" Title="@Title" Hint="@Texts[_tab == EmployeeFileTab.Documents ? "QualityHr.Hint.Credentials" : "QualityHr.Hint.Employee"]"
+       Large="true" OnCancel="CloseAsync">
+    <ChildContent>
+        @if (_failure is { Length: > 0 } failure)
+        {
+            <p class="message is-critical" role="alert" data-state="file-failure">@failure</p>
+        }
+        else if (!_loaded)
+        {
+            <p class="muted" data-state="loading">@Texts["Web.Loading"]</p>
+        }
+        else
+        {
+            <div class="tabs" role="tablist" data-tabs="employee-file">
+                @foreach (var tab in _tabs)
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" disabled="@(tab == EmployeeFileTab.Documents && _detail is null)"
+                            title="@(tab == EmployeeFileTab.Documents && _detail is null ? Texts["Web.HrDocumentsAfterSave"] : null)"
+                            @onclick="() => _tab = tab">@Texts[EmployeeFileRules.TabKey(tab)]</button>
+                }
+            </div>
+
+            <div class="tab-page employee-file-page" data-tab-page="@_tab">
+                @switch (_tab)
+                {
+                    case EmployeeFileTab.Identity:
+                        <div class="form-grid form-grid-3">
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.LastName"]</span>
+                                <input class="input @Refused(EmployeeFileRules.LastNameField)" type="text" autocomplete="off" maxlength="@EmployeeFileRules.NameMaxLength"
+                                       data-field="@EmployeeFileRules.LastNameField" title="@_form.LastName" @bind="_form.LastName" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.LastNameField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.FirstName"]</span>
+                                <input class="input @Refused(EmployeeFileRules.FirstNameField)" type="text" autocomplete="off" maxlength="@EmployeeFileRules.NameMaxLength"
+                                       data-field="@EmployeeFileRules.FirstNameField" title="@_form.FirstName" @bind="_form.FirstName" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.FirstNameField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.ArabicName"]</span>
+                                <input class="input" type="text" dir="rtl" lang="ar" autocomplete="off" maxlength="@EmployeeFileRules.ArabicNameMaxLength"
+                                       data-field="@EmployeeFileRules.ArabicNameField" title="@_form.ArabicName" @bind="_form.ArabicName" @bind:event="oninput" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Field.Gender"]</span>
+                                <select class="input" data-field="employee-gender" @bind="_form.Gender">
+                                    @foreach (var value in Enum.GetValues<Gender>())
+                                    {
+                                        <option value="@value">@Texts[$"Gender.{value}"]</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.BirthDate"]</span>
+                                <input class="input input-date" type="date" max="@Today.ToString("yyyy-MM-dd")" data-field="employee-birth-date"
+                                       @bind="_form.BirthDate" @bind:format="yyyy-MM-dd" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Cin"]</span>
+                                <input class="input mono @Refused(EmployeeFileRules.CinField)" type="text" dir="ltr" autocomplete="off" maxlength="@EmployeeFileRules.CinMaxLength"
+                                       data-field="@EmployeeFileRules.CinField" @bind="_form.Cin" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.CinField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Cnss"]</span>
+                                <input class="input mono @Refused(EmployeeFileRules.CnssField)" type="text" dir="ltr" inputmode="numeric" autocomplete="off" maxlength="@EmployeeFileRules.CnssMaxLength"
+                                       data-field="@EmployeeFileRules.CnssField" @bind="_form.Cnss" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.CnssField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.FamilyStatus"]</span>
+                                <select class="input" data-field="employee-family" @bind="_form.FamilyStatus">
+                                    @foreach (var value in Enum.GetValues<FamilyStatus>())
+                                    {
+                                        <option value="@value">@Texts[$"FamilyStatus.{value}"]</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Children"]</span>
+                                <input class="input num @Refused(EmployeeFileRules.ChildrenField)" type="number" min="0" max="@EmployeeFileRules.MaxChildren" dir="ltr"
+                                       data-field="@EmployeeFileRules.ChildrenField" @bind="_form.Children" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.ChildrenField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Field.Phone"]</span>
+                                <input class="input mono" type="tel" dir="ltr" autocomplete="off" maxlength="@EmployeeFileRules.PhoneMaxLength"
+                                       data-field="@EmployeeFileRules.PhoneField" @bind="_form.Phone" @bind:event="oninput" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Field.Email"]</span>
+                                <input class="input" type="email" dir="ltr" autocomplete="off" maxlength="@EmployeeFileRules.EmailMaxLength"
+                                       data-field="@EmployeeFileRules.EmailField" title="@_form.Email" @bind="_form.Email" @bind:event="oninput" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.City"]</span>
+                                <input class="input" type="text" autocomplete="off" maxlength="@EmployeeFileRules.CityMaxLength"
+                                       data-field="@EmployeeFileRules.CityField" title="@_form.City" @bind="_form.City" @bind:event="oninput" />
+                            </label>
+                            <label class="field field-span-3">
+                                <span class="field-label">@Texts["Personnel.Address"]</span>
+                                <input class="input" type="text" autocomplete="off" maxlength="@EmployeeFileRules.AddressMaxLength"
+                                       data-field="@EmployeeFileRules.AddressField" title="@_form.Address" @bind="_form.Address" @bind:event="oninput" />
+                            </label>
+                        </div>
+                        break;
+
+                    case EmployeeFileTab.Position:
+                        <div class="form-grid form-grid-3">
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Job"]</span>
+                                <select class="input" data-field="@EmployeeFileRules.JobField" value="@_form.Job" @onchange="JobChanged">
+                                    @foreach (var value in Enum.GetValues<EmployeeJob>())
+                                    {
+                                        <option value="@value">@Texts[$"EmployeeJob.{value}"]</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.JobTitle"]</span>
+                                <input class="input" type="text" autocomplete="off" maxlength="@EmployeeFileRules.JobTitleMaxLength"
+                                       data-field="@EmployeeFileRules.JobTitleField" title="@_form.JobTitle" @bind="_form.JobTitle" @bind:event="oninput" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Field.Department"]</span>
+                                <select class="input" data-field="employee-department" value="@(_form.DepartmentId?.ToString() ?? string.Empty)"
+                                        @onchange="e => _form.DepartmentId = Guid.TryParse(e.Value as string, out var id) ? id : null">
+                                    <option value="">—</option>
+                                    @foreach (var department in _lookups?.Departments ?? [])
+                                    {
+                                        <option value="@department.Id">@department.Label</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.LinkedUser"]</span>
+                                <select class="input @Refused(EmployeeFileRules.UserField)" data-field="@EmployeeFileRules.UserField" value="@(_form.UserId?.ToString() ?? string.Empty)"
+                                        @onchange="e => _form.UserId = Guid.TryParse(e.Value as string, out var id) ? id : null">
+                                    <option value="">—</option>
+                                    @foreach (var user in _lookups?.Users ?? [])
+                                    {
+                                        <option value="@user.UserId">@user.FullName (@user.UserName)</option>
+                                    }
+                                </select>
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.UserField" />
+                            </label>
+                            <label class="field field-check field-active">
+                                <input type="checkbox" data-field="employee-exposed" @bind="_form.Exposed" />
+                                <span>@Texts["Personnel.Exposed"]</span>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.ConfidentialityClause"]</span>
+                                <input class="input input-date" type="date" max="@Today.ToString("yyyy-MM-dd")" data-field="employee-clause"
+                                       @bind="_form.ConfidentialityClauseSignedOn" @bind:format="yyyy-MM-dd" />
+                            </label>
+                        </div>
+                        break;
+
+                    case EmployeeFileTab.Contract:
+                        <div class="form-grid form-grid-3">
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.ContractType"]</span>
+                                <select class="input" data-field="employee-contract-type" value="@_form.ContractType" @onchange="ContractChanged">
+                                    @foreach (var value in Enum.GetValues<ContractType>())
+                                    {
+                                        <option value="@value">@Texts[$"ContractType.{value}"]</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.HireDate"]</span>
+                                <input class="input input-date" type="date" data-field="@EmployeeFileRules.HireDateField" @bind="_form.HireDate" @bind:format="yyyy-MM-dd" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.ContractEnd"]</span>
+                                <input class="input input-date @Refused(EmployeeFileRules.ContractEndField)" type="date" data-field="@EmployeeFileRules.ContractEndField"
+                                       @bind="_form.ContractEndDate" @bind:format="yyyy-MM-dd" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.ContractEndField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.TrialEnd"]</span>
+                                <input class="input input-date @Refused(EmployeeFileRules.TrialEndField)" type="date" data-field="@EmployeeFileRules.TrialEndField"
+                                       @bind="_form.TrialPeriodEndDate" @bind:format="yyyy-MM-dd" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.TrialEndField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.WeeklyHours"]</span>
+                                <input class="input num @Refused(EmployeeFileRules.WeeklyHoursField)" type="number" min="0" max="@EmployeeFileRules.MaxWeeklyHours" step="0.25" dir="ltr"
+                                       data-field="@EmployeeFileRules.WeeklyHoursField" value="@_form.WeeklyHours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                       @onchange="WeeklyHoursChanged" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.WeeklyHoursField" />
+                            </label>
+                            @if (EmployeeFileRules.ShowsEndNotice(_form.ContractType))
+                            {
+                                <p class="message is-warning small text-full" data-state="contract-end-notice">@Texts["Personnel.ContractEndNotice"]</p>
+                            }
+                        </div>
+                        @if (!CanSeeSalary)
+                        {
+                            <p class="muted small text-full" data-state="salary-hidden">@Texts["Personnel.SalaryHidden"]</p>
+                        }
+                        break;
+
+                    case EmployeeFileTab.Pay:
+                        <div class="form-grid form-grid-3">
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.BaseSalary"]</span>
+                                <input class="input mono num @Refused(EmployeeFileRules.SalaryField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                                       maxlength="@EmployeeFileRules.SalaryMaxLength" data-field="@EmployeeFileRules.SalaryField" @bind="_form.Salary" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.SalaryField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Rib"]</span>
+                                <input class="input mono @Refused(EmployeeFileRules.RibField)" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                                       maxlength="@EmployeeFileRules.RibMaxLength" data-field="@EmployeeFileRules.RibField" title="@_form.Rib" @bind="_form.Rib" @bind:event="oninput" />
+                                <FieldMessage Refusal="Shown" Field="@EmployeeFileRules.RibField" />
+                            </label>
+                            <label class="field">
+                                <span class="field-label">@Texts["Personnel.Bank"]</span>
+                                <input class="input" type="text" autocomplete="off" maxlength="@EmployeeFileRules.BankMaxLength"
+                                       data-field="@EmployeeFileRules.BankField" title="@_form.Bank" @bind="_form.Bank" @bind:event="oninput" />
+                            </label>
+                        </div>
+                        break;
+
+                    case EmployeeFileTab.Documents when _detail is { } detail:
+                        <div class="table-scroll credential-scroll">
+                            <table class="grid grid-select" data-grid="credentials">
+                                <thead>
+                                    <tr>
+                                        <th>@Texts["Credential.Kind"]</th>
+                                        <th>@Texts["Credential.Title"]</th>
+                                        <th>@Texts["Credential.Reference"]</th>
+                                        <th>@Texts["Credential.IssuedBy"]</th>
+                                        <th>@Texts["Credential.ObtainedOn"]</th>
+                                        <th>@Texts["Credential.ExpiresOn"]</th>
+                                        <th>@Texts["Credential.Scan"]</th>
+                                        <th>@Texts["Field.Notes"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in detail.Credentials)
+                                    {
+                                        <tr class="@(c.CredentialId == SelectedCredential?.CredentialId ? "is-selected" : null) @HrTones.Credential(CredentialRules.IsAlarm(c, Today))"
+                                            data-row="@c.Title" @onclick="() => _credentialId = c.CredentialId" @ondblclick="() => CredentialDoubleClickAsync(c)">
+                                            <td class="small"><span class="list-name" title="@CredentialRules.Kind(c, Texts.T)">@CredentialRules.Kind(c, Texts.T)</span></td>
+                                            <td><span class="list-name strong" title="@c.Title">@c.Title</span></td>
+                                            <td class="mono small" dir="ltr"><span class="cell-wrap">@c.Reference</span></td>
+                                            <td class="small"><span class="list-name" title="@c.IssuedBy">@c.IssuedBy</span></td>
+                                            <td class="mono nowrap" dir="ltr">@PersonnelScreenRules.DateOrDash(c.ObtainedOn)</td>
+                                            <td class="mono nowrap" dir="ltr">@PersonnelScreenRules.DateOrDash(c.ExpiresOn)</td>
+                                            <td class="small nowrap" title="@c.FileName">@CredentialRules.Scan(c, Texts.T)</td>
+                                            <td class="small"><span class="list-name" title="@CredentialRules.Note(c, Texts.T)">@CredentialRules.Note(c, Texts.T)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            @if (detail.Credentials.Count == 0)
+                            {
+                                <p class="muted small card-pad" data-state="no-credential">@Texts["Web.HrNoCredential"]</p>
+                            }
+                        </div>
+                        break;
+                }
+            </div>
+        }
+        @if (_refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_tab == EmployeeFileTab.Documents && _detail is not null)
+        {
+            var actions = CredentialActions;
+            <span class="modal-footer-start credential-actions">
+                <ActionButton Key="Credential.Edit" Hidden="@(!MayEdit)" Disabled="@(!actions.Edit)" OnClick="() => AskCredential(SelectedCredential)" />
+                @if (MayEdit)
+                {
+                    <label class="btn btn-secondary @(actions.Attach ? null : "is-disabled")" data-action="Credential.Attach" aria-disabled="@(actions.Attach ? "false" : "true")">
+                        @Texts["Credential.Attach"]
+                        <InputFile class="file-input" accept="@CredentialRules.ScanAccept" disabled="@(!actions.Attach)" OnChange="PickScanAsync" />
+                    </label>
+                }
+                <ActionButton Key="Credential.OpenScan" Disabled="@(!actions.Open)" OnClick="OpenScanAsync" />
+                @if (MayEdit)
+                {
+                    <span class="action-bar-rule" aria-hidden="true"></span>
+                }
+                <ActionButton Key="Credential.Remove" Danger="true" Hidden="@(!MayEdit)" Disabled="@(!actions.Remove)" OnClick="AskRemove" />
+            </span>
+            <ActionButton Key="Action.Close" OnClick="CloseAsync" />
+            <ActionButton Key="Credential.Add" Primary="true" Hidden="@(!MayEdit)" Disabled="@(!actions.Add)" OnClick="() => AskCredential(null)" />
+        }
+        else
+        {
+            <ActionButton Key="@(MayEdit ? "Action.Cancel" : "Action.Close")" OnClick="CloseAsync" />
+            <ActionButton Key="Action.Save" Primary="true" Hidden="@(!MayEdit)" Disabled="@(!_loaded || _busy)" OnClick="SaveAsync" />
+        }
+    </Footer>
+</Modal>
+}
+else
+{
+    switch (_prompt)
+    {
+        case FilePrompt.Credential:
+            <CredentialEditor Existing="_credentialTarget" Employee="@EmployeeFileRules.Subtitle(_detail)" Refusal="@_promptRefusal" FieldRefusal="_promptField"
+                              Busy="_busy" OnSave="SaveCredentialAsync" OnCancel="ClosePrompt" />
+            break;
+
+        case FilePrompt.ReplaceScan when _credentialTarget is { } row:
+            <ConfirmPrompt Title="@Texts["Credential.Attach"]" Message="@Texts.T("Credential.ReplaceScanPrompt", row.FileName)"
+                           OnYes="AttachPickedAsync" OnNo="ClosePrompt" />
+            break;
+
+        case FilePrompt.RemoveCredential when _credentialTarget is { } row:
+            <ReasonPrompt Title="@Texts["Credential.Remove"]" Prompt="@Texts.T("Credential.RemovePrompt", row.Title)"
+                          MaxLength="CredentialRules.RemoveReasonMaxLength" OnConfirm="RemoveCredentialAsync" OnCancel="ClosePrompt" />
+            break;
+    }
+}
+
+@code {
+    /// <summary>The file opened; none for a new one.</summary>
+    [Parameter] public Guid? EmployeeId { get; set; }
+
+    /// <summary>The part opened first: the identity to edit the file, the documents to see its papers.</summary>
+    [Parameter] public EmployeeFileTab StartTab { get; set; } = EmployeeFileTab.Identity;
+
+    /// <summary>Closed: whether the file was saved, and whether anything of it changed (a document added counts).</summary>
+    [Parameter] public EventCallback<EmployeeFileClosed> OnClose { get; set; }
+
+    private enum FilePrompt { None, Credential, ReplaceScan, RemoveCredential }
+
+    private EmployeeDetail? _detail;
+    private FilePrompt _prompt;
+    private Guid? _credentialId;
+    private CredentialRow? _credentialTarget;
+    private (string Name, byte[] Content)? _picked;
+    private string? _promptRefusal;
+    private FieldRefusal? _promptField;
+    private PersonnelLookups? _lookups;
+    private EmployeeForm _form = new();
+    private IReadOnlyList<EmployeeFileTab> _tabs = [];
+    private EmployeeFileTab _tab;
+    private FieldRefusal? _fieldRefusal;
+    private string? _refusal, _failure;
+    private bool _loaded, _busy, _changed;
+
+    private DateOnly Today => Clock.Today;
+
+    /// <summary>The editor's parts: for whoever may edit files.</summary>
+    private bool MayEdit => Context.User.Has(Permissions.HumanResources.Manage);
+
+    /// <summary>The pay travels only with the salary right; a file opened says whether its reader holds it.</summary>
+    private bool CanSeeSalary => _detail?.CanSeeSalary ?? Context.User.Has(Permissions.HumanResources.Salary);
+
+    private string Title
+    {
+        get
+        {
+            var key = _tab == EmployeeFileTab.Documents ? "Personnel.Documents" : EmployeeFileRules.TitleKey(_detail is null && EmployeeId is null);
+            return EmployeeFileRules.Subtitle(_detail) is { } who ? $"{Texts[key]} — {who}" : Texts[key];
+        }
+    }
+
+    private FieldRefusal? Shown => _fieldRefusal;
+
+    private string? Refused(string field) => _fieldRefusal?.Field == field ? "is-refused" : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (EmployeeId is { } id)
+            {
+                var detail = await Scopes.RunAsync<PersonnelService, Result<EmployeeDetail>>(s => s.GetEmployeeAsync(id));
+                if (detail.IsFailure)
+                {
+                    _failure = Texts.Describe(detail.Errors);
+                    return;
+                }
+                _detail = detail.Value;
+            }
+
+            if (MayEdit)
+            {
+                var forId = EmployeeId;
+                var lookups = await Scopes.RunAsync<PersonnelService, Result<PersonnelLookups>>(s => s.GetLookupsAsync(forId));
+                if (lookups.IsFailure)
+                {
+                    _failure = Texts.Describe(lookups.Errors);
+                    return;
+                }
+                _lookups = lookups.Value;
+            }
+
+            _form = EmployeeFileRules.FormFor(_detail, Today);
+            // The pay tab follows the file's own answer: a file read without the right comes without its pay.
+            _tabs = [.. EmployeeFileRules.Tabs(Context.User.Has).Where(t => t != EmployeeFileTab.Pay || CanSeeSalary)];
+            _tab = _tabs.Contains(StartTab) && (StartTab != EmployeeFileTab.Documents || _detail is not null)
+                ? StartTab
+                : _tabs.FirstOrDefault();
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening a personnel file failed.");
+            _failure = Texts["Message.UnexpectedError"];
+        }
+    }
+
+    private void JobChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<EmployeeJob>(e.Value as string, out var job)) return;
+        _form.Job = job;
+        EmployeeFileRules.JobChanged(_form, isNew: _detail is null);
+    }
+
+    /// <summary>The hours as typed in the number box (a point for the decimals, whatever the language); kept when unreadable.</summary>
+    private void WeeklyHoursChanged(ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value as string, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var hours))
+            _form.WeeklyHours = hours;
+    }
+
+    private void ContractChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ContractType>(e.Value as string, out var type)) return;
+        _form.ContractType = type;
+        EmployeeFileRules.ContractChanged(_form, Today);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !MayEdit) return;
+        _refusal = null;
+        var (refused, request) = EmployeeFileRules.Check(_form, _detail?.Request.EmployeeId, CanSeeSalary);
+        if (refused is not null)
+        {
+            Refuse(refused);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<PersonnelService, Result<Guid>>(s => s.SaveEmployeeAsync(request!));
+            if (saved.IsFailure)
+            {
+                // The form stays open with what was typed: a refused CIN or RIB is corrected in place.
+                if (EmployeeFileRules.RefusalOf(saved.FirstError) is { } field) Refuse(field);
+                else
+                {
+                    _fieldRefusal = null;
+                    _refusal = Texts.Describe(saved.Errors);
+                }
+                return;
+            }
+
+            await OnClose.InvokeAsync(new EmployeeFileClosed(true, true));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a personnel file failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>A refusal beside its box, on the tab that holds it.</summary>
+    private void Refuse(FieldRefusal refusal)
+    {
+        _fieldRefusal = refusal;
+        var tab = EmployeeFileRules.TabOf(refusal.Field);
+        if (_tabs.Contains(tab)) _tab = tab;
+    }
+
+    // ---- The file's documents (the workstation's CredentialsDialog) --------------------------------
+
+    private Guid? FileId => _detail?.Request.EmployeeId;
+
+    /// <summary>The document highlighted: the one clicked, else the first.</summary>
+    private CredentialRow? SelectedCredential =>
+        _detail?.Credentials.FirstOrDefault(c => c.CredentialId == _credentialId) ?? _detail?.Credentials.FirstOrDefault();
+
+    private CredentialActions CredentialActions => CredentialRules.Actions(SelectedCredential, _busy, Context.User.Has);
+
+    /// <summary>A double-click corrects the document for whoever may, and otherwise opens its scan.</summary>
+    private Task CredentialDoubleClickAsync(CredentialRow row)
+    {
+        _credentialId = row.CredentialId;
+        if (CredentialActions.Edit) AskCredential(row);
+        else if (CredentialActions.Open) return OpenScanAsync();
+        return Task.CompletedTask;
+    }
+
+    private void AskCredential(CredentialRow? row)
+    {
+        if (!MayEdit || FileId is null) return;
+        _credentialTarget = row;
+        _promptRefusal = null;
+        _promptField = null;
+        _prompt = FilePrompt.Credential;
+    }
+
+    private async Task SaveCredentialAsync(CredentialRequest request)
+    {
+        if (_busy || FileId is not { } id) return;
+        _busy = true;
+        try
+        {
+            var target = _credentialTarget;
+            var saved = target is null
+                ? await Scopes.RunAsync<PersonnelService, Result>(s => s.AddCredentialAsync(id, request))
+                : await Scopes.RunAsync<PersonnelService, Result>(s => s.UpdateCredentialAsync(id, target.CredentialId, request));
+            if (saved.IsFailure)
+            {
+                _promptField = CredentialRules.RefusalOf(saved.FirstError);
+                _promptRefusal = _promptField is null ? Texts.Describe(saved.Errors) : null;
+                return;
+            }
+
+            _prompt = FilePrompt.None;
+            await DocumentsChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a document of a personnel file failed.");
+            _promptRefusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>A scan handed over by the browser: checked, read once, then the existing one replaced only once confirmed.</summary>
+    private async Task PickScanAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy || !MayEdit || SelectedCredential is not { } row) return;
+        _refusal = null;
+        if (CredentialRules.CheckScan(e.File.Name, e.File.Size) is { } refused)
+        {
+            _refusal = FieldMessage.Say(Texts, refused);
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: MarocLIS.Domain.HumanResources.CredentialFile.MaximumBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _picked = (e.File.Name, buffer.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or JSException)
+        {
+            Logger.LogWarning(ex, "Reading a scan from the browser failed.");
+            _refusal = Texts["Documents.FileUnreadable"];
+            return;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        _credentialTarget = row;
+        if (row.FileName is not null)
+        {
+            _prompt = FilePrompt.ReplaceScan;
+            return;
+        }
+        await AttachPickedAsync();
+    }
+
+    private async Task AttachPickedAsync()
+    {
+        _prompt = FilePrompt.None;
+        if (FileId is not { } id || _credentialTarget is not { } row || _picked is not { } picked) return;
+        _picked = null;
+        _busy = true;
+        try
+        {
+            var attached = await Scopes.RunAsync<PersonnelService, Result>(s => s.AttachCredentialFileAsync(id, row.CredentialId, picked.Name, picked.Content));
+            if (attached.IsFailure)
+            {
+                _refusal = Texts.Describe(attached.Errors);
+                return;
+            }
+            await DocumentsChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Attaching a scan to a personnel file failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The scan handed to the browser, which opens or saves it.</summary>
+    private async Task OpenScanAsync()
+    {
+        if (_busy || FileId is not { } id || SelectedCredential is not { FileName: not null } row) return;
+        _refusal = null;
+        _busy = true;
+        try
+        {
+            var file = await Scopes.RunAsync<PersonnelService, Result<CredentialFileContent>>(s => s.GetCredentialFileAsync(id, row.CredentialId));
+            if (file.IsFailure)
+            {
+                _refusal = Texts.Describe(file.Errors);
+                return;
+            }
+            await JS.InvokeVoidAsync("marocLis.download", file.Value.FileName, file.Value.ContentType, file.Value.Content);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Opening the scan of a personnel document failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskRemove()
+    {
+        if (!MayEdit || SelectedCredential is not { } row) return;
+        _credentialTarget = row;
+        _prompt = FilePrompt.RemoveCredential;
+    }
+
+    private async Task RemoveCredentialAsync(string reason)
+    {
+        _prompt = FilePrompt.None;
+        if (FileId is not { } id || _credentialTarget is not { } row) return;
+        _busy = true;
+        try
+        {
+            var removed = await Scopes.RunAsync<PersonnelService, Result>(s => s.RemoveCredentialAsync(id, row.CredentialId, reason));
+            if (removed.IsFailure)
+            {
+                _refusal = Texts.Describe(removed.Errors);
+                return;
+            }
+            _credentialId = null;
+            await DocumentsChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Removing a document of a personnel file failed.");
+            _refusal = Texts["Message.UnexpectedError"];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = FilePrompt.None;
+        _picked = null;
+    }
+
+    /// <summary>A document added, changed or removed: the file read again, so its list is the one saved.</summary>
+    private async Task DocumentsChangedAsync()
+    {
+        _changed = true;
+        _refusal = null;
+        if (FileId is not { } id) return;
+        var detail = await Scopes.RunAsync<PersonnelService, Result<EmployeeDetail>>(s => s.GetEmployeeAsync(id));
+        if (detail.IsSuccess) _detail = detail.Value;
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync(new EmployeeFileClosed(false, _changed));
+}

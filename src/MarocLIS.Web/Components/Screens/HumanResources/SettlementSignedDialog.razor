@@ -1,0 +1,53 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    The day the employee signed the receipt for the final settlement, the workstation's
+    SettlementSignedDialog: not before the exit date, not in the future (SettlementScreenRules.CheckSigned).
+    Once recorded, the settlement can no longer be changed.
+*@
+<Modal Name="settlement-signed" Title="@($"{Texts["Settlement.SignedTitle"]} — {Employee}")" OnCancel="OnCancel">
+    <ChildContent>
+        <label class="field">
+            <span class="field-label">@Texts["Settlement.SignedOn"]</span>
+            <input class="input input-date @(Shown?.Field == SettlementScreenRules.SignedOnField ? "is-refused" : null)" type="date"
+                   min="@SettlementScreenRules.EarliestSigning(Exit, Clock.Today).ToString("yyyy-MM-dd")" max="@Clock.Today.ToString("yyyy-MM-dd")"
+                   data-field="@SettlementScreenRules.SignedOnField" @bind="_date" @bind:format="yyyy-MM-dd" />
+            <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.SignedOnField" />
+        </label>
+        <p class="message is-warning small text-full" data-state="signed-notice">@Texts["Settlement.SignedNotice"]</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public string Employee { get; set; } = string.Empty;
+    [Parameter] public DateOnly Exit { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<DateOnly> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private DateOnly _date;
+    private FieldRefusal? _refusal;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    protected override void OnInitialized() => _date = Clock.Today;
+
+    private async Task SaveAsync()
+    {
+        _refusal = SettlementScreenRules.CheckSigned(_date, Exit, Clock.Today);
+        if (_refusal is null) await OnSave.InvokeAsync(_date);
+    }
+}

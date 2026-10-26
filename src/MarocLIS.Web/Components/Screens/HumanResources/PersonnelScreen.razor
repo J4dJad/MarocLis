@@ -1,0 +1,526 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<PersonnelScreen> Logger
+
+@*
+    « Dossiers du personnel », the workstation's PersonnelView: the staff with their post and
+    contract — a departure taken effect muted, a contract over in the alarm's colours — and the
+    selected file's card beside the list. The file itself (identity, post, contract and, with the
+    salary right, pay) and its documents open in one window; a departure is recorded, corrected or
+    withdrawn, and a departed employee re-hired; the letters and the final settlement are handed to
+    the browser as PDFs. What is shown and offered is PersonnelScreenRules'; what is done,
+    PersonnelService's, HrDocumentService's and SettlementService's.
+*@
+<div class="screen personnel" data-screen="personnel">
+    @{ var shown = Shown; var actions = Actions; var selected = Selected; }
+    <div class="list-tools">
+        <div class="search-box search-box-wide">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Personnel.SearchPlaceholder"]" aria-label="@Texts["Personnel.SearchPlaceholder"]"
+                   data-field="personnel-search" autocomplete="off" maxlength="@PersonnelScreenRules.SearchMaxLength" @bind="_search" @bind:event="oninput" />
+        </div>
+        <div class="chips" role="group">
+            <button type="button" class="chip @(_includeExited ? "is-pressed" : null)" aria-pressed="@(_includeExited ? "true" : "false")"
+                    data-filter="include-exited" @onclick="ToggleExitedAsync">@Texts["Personnel.IncludeExited"]</button>
+        </div>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split">
+        <div class="card card-flush split-main">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="personnel">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Personnel.Number"]</th>
+                            <th>@Texts["Field.Name"]</th>
+                            <th>@Texts["Personnel.Job"]</th>
+                            <th>@Texts["Personnel.ContractType"]</th>
+                            <th>@Texts["Personnel.HireDate"]</th>
+                            <th>@Texts["Personnel.LinkedUser"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in shown)
+                        {
+                            <tr class="@(row.EmployeeId == selected?.EmployeeId ? "is-selected" : null) @HrTones.Row(PersonnelScreenRules.Ink(row, Today))" data-row="@row.Number"
+                                @onclick="() => _selectedId = row.EmployeeId" @ondblclick="() => DoubleClick(row)">
+                                <td class="mono strong nowrap" dir="ltr">@row.Number</td>
+                                <td>
+                                    <span class="list-name strong" title="@row.FullName">@row.FullName</span>
+                                    @if (row.ExitDate is not null)
+                                    {
+                                        <span class="cell-sub cell-wrap" data-state="departure">@PersonnelScreenRules.Departure(row, Today, Texts.T)</span>
+                                    }
+                                </td>
+                                <td class="small">
+                                    <span class="list-name" title="@Texts[$"EmployeeJob.{row.Job}"]">@Texts[$"EmployeeJob.{row.Job}"]</span>
+                                    @if (row.JobTitle is { Length: > 0 } title)
+                                    {
+                                        <span class="cell-sub cell-wrap" title="@Texts["Personnel.JobTitle"]">@title</span>
+                                    }
+                                </td>
+                                <td class="small">
+                                    <span class="list-name" title="@Texts[$"ContractType.{row.ContractType}"]">@Texts[$"ContractType.{row.ContractType}"]</span>
+                                    @if (row.ContractEndDate is { } end)
+                                    {
+                                        <span class="cell-sub nowrap" data-state="contract-end">@Texts.T("Web.ContractEndsOn", PersonnelScreenRules.Date(end))</span>
+                                    }
+                                </td>
+                                <td class="mono nowrap" dir="ltr">@PersonnelScreenRules.Date(row.HireDate)</td>
+                                <td class="mono small nowrap" dir="ltr">@row.UserName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && shown.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.PersonnelNone"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer muted" data-state="count">@PersonnelScreenRules.Count(_rows, shown.Count, Today, Texts.T)</p>
+        </div>
+
+        <aside class="card split-side" data-card="employee">
+            @if (selected is null)
+            {
+                <p class="muted" data-state="no-row">@Texts["Web.PersonnelSelect"]</p>
+            }
+            else
+            {
+                var pill = PersonnelScreenRules.Pill(selected, Today, Texts.T);
+                <div class="identity">
+                    <span class="identity-name text-full">@selected.FullName</span>
+                    <span class="muted text-full">@PersonnelScreenRules.Subtitle(selected)</span>
+                </div>
+                <div class="pills">
+                    <Pill Text="@pill.Text" Tone="@pill.Tone" />
+                </div>
+                <dl class="facts" data-state="facts">
+                    @foreach (var fact in PersonnelScreenRules.Facts(selected, Texts.T))
+                    {
+                        <dt>@fact.Label</dt>
+                        <dd class="@(fact.Mono ? "mono" : null) text-full" dir="@(fact.Mono ? "ltr" : null)">@fact.Value</dd>
+                    }
+                </dl>
+            }
+        </aside>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)" ShowMore="@(MayLetters || MaySalary)">
+        <Secondary>
+            <ActionButton Key="Personnel.Edit" Hidden="@(!MayManage)" Disabled="@(!actions.Edit || _busy)" OnClick="() => Open(selected, EmployeeFileTab.Identity)" />
+            <ActionButton Key="Personnel.Documents" Disabled="@(!actions.Documents || _busy)" OnClick="() => Open(selected, EmployeeFileTab.Documents)" />
+        </Secondary>
+        <More>
+            @if (MayLetters)
+            {
+                <ActionButton Key="HrDocument.EmploymentAttestation" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ScrollText" Hidden="@(!MayManage)"
+                              Disabled="@(!actions.EmploymentLetter || _busy)" OnClick="() => LetterAsync(HrDocumentKind.EmploymentAttestation)" />
+                <ActionButton Key="HrDocument.SalaryAttestation" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ScrollText" Hidden="@(!MaySalary)"
+                              Disabled="@(!actions.SalaryLetter || _busy)" OnClick="() => LetterAsync(HrDocumentKind.SalaryAttestation)" />
+                <ActionButton Key="HrDocument.WorkCertificate" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ScrollText" Hidden="@(!MayManage)"
+                              Disabled="@(!actions.Certificate || _busy)" OnClick="() => LetterAsync(HrDocumentKind.WorkCertificate)" />
+            }
+            @if (MaySalary)
+            {
+                <hr class="more-rule" />
+                <ActionButton Key="Settlement.Compute" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.HandCoins" Disabled="@(!actions.Settlement || _busy)" OnClick="AskSettlementAsync" />
+                <ActionButton Key="Settlement.PrintReceipt" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.HandCoins" Disabled="@(!actions.Settlement || _busy)" OnClick="ReceiptAsync" />
+                <ActionButton Key="Settlement.RecordSigned" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.HandCoins" Disabled="@(!actions.Settlement || _busy)" OnClick="AskSigned" />
+            }
+        </More>
+        <Destructive>
+            @if (MayManage)
+            {
+                switch (actions.ExitStep)
+                {
+                    case ExitStep.Change:
+                        <ActionButton Key="Personnel.CorrectExit" Disabled="@(!actions.Exit || _busy)" OnClick="AskCorrectExitAsync" />
+                        <ActionButton Key="Personnel.CancelExit" Danger="true" Disabled="@(!actions.Exit || _busy)" OnClick="AskCancelExit" />
+                        break;
+                    case ExitStep.Rehire:
+                        <ActionButton Key="Personnel.Rehire" Disabled="@(!actions.Exit || _busy)" OnClick="AskRehire" />
+                        break;
+                    default:
+                        <ActionButton Key="Personnel.RecordExit" Danger="true" Disabled="@(!actions.Exit || _busy)" OnClick="AskExit" />
+                        break;
+                }
+            }
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Personnel.New" Primary="true" Hidden="@(!MayManage)" Disabled="@(!actions.New || _busy)" OnClick="() => Open(null, EmployeeFileTab.Identity)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.File:
+        <EmployeeFileDialog EmployeeId="_fileId" StartTab="_fileTab" OnClose="FileClosedAsync" />
+        break;
+
+    case Prompt.Exit when _target is { } row:
+        <ExitDialog Employee="@PersonnelScreenRules.Who(row)" Current="_exitCurrent" LinkedUserName="@row.UserName"
+                    Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveExitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.CancelExit when _target is { } row:
+        <ReasonPrompt Title="@Texts["Personnel.CancelExit"]" Prompt="@PersonnelScreenRules.CancelExitPrompt(row, Texts.T)"
+                      MaxLength="PersonnelScreenRules.CancelExitReasonMaxLength" OnConfirm="CancelExitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Rehire when _target is { ExitDate: { } exit } row:
+        <RehireDialog Employee="@PersonnelScreenRules.Who(row)" Exit="exit" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                      Busy="_busy" OnSave="RehireAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Settlement when _settlement is { } detail:
+        <SettlementDialog Detail="detail" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveSettlementAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Signed when _target is { ExitDate: { } exit } row:
+        <SettlementSignedDialog Employee="@PersonnelScreenRules.Who(row)" Exit="exit" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal"
+                                Busy="_busy" OnSave="SignedAsync" OnCancel="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, File, Exit, CancelExit, Rehire, Settlement, Signed }
+
+    private IReadOnlyList<EmployeeRow> _rows = [];
+    private string _search = string.Empty;
+    private bool _includeExited;
+    private Guid? _selectedId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private EmployeeRow? _target;
+    private Guid? _fileId;
+    private EmployeeFileTab _fileTab;
+    private (DateOnly Date, ExitReason Reason, string? Comment)? _exitCurrent;
+    private SettlementDetail? _settlement;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private DateOnly Today => Clock.Today;
+
+    private IReadOnlyList<EmployeeRow> Shown => PersonnelScreenRules.Shown(_rows, _search);
+
+    /// <summary>The file highlighted: the one clicked, kept after a save, else the first listed.</summary>
+    private EmployeeRow? Selected
+    {
+        get
+        {
+            var shown = Shown;
+            return shown.FirstOrDefault(r => r.EmployeeId == _selectedId) ?? shown.FirstOrDefault();
+        }
+    }
+
+    private PersonnelActions Actions => PersonnelScreenRules.Actions(Selected, Today, Context.User.Has);
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.Manage);
+
+    private bool MaySalary => Context.User.Has(Permissions.HumanResources.Salary);
+
+    private bool MayLetters => MayManage || MaySalary;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var include = _includeExited;
+            var rows = await Scopes.RunAsync<PersonnelService, Result<IReadOnlyList<EmployeeRow>>>(s => s.GetEmployeesAsync(include));
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the personnel list failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task ToggleExitedAsync()
+    {
+        _includeExited = !_includeExited;
+        await LoadAsync();
+    }
+
+    /// <summary>A double-click opens the file for whoever may edit it, its documents for whoever may only read it.</summary>
+    private void DoubleClick(EmployeeRow row)
+    {
+        _selectedId = row.EmployeeId;
+        Open(row, MayManage ? EmployeeFileTab.Identity : EmployeeFileTab.Documents);
+    }
+
+    // ---- The file and its documents ----------------------------------------------------------------
+
+    private void Open(EmployeeRow? row, EmployeeFileTab tab)
+    {
+        if (_busy) return;
+        var allowed = row is null ? Actions.New : tab == EmployeeFileTab.Documents ? Actions.Documents : Actions.Edit;
+        if (!allowed) return;
+        _fileId = row?.EmployeeId;
+        _fileTab = tab;
+        _prompt = Prompt.File;
+    }
+
+    private async Task FileClosedAsync(EmployeeFileClosed closed)
+    {
+        _prompt = Prompt.None;
+        if (closed.Saved) _status = (Texts["Personnel.Saved"], "normal");
+        if (closed.Saved || closed.Changed) await LoadAsync();
+    }
+
+    // ---- The departure -----------------------------------------------------------------------------
+
+    private void AskExit()
+    {
+        if (_busy || Selected is not { } row || !Actions.Exit || Actions.ExitStep != ExitStep.Record) return;
+        Ask(Prompt.Exit, row);
+        _exitCurrent = null;
+    }
+
+    /// <summary>A departure not reached yet corrected: opened as recorded, its comment read from the file.</summary>
+    private Task AskCorrectExitAsync() =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { ExitDate: { } exit, ExitReason: { } reason } row || !Actions.Exit) return;
+            var detail = await Scopes.RunAsync<PersonnelService, Result<EmployeeDetail>>(s => s.GetEmployeeAsync(row.EmployeeId));
+            if (detail.IsFailure)
+            {
+                _status = (Texts.Describe(detail.Errors), "critical");
+                return;
+            }
+
+            Ask(Prompt.Exit, row);
+            _exitCurrent = (exit, reason, detail.Value.ExitComment);
+        });
+
+    private Task SaveExitAsync(ExitForm form) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var correcting = _exitCurrent is not null;
+            var comment = DepartureRules.Comment(form);
+            var saved = await Scopes.RunAsync<PersonnelService, Result<DepartedAccountOutcome?>>(s => correcting
+                ? s.CorrectExitAsync(row.EmployeeId, form.Date, form.Reason, comment)
+                : s.RecordExitAsync(row.EmployeeId, form.Date, form.Reason, comment));
+            if (saved.IsFailure)
+            {
+                Refuse(DepartureRules.RefusalOf(saved.FirstError), saved.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            ShowAccountOutcome(saved.Value, Texts.T("Web.PersonnelExitSaved", PersonnelScreenRules.Who(row)));
+        });
+
+    private void AskCancelExit()
+    {
+        if (_busy || Selected is not { ExitDate: not null } row || !Actions.Exit) return;
+        Ask(Prompt.CancelExit, row);
+    }
+
+    private Task CancelExitAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var result = await Scopes.RunAsync<PersonnelService, Result<DepartedAccountOutcome?>>(s => s.CancelExitAsync(row.EmployeeId, reason));
+            ClosePrompt();
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            ShowAccountOutcome(result.Value, Texts.T("Web.PersonnelExitCancelled", PersonnelScreenRules.Who(row)));
+        });
+
+    private void AskRehire()
+    {
+        if (_busy || Selected is not { ExitDate: not null } row || !Actions.Exit || Actions.ExitStep != ExitStep.Rehire) return;
+        Ask(Prompt.Rehire, row);
+    }
+
+    private Task RehireAsync(DateOnly on) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var result = await Scopes.RunAsync<PersonnelService, Result>(s => s.RehireAsync(row.EmployeeId, on));
+            if (result.IsFailure)
+            {
+                Refuse(DepartureRules.RefusalOf(result.FirstError), result.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            _status = (Texts.T("Web.PersonnelRehired", PersonnelScreenRules.Who(row), PersonnelScreenRules.Date(on)), "normal");
+            await LoadAsync();
+        });
+
+    /// <summary>What the departure did to the linked LIS account, else that it was saved.</summary>
+    private void ShowAccountOutcome(DepartedAccountOutcome? outcome, string saved) =>
+        _status = PersonnelScreenRules.AccountOutcome(outcome, Texts.T) is { } said ? (said.Text, said.Tone) : (saved, "normal");
+
+    // ---- The letters and the final settlement ------------------------------------------------------
+
+    /// <summary>A letter rendered as the workstation prints it, handed to the browser as a PDF.</summary>
+    private Task LetterAsync(HrDocumentKind kind) =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { } row) return;
+            await PdfAsync<HrDocumentService>(row, kind, (s, r) => Render(s.GetAsync(kind, row.EmployeeId), r));
+        });
+
+    private Task ReceiptAsync() =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { ExitDate: not null } row || !Actions.Settlement) return;
+            await PdfAsync<SettlementService>(row, HrDocumentKind.SettlementReceipt, (s, r) => Render(s.ReceiptAsync(row.EmployeeId), r));
+        });
+
+    private static async Task<Result<byte[]>> Render(Task<Result<HrDocument>> load, IHrDocumentRenderer renderer)
+    {
+        var document = await load;
+        return document.IsFailure ? Result.Failure<byte[]>(document.Errors) : Result.Success(renderer.Render(document.Value));
+    }
+
+    private async Task PdfAsync<TService>(EmployeeRow row, HrDocumentKind kind, Func<TService, IHrDocumentRenderer, Task<Result<byte[]>>> render)
+        where TService : notnull
+    {
+        var pdf = await Scopes.RunAsync<TService, IHrDocumentRenderer, Result<byte[]>>(render);
+        if (pdf.IsFailure)
+        {
+            _status = (Texts.Describe(pdf.Errors), "critical");
+            return;
+        }
+
+        var name = PersonnelScreenRules.LetterFileName(row, kind);
+        await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", pdf.Value);
+        _status = (Texts.T("Web.DocDownloaded", name), "muted");
+    }
+
+    private Task AskSettlementAsync() =>
+        RunAsync(async () =>
+        {
+            if (Selected is not { ExitDate: not null } row || !Actions.Settlement) return;
+            var detail = await Scopes.RunAsync<SettlementService, Result<SettlementDetail>>(s => s.GetAsync(row.EmployeeId));
+            if (detail.IsFailure)
+            {
+                _status = (Texts.Describe(detail.Errors), "critical");
+                return;
+            }
+
+            Ask(Prompt.Settlement, row);
+            _settlement = detail.Value;
+        });
+
+    private Task SaveSettlementAsync(SettlementAmounts amounts) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var saved = await Scopes.RunAsync<SettlementService, Result<SettlementPayroll>>(s => s.SaveAsync(row.EmployeeId, amounts));
+            if (saved.IsFailure)
+            {
+                Refuse(SettlementScreenRules.FieldOf(saved.FirstError.ResourceKey) is { } field ? FieldRefusal.Of(field, saved.FirstError) : null, saved.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            var (said, tone) = PersonnelScreenRules.SettlementSaved(saved.Value, Texts.T);
+            _status = (said, tone);
+        });
+
+    private void AskSigned()
+    {
+        if (_busy || Selected is not { ExitDate: not null } row || !Actions.Settlement) return;
+        Ask(Prompt.Signed, row);
+    }
+
+    private Task SignedAsync(DateOnly on) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } row) return;
+            var signed = await Scopes.RunAsync<SettlementService, Result>(s => s.SignAsync(row.EmployeeId, on));
+            if (signed.IsFailure)
+            {
+                Refuse(SettlementScreenRules.FieldOf(signed.FirstError.ResourceKey) is { } field ? FieldRefusal.Of(field, signed.FirstError) : null, signed.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            _status = (Texts["Settlement.SignedRecorded"], "normal");
+        });
+
+    // ---- Plumbing ----------------------------------------------------------------------------------
+
+    private void Ask(Prompt prompt, EmployeeRow row)
+    {
+        _target = row;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(FieldRefusal? field, IEnumerable<Error> errors)
+    {
+        _fieldRefusal = field;
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A personnel operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _target = null;
+        _settlement = null;
+        _exitCurrent = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

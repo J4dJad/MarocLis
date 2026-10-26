@@ -72,6 +72,12 @@ public static class WebServiceCollectionExtensions
         // The purchase order of « Bons de commande », downloaded to be printed or sent, and e-mailed
         // to the supplier through the laboratory's mail account, as at the workstation.
         services.AddSingleton<Application.Inventory.IPurchaseOrderRenderer, QuestPdfPurchaseOrderRenderer>();
+        // The HR letters, the receipt for the final settlement, the accident declarations and the
+        // payslips, downloaded rather than opened, as the workstation renders them.
+        services.AddSingleton<QuestPdfHrDocumentRenderer>();
+        services.AddSingleton<Application.HumanResources.IHrDocumentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
+        services.AddSingleton<Application.HumanResources.IAccidentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
+        services.AddSingleton<Application.HumanResources.IPayslipRenderer, QuestPdfPayslipRenderer>();
 
         // ---- The read side of the screens: the workstation's queries, one per scope. The
         // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
@@ -149,6 +155,15 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Dashboard.IDashboardQueries, DashboardQueries>();
         services.AddScoped<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
         services.AddScoped<Application.Steering.ISteeringQueries, SteeringQueries>();
+        // « Dossiers du personnel », « Habilitations » and « Échéances RH », and the leave, planning,
+        // payroll and accident screens built on them: the staff and their files, the absences, the
+        // rota, the pay and the HR documents. (The demo data's HR part needs them all too.)
+        services.AddScoped<Application.HumanResources.IPersonnelQueries, PersonnelQueries>();
+        services.AddScoped<Application.HumanResources.ILeaveQueries, LeaveQueries>();
+        services.AddScoped<Application.HumanResources.IPlanningQueries, PlanningQueries>();
+        services.AddScoped<Application.HumanResources.IPayrollQueries, PayrollQueries>();
+        services.AddScoped<Application.HumanResources.IHrDocumentQueries, HrDocumentQueries>();
+        services.AddScoped<Application.HumanResources.IAccidentQueries, AccidentQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

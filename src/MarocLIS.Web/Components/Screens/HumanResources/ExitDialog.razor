@@ -1,0 +1,76 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    A departure recorded, or one not reached yet corrected: the workstation's EmployeeExitDialog.
+    The last day worked, the reason and a comment; the habilitations end with it, and the linked LIS
+    account it will switch off is named before it is saved (DepartureRules.AccountNotice).
+*@
+<Modal Name="employee-exit" Title="@($"{Texts[DepartureRules.TitleKey(Correcting)]} — {Employee}")" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Personnel.ExitDate"]</span>
+                <input class="input input-date @Refused(DepartureRules.DateField)" type="date" data-field="@DepartureRules.DateField"
+                       @bind="_form.Date" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="FieldRefusal" Field="@DepartureRules.DateField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Personnel.ExitReason"]</span>
+                <select class="input" data-field="@DepartureRules.ReasonField" @bind="_form.Reason">
+                    @foreach (var value in Enum.GetValues<ExitReason>())
+                    {
+                        <option value="@value">@Texts[$"ExitReason.{value}"]</option>
+                    }
+                </select>
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Field.Comment"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@DepartureRules.CommentMaxLength"
+                       data-field="@DepartureRules.CommentField" title="@_form.Comment" @bind="_form.Comment" @bind:event="oninput" />
+            </label>
+            <p class="field-span-2 message is-warning small text-full" data-state="exit-notice">@Texts["Personnel.ExitNoticeAfterLastDay"]</p>
+            @if (DepartureRules.AccountNotice(LinkedUserName, Texts.T) is { } account)
+            {
+                <p class="field-span-2 message is-warning small text-full" data-state="account-notice">@account</p>
+            }
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="() => OnSave.InvokeAsync(_form)" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>« 0042 BOUZID Hanane ».</summary>
+    [Parameter, EditorRequired] public string Employee { get; set; } = string.Empty;
+
+    /// <summary>The departure as recorded, when it is corrected.</summary>
+    [Parameter] public (DateOnly Date, ExitReason Reason, string? Comment)? Current { get; set; }
+
+    /// <summary>The LIS account linked to the file, which the departure switches off.</summary>
+    [Parameter] public string? LinkedUserName { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<ExitForm> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ExitForm _form = new();
+
+    private bool Correcting => Current is not null;
+
+    private string? Refused(string field) => FieldRefusal?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized() =>
+        _form = DepartureRules.FormFor(Clock.Today, Current?.Date, Current?.Reason, Current?.Comment);
+}

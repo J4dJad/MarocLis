@@ -1323,3 +1323,30 @@ a.dashboard-step:hover { border-color: var(--accent); color: var(--text); }
 /* The last column of the serum bank and of the send-outs well clear of the card's edge (in Arabic, of its left edge). */
 :is([data-screen=serumbank], [data-screen=subcontracting]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=serumbank], [data-screen=subcontracting]) .grid :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+/* « Dossiers du personnel », « Habilitations » and « Échéances RH »: a list alone in its body; the matrix
+   whose cells hold each habilitation (an analyser or a discipline above its level and review date), the cell
+   selected framed; the documents of a file in their window; the last column clear of the card's edge. */
+.screen-body.split.split-single { grid-template-columns: minmax(0, 1fr); }
+.hab-matrix { table-layout: fixed; inline-size: 100%; }
+.hab-matrix th { white-space: normal; vertical-align: bottom; font-size: 12px; overflow-wrap: break-word; hyphens: auto; }
+.hab-matrix th.hab-name { inline-size: 17%; }
+.hab-matrix td { vertical-align: top; cursor: pointer; }
+.hab-matrix tr.hab-row-current > td.hab-name { background: var(--accent-subtle); }
+.hab-matrix td.is-selected-cell { background: var(--accent-subtle); box-shadow: inset 0 0 0 2px var(--accent); }
+.hab-entry { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; inline-size: 100%; min-inline-size: 0; margin-block-end: 3px;
+             padding: 3px 4px; border: 1px solid transparent; border-radius: 4px; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+.hab-entry:hover { border-color: var(--border-strong); }
+.hab-entry.is-picked { border-color: var(--accent); background: var(--surface-raised); }
+.hab-entry > .pill { white-space: normal; max-inline-size: 100%; overflow-wrap: anywhere; }
+.hab-subject { font-size: 12px; color: var(--text-secondary); max-inline-size: 100%; }
+.hab-review { font-size: 12px; color: var(--text-secondary); }
+.hab-cell-overdue > .hab-review { color: var(--critical); font-weight: 600; }
+.hab-cell-training > .hab-review { color: var(--abnormal); }
+.screen-body.split > .card-flush > .hab-detail { color: var(--text); font-size: 13px; }
+.screen-body.split > .card-flush > .hab-detail.muted { color: var(--text-secondary); }
+.credential-scroll { max-block-size: 420px; }
+.employee-file-page { min-block-size: 330px; }
+.modal-footer > .credential-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.modal-footer > .credential-actions > .action-bar-rule { block-size: 24px; }
+:is([data-screen=personnel], [data-screen=habilitations], [data-screen=hrdeadlines], [data-modal=employee-file]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=personnel], [data-screen=habilitations], [data-screen=hrdeadlines], [data-modal=employee-file]) .grid :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }

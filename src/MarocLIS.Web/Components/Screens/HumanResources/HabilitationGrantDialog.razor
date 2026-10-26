@@ -1,0 +1,120 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+@inject IClock Clock
+
+@*
+    A habilitation decision, the workstation's HabilitationGrantDialog: what, on which analyser or
+    in which discipline, at what level, since when, reviewed when, on what evidence. Opened on the
+    column selected (HabilitationScreenRules.FormFor); a refusal is said next to its box — the
+    biologist's signature the service requires among them.
+*@
+<Modal Name="habilitation-grant" Title="@($"{Texts["Habilitation.Grant"]} — {Employee}")" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Habilitation.Activity"]</span>
+                <select class="input @Refused(HabilitationScreenRules.ActivityField)" data-field="@HabilitationScreenRules.ActivityField" value="@_form.Activity" @onchange="ActivityChanged">
+                    @foreach (var value in Enum.GetValues<HabilitationActivity>())
+                    {
+                        <option value="@value">@Texts[$"HabilitationActivity.{value}"]</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@HabilitationScreenRules.ActivityField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Habilitation.Subject"]</span>
+                <select class="input @Refused(HabilitationScreenRules.SubjectField)" data-field="@HabilitationScreenRules.SubjectField"
+                        disabled="@(!HabilitationScreenRules.AsksSubject(_form.Activity))" value="@(_form.SubjectId?.ToString() ?? string.Empty)"
+                        @onchange="e => _form.SubjectId = Guid.TryParse(e.Value as string, out var id) ? id : null">
+                    @if (!HabilitationScreenRules.AsksSubject(_form.Activity))
+                    {
+                        <option value="">—</option>
+                    }
+                    @foreach (var subject in HabilitationScreenRules.Subjects(_form.Activity, Lookups))
+                    {
+                        <option value="@subject.Id">@subject.Label</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@HabilitationScreenRules.SubjectField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Habilitation.Level"]</span>
+                <select class="input @Refused(HabilitationScreenRules.LevelField)" data-field="@HabilitationScreenRules.LevelField" @bind="_form.Level">
+                    @foreach (var value in Enum.GetValues<HabilitationLevel>())
+                    {
+                        <option value="@value">@Texts[$"HabilitationLevel.{value}"]</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@HabilitationScreenRules.LevelField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Habilitation.GrantedOn"]</span>
+                <input class="input input-date @Refused(HabilitationScreenRules.GrantedOnField)" type="date" max="@Clock.Today.ToString("yyyy-MM-dd")"
+                       data-field="@HabilitationScreenRules.GrantedOnField" @bind="_form.GrantedOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@HabilitationScreenRules.GrantedOnField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Habilitation.ReviewDue"]</span>
+                <input class="input input-date @Refused(HabilitationScreenRules.ReviewField)" type="date" min="@Clock.Today.ToString("yyyy-MM-dd")"
+                       data-field="@HabilitationScreenRules.ReviewField" @bind="_form.ReviewDueOn" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@HabilitationScreenRules.ReviewField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Habilitation.Evidence"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@HabilitationScreenRules.EvidenceMaxLength"
+                       data-field="@HabilitationScreenRules.EvidenceField" title="@_form.Evidence" @bind="_form.Evidence" @bind:event="oninput" />
+            </label>
+            <p class="field-span-2 small muted text-full" data-state="signature-notice">@Texts["Habilitation.SignatureNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>« 0042 BOUZID Hanane ».</summary>
+    [Parameter, EditorRequired] public string Employee { get; set; } = string.Empty;
+
+    /// <summary>The analysers and the disciplines offered as subjects.</summary>
+    [Parameter, EditorRequired] public PersonnelLookups Lookups { get; set; } = null!;
+
+    /// <summary>The column selected, the grant opened on it.</summary>
+    [Parameter] public HabilitationColumn? Column { get; set; }
+
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<HabilitationGrant> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private HabilitationForm _form = new();
+    private FieldRefusal? _refusal;
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized() => _form = HabilitationScreenRules.FormFor(Column, Lookups, Clock.Today);
+
+    private void ActivityChanged(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<HabilitationActivity>(e.Value as string, out var activity)) return;
+        _form.Activity = activity;
+        HabilitationScreenRules.ActivityChanged(_form, Lookups);
+    }
+
+    private async Task SaveAsync()
+    {
+        var (refused, grant) = HabilitationScreenRules.Check(_form, Clock.Today);
+        _refusal = refused;
+        if (refused is null) await OnSave.InvokeAsync(grant!);
+    }
+}

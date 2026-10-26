@@ -67,6 +67,18 @@
             <MarocLIS.Web.Components.Screens.Samples.Subcontracting />
             break;
 
+        case ScreenDecision.Open when Key == "personnel":
+            <MarocLIS.Web.Components.Screens.HumanResources.PersonnelScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "habilitations":
+            <MarocLIS.Web.Components.Screens.HumanResources.HabilitationsScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "hrdeadlines":
+            <MarocLIS.Web.Components.Screens.HumanResources.PersonnelDeadlinesScreen />
+            break;
+
 
         case ScreenDecision.Open when Key == "recollections":
             <MarocLIS.Web.Components.Screens.Samples.Recollections />

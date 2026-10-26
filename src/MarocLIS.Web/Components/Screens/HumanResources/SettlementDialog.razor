@@ -1,0 +1,121 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@inject WebTexts Texts
+
+@*
+    « Solde de tout compte », the workstation's SettlementDialog: the law's figures proposed (or the
+    ones saved), each amount put back to the law's when its basis changes, the total, the sentences
+    that explain them and where the amounts go. Signed, the settlement is final: shown, not changed.
+    For whoever holds the salary right (SettlementScreenRules).
+*@
+<Modal Name="settlement" Title="@($"{Texts["Personnel.Settlement"]} — {Detail.Number} {Detail.FullName}")" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <p class="text-full" data-state="settlement-summary">@SettlementScreenRules.Summary(Detail, Texts.T, Texts.Culture)</p>
+        <div class="form-grid form-grid-3">
+            <label class="field">
+                <span class="field-label">@Texts["Settlement.ReferenceSalary"]</span>
+                <input class="input mono num @Refused(SettlementScreenRules.ReferenceField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SettlementScreenRules.AmountMaxLength" disabled="@ReadOnly" data-field="@SettlementScreenRules.ReferenceField"
+                       value="@_form.ReferenceSalary" @oninput="e => Typed(e, v => _form.ReferenceSalary = v, leave: true, notice: true, severance: true)" />
+                <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.ReferenceField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Settlement.LeaveDays"]</span>
+                <input class="input mono num @Refused(SettlementScreenRules.LeaveDaysField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SettlementScreenRules.LeaveDaysMaxLength" disabled="@ReadOnly" data-field="@SettlementScreenRules.LeaveDaysField"
+                       value="@_form.LeaveDays" @oninput="e => Typed(e, v => _form.LeaveDays = v, leave: true)" />
+                <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.LeaveDaysField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Settlement.LeaveIndemnity"]</span>
+                <input class="input mono num @Refused(SettlementScreenRules.LeaveField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SettlementScreenRules.AmountMaxLength" disabled="@ReadOnly" data-field="@SettlementScreenRules.LeaveField"
+                       @bind="_form.LeaveIndemnity" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.LeaveField" />
+            </label>
+            <p class="field-span-3 small muted text-full" data-state="reference-hint">@SettlementScreenRules.ReferenceHint(Detail, Texts.T)</p>
+
+            <label class="field field-span-2 field-check @(ReadOnly ? "is-disabled" : null)">
+                <input type="checkbox" data-field="@SettlementScreenRules.NoticeNotWorkedField" disabled="@ReadOnly"
+                       checked="@_form.NoticeNotWorked" @onchange="NoticeChanged" />
+                <span>@Texts["Settlement.NoticeNotWorked"]</span>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Settlement.NoticeIndemnity"]</span>
+                <input class="input mono num @Refused(SettlementScreenRules.NoticeField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SettlementScreenRules.AmountMaxLength" disabled="@(!SettlementScreenRules.NoticeEditable(_form, Detail))"
+                       data-field="@SettlementScreenRules.NoticeField" @bind="_form.NoticeIndemnity" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.NoticeField" />
+            </label>
+            <p class="field-span-3 small muted text-full" data-state="notice-hint">@SettlementScreenRules.NoticeHint(Detail, Texts.T)</p>
+
+            <p class="field-span-2 small muted text-full settlement-hint" data-state="severance-hint">@SettlementScreenRules.SeveranceHint(Detail, Texts.T, Texts.Culture)</p>
+            <label class="field">
+                <span class="field-label">@Texts["Settlement.Severance"]</span>
+                <input class="input mono num @Refused(SettlementScreenRules.SeveranceField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@SettlementScreenRules.AmountMaxLength" disabled="@ReadOnly" data-field="@SettlementScreenRules.SeveranceField"
+                       @bind="_form.Severance" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@SettlementScreenRules.SeveranceField" />
+            </label>
+
+            <label class="field field-span-3">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <input class="input" type="text" autocomplete="off" maxlength="@SettlementScreenRules.NoteMaxLength" disabled="@ReadOnly"
+                       data-field="@SettlementScreenRules.NoteField" title="@_form.Note" @bind="_form.Note" @bind:event="oninput" />
+            </label>
+        </div>
+        <p class="strong text-full" data-state="settlement-total">@SettlementScreenRules.TotalText(_form, Texts.T, Texts.Culture)</p>
+        @{ var (notice, warning) = SettlementScreenRules.Notice(Detail, Texts.T); }
+        <p class="message @(warning ? "is-warning" : "is-info") small text-full" data-state="settlement-notice">@notice</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="@(ReadOnly ? "Action.Close" : "Action.Cancel")" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Hidden="ReadOnly" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public SettlementDetail Detail { get; set; } = null!;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<SettlementAmounts> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private SettlementForm _form = new();
+    private FieldRefusal? _refusal;
+
+    private bool ReadOnly => SettlementScreenRules.IsReadOnly(Detail);
+
+    private FieldRefusal? Shown => _refusal ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized() => _form = SettlementScreenRules.FormFor(Detail);
+
+    /// <summary>A basis typed: the amounts it moves put back to the law's.</summary>
+    private void Typed(ChangeEventArgs e, Action<string?> set, bool leave = false, bool notice = false, bool severance = false)
+    {
+        set(e.Value as string);
+        SettlementScreenRules.Recompute(_form, Detail, leave, notice, severance);
+    }
+
+    private void NoticeChanged(ChangeEventArgs e)
+    {
+        _form.NoticeNotWorked = e.Value is true;
+        SettlementScreenRules.Recompute(_form, Detail, notice: true);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (ReadOnly) return;
+        var (refused, amounts) = SettlementScreenRules.Check(_form);
+        _refusal = refused;
+        if (refused is null) await OnSave.InvokeAsync(amounts!);
+    }
+}

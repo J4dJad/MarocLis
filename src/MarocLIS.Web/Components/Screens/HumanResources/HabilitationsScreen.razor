@@ -1,0 +1,294 @@
+@using MarocLIS.Application.HumanResources
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.HumanResources
+@using MarocLIS.Domain.Identity
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<HabilitationsScreen> Logger
+
+@*
+    « Habilitations », the workstation's HabilitationView: the staff down the side, the activities
+    across, each habilitation held in its cell with its level and its review date — the review
+    overdue in the alarm's colours, a person in training in the warning's. The analysers and the
+    disciplines of an activity share its cell, so the matrix fits its page however many analysers
+    the laboratory runs. A cell selected says what it holds; a habilitation is granted on it
+    (reserved to a biologist by the service) or withdrawn with a reason, and the matrix exported
+    for the accreditation file. What is shown and offered is HabilitationScreenRules'; what is done,
+    PersonnelService's.
+*@
+<div class="screen habilitations" data-screen="habilitations">
+    @{ var actions = Actions; var activities = _matrix is null ? [] : HabilitationScreenRules.Activities(_matrix); }
+    <div class="list-tools">
+        <span class="muted small text-full" data-state="count">@(_matrix is null ? null : HabilitationScreenRules.Count(_matrix, Today, Texts.T))</span>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body split split-single">
+        <div class="card card-flush">
+            <div class="table-scroll">
+                <table class="grid hab-matrix" data-grid="habilitations">
+                    <thead>
+                        <tr>
+                            <th class="hab-name">@Texts["Field.Name"]</th>
+                            @foreach (var activity in activities)
+                            {
+                                <th class="hab-col">@Texts[$"HabilitationActivity.{activity}"]</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var employee in _matrix?.Employees ?? [])
+                        {
+                            var chosen = employee.EmployeeId == SelectedEmployee?.EmployeeId;
+                            <tr class="@(chosen ? "hab-row-current" : null)" data-row="@employee.Number">
+                                <td class="hab-name @(chosen && _activity is null ? "is-selected-cell" : null)" @onclick="() => Select(employee, null, null)">
+                                    <span class="list-name strong" title="@employee.FullName">@employee.FullName</span>
+                                    <span class="cell-sub cell-wrap">@employee.Number · @Texts[$"EmployeeJob.{employee.Job}"]</span>
+                                </td>
+                                @foreach (var activity in activities)
+                                {
+                                    var held = HabilitationScreenRules.HeldIn(_matrix!, employee.EmployeeId, activity);
+                                    <td class="hab-cell @(chosen && _activity == activity ? "is-selected-cell" : null)" data-activity="@activity"
+                                        @onclick="() => Select(employee, activity, held.FirstOrDefault())" @ondblclick="() => AskGrantAsync()">
+                                        @foreach (var h in held)
+                                        {
+                                            var ink = HabilitationScreenRules.Ink(h, Today);
+                                            <button type="button" class="hab-entry @HrTones.Cell(ink) @(h.HabilitationId == _habilitationId ? "is-picked" : null)"
+                                                    data-habilitation="@h.HabilitationId" title="@HabilitationScreenRules.Detail(_matrix, h, Texts.T)"
+                                                    @onclick="() => Select(employee, activity, h)" @onclick:stopPropagation="true">
+                                                @if (h.SubjectLabel is { Length: > 0 } subject)
+                                                {
+                                                    <span class="hab-subject list-name" title="@subject">@subject</span>
+                                                }
+                                                <Pill Text="@HabilitationScreenRules.Level(h, Texts.T)" Tone="@HabilitationScreenRules.Tone(ink)" />
+                                                @if (h.ReviewDueOn is not null)
+                                                {
+                                                    <span class="hab-review mono" dir="ltr">@HabilitationScreenRules.ReviewDue(h)</span>
+                                                }
+                                            </button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _matrix is { Employees.Count: 0 })
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.HabilitationNoStaff"]</p>
+                }
+            </div>
+            <p class="card-pad small grid-footer hab-detail text-full @(Held is null ? "muted" : null)" data-state="detail">@DetailText</p>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@HrTones.Status(_status?.Tone)">
+        <Secondary>
+            <ActionButton Key="Habilitation.Export" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(!actions.Export || _busy)" OnClick="ExportAsync" />
+        </Secondary>
+        <Destructive>
+            <ActionButton Key="Habilitation.Withdraw" Danger="true" Hidden="@(!MayManage)" Disabled="@(!actions.Withdraw || _busy)" OnClick="AskWithdraw" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Habilitation.Grant" Primary="true" Hidden="@(!MayManage)" Disabled="@(!actions.Grant || _busy)" OnClick="AskGrantAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Grant when _target is { } employee && _lookups is { } lookups:
+        <HabilitationGrantDialog Employee="@PersonnelScreenRules.Who(employee)" Lookups="lookups" Column="_column"
+                                 Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="GrantAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Withdraw when _target is { } employee && _withdrawn is { } h:
+        <ReasonPrompt Title="@Texts["Habilitation.Withdraw"]" Prompt="@HabilitationScreenRules.WithdrawPrompt(h, employee, Texts.T)"
+                      MaxLength="HabilitationScreenRules.WithdrawReasonMaxLength" OnConfirm="WithdrawAsync" OnCancel="ClosePrompt" />
+        break;
+}
+
+@code {
+    private enum Prompt { None, Grant, Withdraw }
+
+    private HabilitationMatrix? _matrix;
+    private Guid? _employeeId;
+    private HabilitationActivity? _activity;
+    private Guid? _habilitationId;
+    private bool _loaded, _busy;
+
+    private Prompt _prompt;
+    private EmployeeRow? _target;
+    private HabilitationRow? _withdrawn;
+    private HabilitationColumn? _column;
+    private PersonnelLookups? _lookups;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private DateOnly Today => Clock.Today;
+
+    private bool MayManage => Context.User.Has(Permissions.HumanResources.ManageHabilitations);
+
+    /// <summary>The employee of the cell selected, else the first of the matrix.</summary>
+    private EmployeeRow? SelectedEmployee =>
+        _matrix?.Employees.FirstOrDefault(e => e.EmployeeId == _employeeId) ?? _matrix?.Employees.FirstOrDefault();
+
+    /// <summary>The habilitation picked in the cell selected, if it still exists.</summary>
+    private HabilitationRow? Held =>
+        _matrix?.Habilitations.FirstOrDefault(h => h.HabilitationId == _habilitationId && h.EmployeeId == SelectedEmployee?.EmployeeId);
+
+    private (bool Grant, bool Withdraw, bool Export) Actions =>
+        HabilitationScreenRules.Actions(_matrix, SelectedEmployee, Held, Context.User.Has);
+
+    private string DetailText => HabilitationScreenRules.Detail(_matrix, Held, Texts.T) is { Length: > 0 } said
+        ? said
+        : SelectedEmployee is { } e && _activity is { } a ? Texts.T("Web.HabilitationCellEmpty", e.FullName, Texts[$"HabilitationActivity.{a}"])
+        : _matrix is { Employees.Count: > 0 } ? Texts["Web.HabilitationPickCell"]
+        : string.Empty;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var matrix = await Scopes.RunAsync<PersonnelService, Result<HabilitationMatrix>>(s => s.GetMatrixAsync());
+            if (matrix.IsFailure)
+            {
+                _status = (Texts.Describe(matrix.Errors), "critical");
+                return;
+            }
+
+            _matrix = matrix.Value;
+            // A habilitation withdrawn is no longer picked; the cell stays selected.
+            if (Held is null) _habilitationId = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the habilitation matrix failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    /// <summary>A cell selected: the employee, the activity (none on the name), and the habilitation picked in it.</summary>
+    private void Select(EmployeeRow employee, HabilitationActivity? activity, HabilitationRow? held)
+    {
+        _employeeId = employee.EmployeeId;
+        _activity = activity;
+        _habilitationId = held?.HabilitationId;
+    }
+
+    private Task AskGrantAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedEmployee is not { } employee || !Actions.Grant) return;
+            var lookups = await Scopes.RunAsync<PersonnelService, Result<PersonnelLookups>>(s => s.GetLookupsAsync(employee.EmployeeId));
+            if (lookups.IsFailure)
+            {
+                _status = (Texts.Describe(lookups.Errors), "critical");
+                return;
+            }
+
+            _lookups = lookups.Value;
+            _column = _activity is { } activity ? HabilitationScreenRules.ColumnOf(activity, Held) : null;
+            _target = employee;
+            _dialogRefusal = null;
+            _fieldRefusal = null;
+            _prompt = Prompt.Grant;
+        });
+
+    private Task GrantAsync(HabilitationGrant g) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } employee) return;
+            var granted = await Scopes.RunAsync<PersonnelService, Result>(s => s.GrantAsync(employee.EmployeeId, g.Activity, g.SubjectId, g.Level,
+                                                                                                g.GrantedOn, g.ReviewDueOn, g.Evidence));
+            if (granted.IsFailure)
+            {
+                _fieldRefusal = HabilitationScreenRules.RefusalOf(granted.FirstError);
+                _dialogRefusal = _fieldRefusal is null ? Texts.Describe(granted.Errors) : null;
+                return;
+            }
+
+            ClosePrompt();
+            _activity = g.Activity;
+            await LoadAsync();
+            _habilitationId = _matrix is null ? null
+                : HabilitationScreenRules.Held(_matrix, employee.EmployeeId, new HabilitationColumn(g.Activity, g.SubjectId, null))?.HabilitationId;
+            _status = (Texts.T("Web.HabilitationGranted", Texts[$"HabilitationActivity.{g.Activity}"], employee.FullName), "normal");
+        });
+
+    private void AskWithdraw()
+    {
+        if (_busy || SelectedEmployee is not { } employee || Held is not { } h || !Actions.Withdraw) return;
+        _target = employee;
+        _withdrawn = h;
+        _prompt = Prompt.Withdraw;
+    }
+
+    private Task WithdrawAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            if (_target is not { } employee || _withdrawn is not { } h) return;
+            var result = await Scopes.RunAsync<PersonnelService, Result>(s => s.WithdrawAsync(employee.EmployeeId, h.HabilitationId, reason));
+            ClosePrompt();
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            _status = (Texts.T("Web.HabilitationWithdrawn", Texts[$"HabilitationActivity.{h.Activity}"], employee.FullName), "muted");
+        });
+
+    /// <summary>The matrix as CSV, one line per habilitation, for the accreditation file.</summary>
+    private Task ExportAsync() =>
+        RunAsync(async () =>
+        {
+            if (_matrix is null || !Actions.Export) return;
+            var name = HabilitationScreenRules.ExportFileName(Today);
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", HabilitationScreenRules.ExportCsv(_matrix, Texts.T));
+            _status = (Texts.T("Web.DocDownloaded", name), "muted");
+        });
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A habilitation operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _target = null;
+        _withdrawn = null;
+        _lookups = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}
