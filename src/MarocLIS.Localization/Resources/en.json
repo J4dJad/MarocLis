@@ -6237,6 +6237,7 @@
   "Instruments_EmptyMessage": "Empty instrument message.",
   "Instruments_MissingMsh": "MSH segment absent: invalid HL7 message.",
   "Instruments_UnsupportedMessageType": "Unsupported HL7 message type: {0}",
+  "Instruments_MindrayCalibrationIgnored": "Mindray calibration results ({0}): received and acknowledged, not stored (calibration is followed on the analyser).",
   "Instruments_MissingSpecimenId": "Specimen identifier absent from the record: {0}",
   "Instruments_ResultWithoutOrder": "Result transmitted without an order record: {0}",
   "Instruments_MissingTestCode": "Test code absent from the record: {0}",

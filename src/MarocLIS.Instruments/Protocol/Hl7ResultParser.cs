@@ -112,6 +112,25 @@ public static class Hl7ResultParser
             type.StartsWith("QBP", StringComparison.Ordinal))
             return ParseQuery(message, text);
 
+        // Mindray marks a calibration's results in MSH-16. They are no patient's and no control's:
+        // acknowledged and recorded as ignored, with the reason on the log line.
+        var mindrayKind = format.IsMindray ? MindrayHl7.ResultKind(message) : null;
+
+        if (mindrayKind == MindrayHl7.CalibrationResult)
+        {
+            return new InstrumentMessage
+            {
+                Kind = InstrumentMessageKind.Status,
+                SenderId = message.SendingApplication,
+                SenderVersion = message.Version,
+                ControlId = message.ControlId,
+                MessageTimestamp = message.MessageTimestamp,
+                Issues = [InstrumentParseIssue.Warning("Instruments_MindrayCalibrationIgnored",
+                                                       message.SendingFacility ?? message.SendingApplication)],
+                RawText = text
+            };
+        }
+
         if (!type.StartsWith("ORU", StringComparison.Ordinal) &&
             !type.StartsWith("ORL", StringComparison.Ordinal))
             issues.Add(InstrumentParseIssue.Warning("Instruments_UnsupportedMessageType", type));
@@ -179,6 +198,13 @@ public static class Hl7ResultParser
                     specimenIdFromSpm = null;
                     lastSpm = null;
 
+                    // A Mindray control: MSH-16 says so, or the test ordered names a QC run.
+                    var mindrayControl = format.IsMindray
+                        && (mindrayKind == MindrayHl7.QcResult
+                            || MentionsControl(message.Field(segment, 4)));
+
+                    if (mindrayControl && string.IsNullOrWhiteSpace(specimenId)) specimenId = "QC";
+
                     if (string.IsNullOrWhiteSpace(specimenId))
                     {
                         issues.Add(InstrumentParseIssue.Blocking("Instruments_MissingSpecimenId",
@@ -198,9 +224,12 @@ public static class Hl7ResultParser
                         CollectedAt = Hl7Message.ParseTimestamp(message.Field(segment, 7)),
                         ReceivedAt = Hl7Message.ParseTimestamp(message.Field(segment, 14)),
                         // "Q" in the specimen source, or an explicit control flag, marks QC material.
-                        IsControl = specimenSource?.Contains("CONTROL", StringComparison.OrdinalIgnoreCase) == true
+                        IsControl = mindrayControl
+                                    || specimenSource?.Contains("CONTROL", StringComparison.OrdinalIgnoreCase) == true
                                     || specimenSource?.Contains("QC", StringComparison.OrdinalIgnoreCase) == true,
-                        ControlIdentifier = specimenSource
+                        ControlIdentifier = mindrayControl
+                            ? MindrayHl7.ControlIdentifier(message, segment)
+                            : specimenSource
                     };
                     break;
                 }
@@ -230,6 +259,11 @@ public static class Hl7ResultParser
 
                     var valueType = message.Field(segment, 2);
                     var status = message.Field(segment, 11);
+
+                    // A Mindray histogram or scattergram travels as encapsulated data (ED), a bitmap
+                    // in Base64 that is no value: it is named, not carried into the result.
+                    if (format.IsMindray && string.Equals(valueType, "ED", StringComparison.OrdinalIgnoreCase))
+                        value = "(ED)";
 
                     current.Results.Add(new InstrumentResult
                     {
@@ -283,6 +317,13 @@ public static class Hl7ResultParser
             RawText = text
         };
     }
+
+    /// <summary>« QC », « Control » or « Contrôle » as a word of the test ordered (OBR-4).</summary>
+    private static bool MentionsControl(string? universalServiceId) =>
+        !string.IsNullOrWhiteSpace(universalServiceId)
+        && System.Text.RegularExpressions.Regex.IsMatch(universalServiceId,
+               @"(?<![\p{L}\p{Nd}])(QC|CONTROL|CONTR[OÔ]LE)(?![\p{L}\p{Nd}])",
+               System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// <summary>
     /// The specimen number from the segment the link names ("SPM-2", "OBR-3", "OBR-2", "ORC-3"),

@@ -6238,6 +6238,7 @@
   "Instruments_EmptyMessage": "Message automate vide.",
   "Instruments_MissingMsh": "Segment MSH absent : message HL7 invalide.",
   "Instruments_UnsupportedMessageType": "Type de message HL7 non pris en charge : {0}",
+  "Instruments_MindrayCalibrationIgnored": "Résultats d'étalonnage Mindray ({0}) : reçus et acquittés, non enregistrés (l'étalonnage se suit sur l'automate).",
   "Instruments_MissingSpecimenId": "Identifiant d'échantillon absent dans l'enregistrement : {0}",
   "Instruments_ResultWithoutOrder": "Résultat transmis sans enregistrement de demande : {0}",
   "Instruments_MissingTestCode": "Code d'analyse absent dans l'enregistrement : {0}",

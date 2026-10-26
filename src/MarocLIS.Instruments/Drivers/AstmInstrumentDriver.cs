@@ -557,7 +557,9 @@ public sealed class Hl7InstrumentDriver : IInstrumentDriver
 
     public Guid InterfaceId => _config.Id;
     public bool IsConnected => _transport.IsConnected;
-    public string Description => $"HL7 v2 — {_transport.Description}";
+    public string Description => _config.MessageFormat.IsMindray
+        ? $"HL7 v2.3.1 ({_config.Hl7Dialect}) — {_transport.Description}"
+        : $"HL7 v2 — {_transport.Description}";
 
     public async Task RunAsync(CancellationToken ct)
     {
@@ -601,6 +603,16 @@ public sealed class Hl7InstrumentDriver : IInstrumentDriver
 
         if (message.Kind == InstrumentMessageKind.Acknowledgement) return;
 
+        var format = _config.MessageFormat;
+
+        // Mindray answers a query with QCK^Q02 and DSR^Q03, never with ORM^O01, and is told « not
+        // found » rather than left to time out when the link does not download worklists.
+        if (message.Kind == InstrumentMessageKind.Query && format.IsMindray)
+        {
+            await AnswerMindrayQueryAsync(parsed, message, format, ct);
+            return;
+        }
+
         if (message.Kind == InstrumentMessageKind.Query
             && _config.Direction != InstrumentDirection.Unidirectional)
         {
@@ -619,15 +631,49 @@ public sealed class Hl7InstrumentDriver : IInstrumentDriver
 
     private async Task SendAckAsync(Hl7Message inbound, string? errorText, CancellationToken ct)
     {
-        var ack = inbound.BuildAck(SendingApplication, DateTimeOffset.Now, errorText);
-        await _transport.WriteAsync(Mllp.Wrap(ack, _encoding), ct);
-        await _sink.LogRawAsync(_config.Id, MessageDirection.Outbound, ack, ct);
+        var ack = _config.MessageFormat.IsMindray
+            ? MindrayHl7.BuildAck(inbound, SendingApplication, DateTimeOffset.Now, errorText)
+            : inbound.BuildAck(SendingApplication, DateTimeOffset.Now, errorText);
+        await SendAsync(ack, ct);
+    }
+
+    private async Task SendAsync(string message, CancellationToken ct)
+    {
+        await _transport.WriteAsync(Mllp.Wrap(message, _encoding), ct);
+        await _sink.LogRawAsync(_config.Id, MessageDirection.Outbound, message, ct);
+    }
+
+    /// <summary>
+    /// The Mindray worklist dialogue: QCK^Q02 says whether the LIS has the tube (« OK » or « NF »),
+    /// then one DSR^Q03 per tube found carries its patient and tests; the analyser acknowledges each
+    /// with ACK^Q03. A haematology BC link, or a unidirectional one, answers « NF »: the analyser
+    /// then runs what is programmed on it instead of waiting for a time-out.
+    /// </summary>
+    private async Task AnswerMindrayQueryAsync(Hl7Message query, InstrumentMessage message,
+                                               InstrumentMessageFormat format, CancellationToken ct)
+    {
+        IReadOnlyList<InstrumentOrderDownload> orders = [];
+
+        if (_config.Direction != InstrumentDirection.Unidirectional && format.Hl7Dialect != Hl7Dialect.MindrayBc)
+            orders = await _sink.ResolveQueryAsync(_config.Id, message.QueriedSpecimenIds, ct);
+        else
+            _logger?.LogInformation("Mindray query on {Interface} answered « not found »: the link does not download worklists.",
+                                    _config.Id);
+
+        var now = DateTimeOffset.Now;
+        await SendAsync(MindrayHl7.BuildQueryAck(query, SendingApplication, now, orders.Count > 0), ct);
+
+        foreach (var order in orders)
+            await SendAsync(MindrayHl7.BuildWorklist(query, order, SendingApplication, now), ct);
     }
 
     public async Task<bool> SendOrdersAsync(IReadOnlyList<InstrumentOrderDownload> orders,
                                              CancellationToken ct = default)
     {
         if (orders.Count == 0 || !_transport.IsConnected) return false;
+
+        // A Mindray analyser takes its worklist only as the answer to its own query.
+        if (_config.MessageFormat.IsMindray) return false;
 
         foreach (var order in orders)
         {

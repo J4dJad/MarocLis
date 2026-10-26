@@ -6237,6 +6237,7 @@
   "Instruments_EmptyMessage": "رسالة الجهاز فارغة.",
   "Instruments_MissingMsh": "المقطع MSH غائب: رسالة HL7 غير صحيحة.",
   "Instruments_UnsupportedMessageType": "نوع رسالة HL7 غير مدعوم: {0}",
+  "Instruments_MindrayCalibrationIgnored": "نتائج معايرة Mindray ({0}): استُلمت وأُكّد استلامها دون تسجيلها (تُتابَع المعايرة على المحلّل).",
   "Instruments_MissingSpecimenId": "معرف العينة غائب في السجل: {0}",
   "Instruments_ResultWithoutOrder": "نتيجة مُرسلة بدون سجل طلب: {0}",
   "Instruments_MissingTestCode": "رمز التحليل غائب في السجل: {0}",
