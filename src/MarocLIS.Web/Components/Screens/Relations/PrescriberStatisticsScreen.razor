@@ -1,0 +1,200 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Relations
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@using MarocLIS.Web.Components.Screens.Steering
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<PrescriberStatisticsScreen> Logger
+
+@*
+    « Statistiques prescripteurs », the workstation's PrescriberStatisticsView: what each prescriber
+    and each clinic sends for a period — files, analyses and revenue in DH against the period before
+    and the same period last year — by prescriber, by institution and by month, the prescribers who
+    started sending (on the green of a normal result) and those who stopped, and the detail month by
+    month, every site the operator may open counted together. A row's detail opens over the table
+    (a prescriber's months, an institution's prescribers, a month's prescribers); each table and each
+    detail is downloaded as CSV. What is shown, offered and refused is PrescriberStatisticsScreenRules';
+    the computation is PrescriberStatisticsService's.
+*@
+<div class="screen report-screen" data-screen="prescriberstats">
+    @{ var actions = Actions; var result = _result; var rows = Rows(result, _tab); }
+    <PeriodFilters State="_period" Prefix="prescriberstats" PeriodField="@PrescriberStatisticsScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@Heading(result)" OnChosen="LoadAsync" />
+
+    <div class="screen-body">
+        @if (result is not null)
+        {
+            <ReportTiles Tiles="PrescriberStatisticsScreenRules.Tiles(result, Texts.T, Mad, Texts.Culture)" />
+        }
+
+        <section class="card card-flush report-card" data-card="prescriberstats">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<PrescriberStatisticsTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => Choose(tab)">
+                        @Texts[PrescriberStatisticsScreenRules.TabKey(tab)]
+                        @if (result is not null)
+                        {
+                            <span class="pill pill-waiting">@Rows(result, tab).Count</span>
+                        }
+                    </button>
+                }
+            </div>
+            @if (_tab == PrescriberStatisticsTab.MonthlyDetail)
+            {
+                <ReportTable Name="prescriberstats" Columns="PrescriberStatisticsScreenRules.Columns(_tab)" Rows="rows"
+                             Identifier="PrescriberStatisticsScreenRules.IsIdentifier" Computed="@(result is not null)" />
+            }
+            else
+            {
+                <ReportTable Name="prescriberstats" Columns="PrescriberStatisticsScreenRules.Columns(_tab)" Rows="rows"
+                             Identifier="PrescriberStatisticsScreenRules.IsIdentifier" Computed="@(result is not null)"
+                             RowClass="@(i => PrescriberStatisticsScreenRules.IsNew(result, _tab, i) ? "is-new" : null)"
+                             Selected="_selected" OnRowClick="Select" OnRowDoubleClick="Drill" />
+            }
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Web.RelationsDetail" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Eye"
+                          Hidden="@(_tab == PrescriberStatisticsTab.MonthlyDetail)"
+                          Disabled="@(!actions.Detail || _selected is null || _busy)" OnClick="() => Drill(_selected ?? -1)" />
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Statistics.Compute" Primary="true" Disabled="@(!actions.Compute || _busy)" OnClick="LoadAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@if (_drill is { } drill)
+{
+    <Modal Name="prescriber-drill" Title="@drill.Title" Hint="@PrescriberStatisticsScreenRules.Subtitle(_result, Texts.T)" Large="true" OnCancel="CloseDrill">
+        <ChildContent>
+            <div class="card card-flush">
+                <ReportTable Name="prescriber-drill" Columns="drill.Columns" Rows="drill.Rows"
+                             Identifier="PrescriberStatisticsScreenRules.IsIdentifier" Computed="true" />
+            </div>
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(drill.Rows.Count == 0 || _busy)" OnClick="DrillCsvAsync" />
+            <ActionButton Key="Action.Close" Primary="true" OnClick="CloseDrill" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private PeriodState _period = default!;
+    private PrescriberStatisticsTab _tab = PrescriberStatisticsTab.ByPrescriber;
+    private PrescriberStatistics? _result;
+    private PrescriberDrill? _drill;
+    private int? _selected;
+    private FieldRefusal? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private PrescriberStatisticsActions Actions => PrescriberStatisticsScreenRules.Actions(Context.User.Has, _result);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private IReadOnlyList<ReportRow> Rows(PrescriberStatistics? result, PrescriberStatisticsTab tab) =>
+        PrescriberStatisticsScreenRules.Rows(result, tab, Texts.T, Mad, Texts.Culture);
+
+    // « Activité par prescripteur — 01/10/2026 → 26/10/2026 (comparé à …) », the workstation's title and the period beside it.
+    private string Heading(PrescriberStatistics? result) =>
+        result is null
+            ? Texts["Relations.PrescriberStatisticsTitle"]
+            : $"{Texts["Relations.PrescriberStatisticsTitle"]} — {PrescriberStatisticsScreenRules.Subtitle(result, Texts.T)}";
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    private void Choose(PrescriberStatisticsTab tab)
+    {
+        _tab = tab;
+        _selected = null;
+    }
+
+    private void Select(int index) => _selected = index;
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (from, to) = (_period.From, _period.To);
+            var result = await Scopes.RunAsync<PrescriberStatisticsService, Result<PrescriberStatistics>>(s => s.GetAsync(from, to));
+            if (result.IsFailure)
+            {
+                var error = result.FirstError;
+                if (PrescriberStatisticsScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _status = null;
+            _selected = null;
+            _result = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Computing prescriber statistics failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>A row's detail over the table: a prescriber's months, an institution's or a month's prescribers.</summary>
+    private void Drill(int index)
+    {
+        if (!Actions.Detail || index < 0) return;
+        _selected = index;
+        _drill = PrescriberStatisticsScreenRules.Drill(_result, _tab, index, Texts.T, Mad, Texts.Culture);
+    }
+
+    private void CloseDrill() => _drill = null;
+
+    private Task CsvAsync() =>
+        _result is { } result && Actions.Export
+            ? DownloadAsync(PrescriberStatisticsScreenRules.Csv(result, _tab, Texts.T, Mad, Texts.Culture),
+                            PrescriberStatisticsScreenRules.FileName(result, _tab))
+            : Task.CompletedTask;
+
+    private Task DrillCsvAsync() =>
+        _result is { } result && _drill is { } drill
+            ? DownloadAsync(PrescriberStatisticsScreenRules.Csv(drill, Texts.T), PrescriberStatisticsScreenRules.FileName(result, _tab, detail: true))
+            : Task.CompletedTask;
+
+    private async Task DownloadAsync(byte[]? csv, string name)
+    {
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+    }
+}

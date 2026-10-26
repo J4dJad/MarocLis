@@ -11,8 +11,7 @@
 @*
     A screen of the menu. Opened only by the rule that builds the menu: a screen the operator may not
     see is refused here too when its address is typed, and the refusal is recorded as the services
-    record one. The screens ported so far open here; the others say they are not yet in the web
-    version.
+    record one. Every screen of the menu opens here.
 *@
 <PageTitle>MarocLIS — @Title</PageTitle>
 
@@ -236,13 +235,20 @@
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;
 
-        case ScreenDecision.Open:
-            <div class="card card-empty" data-state="unavailable">
-                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Cpu" Class="icon-large" />
-                <p>@Texts["Web.ScreenUnavailable"]</p>
-            </div>
+        case ScreenDecision.Open when Key == "prescriberstats":
+            <MarocLIS.Web.Components.Screens.Relations.PrescriberStatisticsScreen />
             break;
 
+        case ScreenDecision.Open when Key == "relations":
+            <MarocLIS.Web.Components.Screens.Relations.RelationsScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "patientmessaging":
+            <MarocLIS.Web.Components.Screens.Relations.PatientMessagingScreen />
+            break;
+
+        // Every entry of the menu has its screen: an address the menu opens but no screen answers is unknown here.
+        case ScreenDecision.Open:
         case ScreenDecision.NotFound:
             <div class="card card-refused" data-state="not-found" role="alert">
                 <p>@Texts["Web.ScreenNotFound"]</p>

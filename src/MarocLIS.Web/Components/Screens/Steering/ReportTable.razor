@@ -5,10 +5,11 @@
 @*
     A table of a period report, the workstation's ReportGrids grid: the columns in the rules' order,
     the figures right-aligned in the fixed-pitch face, codes and dates read left to right, a name
-    shortened only with its whole text in its tooltip, a row to watch in its ink.
+    shortened only with its whole text in its tooltip, a row to watch in its ink. A screen that opens
+    a row's detail gets the row clicked (and double-clicked) back, the row selected highlighted.
 *@
 <div class="table-scroll">
-    <table class="grid report-grid" data-grid="@Name">
+    <table class="grid report-grid @(OnRowClick.HasDelegate ? "grid-select" : null)" data-grid="@Name">
         <thead>
             <tr>
                 @foreach (var column in Columns)
@@ -21,7 +22,9 @@
             @for (var r = 0; r < Rows.Count; r++)
             {
                 var row = Rows[r];
-                <tr class="@StockTones.Ink(row.Ink)" data-row="@r" data-ink="@row.Ink">
+                var index = r;
+                <tr class="@StockTones.Ink(row.Ink) @RowClass?.Invoke(r) @(Selected == r ? "is-selected" : null)" data-row="@r" data-ink="@row.Ink"
+                    @onclick="() => ClickAsync(index)" @ondblclick="() => DoubleClickAsync(index)">
                     @for (var c = 0; c < Columns.Count && c < row.Cells.Count; c++)
                     {
                         var column = Columns[c];
@@ -59,6 +62,22 @@
 
     /// <summary>A period was computed: an empty table then says so.</summary>
     [Parameter] public bool Computed { get; set; }
+
+    /// <summary>A class of its own for a row (a prescriber new in the period on the green of a normal result).</summary>
+    [Parameter] public Func<int, string?>? RowClass { get; set; }
+
+    /// <summary>The row selected, highlighted.</summary>
+    [Parameter] public int? Selected { get; set; }
+
+    /// <summary>A row clicked: its index.</summary>
+    [Parameter] public EventCallback<int> OnRowClick { get; set; }
+
+    /// <summary>A row double-clicked: its index (its detail opened).</summary>
+    [Parameter] public EventCallback<int> OnRowDoubleClick { get; set; }
+
+    private Task ClickAsync(int index) => OnRowClick.HasDelegate ? OnRowClick.InvokeAsync(index) : Task.CompletedTask;
+
+    private Task DoubleClickAsync(int index) => OnRowDoubleClick.HasDelegate ? OnRowDoubleClick.InvokeAsync(index) : Task.CompletedTask;
 
     private static string? Cell(ReportColumn column, bool identifier) =>
         column.Numeric ? "num nowrap mono" : identifier ? "mono small nowrap" : null;

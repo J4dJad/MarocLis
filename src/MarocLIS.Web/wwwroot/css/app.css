@@ -1400,3 +1400,23 @@ html[dir=rtl] :is([data-screen=leave], [data-screen=payroll], [data-screen=accid
 .accident-tables > .table-scroll { min-block-size: 0; max-block-size: none; border: 0; border-radius: 0; overflow: auto; }
 .accident-tables > .table-scroll + .table-scroll { border-inline-start: 1px solid var(--border); }
 html[dir=rtl] .planning-grid .planning-name .list-name { text-align: right; }
+/* « Statistiques prescripteurs », « Visites et conventions » and « Rappels et enquêtes »: a prescriber who started
+   sending on the green of a normal result; the visits or conventions above the file of the row selected (its facts
+   beside its report or terms, read in full); the consent notice above the campaigns, a message's text on two lines
+   with the whole of it on hover; the last column clear of the card's edge (in Arabic, of its left edge). */
+.grid tr.is-new td { background: var(--normal-bg); }
+.grid tr.is-new.is-selected td { background: var(--accent-subtle); }
+.screen-body.split.relations-body { grid-template-rows: minmax(0, 1fr) minmax(0, 230px); }
+.relations-notice, .messaging-notice { flex-wrap: nowrap; }
+.relations-notice-text, .messaging-notice-text { flex: 1 1 auto; min-inline-size: 0; }
+.relation-file-body { flex: 1 1 auto; min-block-size: 0; overflow: auto; display: grid; grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); gap: 0 20px; padding: 10px 16px; }
+.relation-file-facts, .relation-file-text { min-inline-size: 0; display: flex; flex-direction: column; gap: 6px; }
+.relation-file-facts > p, .relation-file-text > p { margin: 0; }
+.relation-file-text { border-inline-start: 1px solid var(--border); padding-inline-start: 20px; }
+.relation-file-text > .field-label + p { white-space: pre-wrap; margin-block-end: 6px; }
+.relation-facts { grid-template-columns: max-content minmax(0, 1fr); }
+.grid td.messaging-text { min-inline-size: 220px; }
+.import-details { margin: 8px 0 0; padding-inline-start: 18px; max-block-size: 220px; overflow: auto; }
+:is([data-screen=prescriberstats], [data-screen=relations], [data-screen=patientmessaging], [data-modal=prescriber-drill]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=prescriberstats], [data-screen=relations], [data-screen=patientmessaging], [data-modal=prescriber-drill]) .grid :is(th, td):last-child { padding-left: 22px; padding-right: 8px; }
+@media (max-width: 1100px) { .relation-file-body { grid-template-columns: minmax(0, 1fr); } .relation-file-text { border: 0; padding: 0; } }

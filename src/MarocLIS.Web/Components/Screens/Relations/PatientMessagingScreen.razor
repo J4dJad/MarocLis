@@ -1,0 +1,700 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Application.Relations
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Relations
+@using MarocLIS.Web.Components.Screens.Steering
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<PatientMessagingScreen> Logger
+
+@*
+    « Rappels et enquêtes », the workstation's PatientMessagingView: the bilan reminders due today
+    and the satisfaction surveys of the reports of a period, each text as the patient will read it,
+    all ticked and sent through the laboratory's SMS gateway once confirmed; the reminder rules; the
+    surveys' results (key figures and comments) and the log of every message sent, a refused one in
+    red with the gateway's reason. Only the patients with the follow-up consent, a mobile number and
+    no opposition are listed — the service leaves the others out, and checks again when sending.
+    Everything is for whom may run the patient campaigns. What is shown and offered is
+    PatientMessagingScreenRules'; what is sent and recorded, PatientMessagingService's.
+*@
+<div class="screen messaging" data-screen="patientmessaging">
+    @{ var actions = Actions; }
+    <PeriodFilters State="_period" Prefix="messaging" PeriodField="@PatientMessagingScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@Texts["Messaging.Title"]" OnChosen="LoadAsync" />
+    <div class="list-tools messaging-notice" data-tools="notice">
+        <span class="small muted text-full messaging-notice-text" data-state="notice">@PatientMessagingScreenRules.Notice(_canSendSms, Texts.T)</span>
+    </div>
+
+    <div class="screen-body">
+        @if (_tab == MessagingTab.SurveyResults && _results is { } results)
+        {
+            <ReportTiles Tiles="PatientMessagingScreenRules.Tiles(results, Texts.T, Texts.Culture)" />
+        }
+
+        <section class="card card-flush report-card" data-card="messaging">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<MessagingTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => ChooseAsync(tab)">
+                        @Texts[PatientMessagingScreenRules.TabKey(tab)]
+                        @if (CountOf(tab) is { } count)
+                        {
+                            <span class="pill pill-waiting">@count</span>
+                        }
+                    </button>
+                }
+            </div>
+            <div class="table-scroll">
+                @switch (_tab)
+                {
+                    case MessagingTab.Reminders:
+                        <table class="grid" data-grid="reminders">
+                            <thead>
+                                <tr>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-field="tick-all" aria-label="@Texts["Messaging.Column.send"]" title="@Texts["Messaging.Column.send"]"
+                                               checked="@(_reminders.Count > 0 && _unticked.Count == 0)" @onchange="TickAll" />
+                                    </th>
+                                    @foreach (var column in PatientMessagingScreenRules.Columns(_tab))
+                                    {
+                                        <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _reminders)
+                                {
+                                    var key = KeyOf(c);
+                                    var cells = PatientMessagingScreenRules.Cells(c, Texts.Culture);
+                                    <tr data-row="@c.PatientName" class="@(_unticked.Contains(key) ? "is-tone-muted" : null)">
+                                        <td class="col-check"><input type="checkbox" data-field="tick" checked="@(!_unticked.Contains(key))" @onchange="e => Tick(key, e)" /></td>
+                                        <td><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[1]</td>
+                                        <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[3]</td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[4]</td>
+                                        <td class="small messaging-text"><span class="list-name" title="@cells[5]" dir="auto">@cells[5]</span></td>
+                                        <td class="num mono">@cells[6]</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @(Empty(_loaded && _reminders.Count == 0))
+                        break;
+
+                    case MessagingTab.Surveys:
+                        <table class="grid" data-grid="surveys">
+                            <thead>
+                                <tr>
+                                    <th class="col-check">
+                                        <input type="checkbox" data-field="tick-all" aria-label="@Texts["Messaging.Column.send"]" title="@Texts["Messaging.Column.send"]"
+                                               checked="@(_surveys.Count > 0 && _unticked.Count == 0)" @onchange="TickAll" />
+                                    </th>
+                                    @foreach (var column in PatientMessagingScreenRules.Columns(_tab))
+                                    {
+                                        <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _surveys)
+                                {
+                                    var key = c.OrderId.ToString();
+                                    var cells = PatientMessagingScreenRules.Cells(c, Offset(c.ReportedAt), Texts.Culture);
+                                    <tr data-row="@c.AccessionNumber" class="@(_unticked.Contains(key) ? "is-tone-muted" : null)">
+                                        <td class="col-check"><input type="checkbox" data-field="tick" checked="@(!_unticked.Contains(key))" @onchange="e => Tick(key, e)" /></td>
+                                        <td><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[1]</td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[2]</td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[3]</td>
+                                        <td class="small messaging-text"><span class="list-name" title="@cells[4]" dir="auto">@cells[4]</span></td>
+                                        <td class="num mono">@cells[5]</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @(Empty(_loaded && _surveys.Count == 0))
+                        break;
+
+                    case MessagingTab.Rules:
+                        <table class="grid grid-select" data-grid="rules">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in PatientMessagingScreenRules.Columns(_tab))
+                                    {
+                                        <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _rules)
+                                {
+                                    var cells = PatientMessagingScreenRules.Cells(r, Texts.Language, Texts.T, Texts.Culture);
+                                    var id = r.Id;
+                                    <tr data-row="@r.Code" class="@(r.Id == _ruleId ? "is-selected" : null) @(r.IsActive ? null : "is-tone-muted")"
+                                        @onclick="() => _ruleId = id" @ondblclick="EditRuleOnDoubleClickAsync">
+                                        <td class="mono small nowrap" dir="ltr">@cells[0]</td>
+                                        <td><span class="list-name strong" title="@cells[1]">@cells[1]</span></td>
+                                        <td class="num mono">@cells[2]</td>
+                                        <td class="num mono">@cells[3]</td>
+                                        <td class="small messaging-text"><span class="list-name" title="@cells[4]" dir="auto">@cells[4]</span></td>
+                                        <td class="small nowrap">@cells[5]</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @(Empty(_loaded && _rules.Count == 0))
+                        break;
+
+                    case MessagingTab.SurveyResults:
+                        <table class="grid" data-grid="comments">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in PatientMessagingScreenRules.Columns(_tab))
+                                    {
+                                        <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _results?.Comments ?? [])
+                                {
+                                    var cells = PatientMessagingScreenRules.Cells(c, Texts.Culture);
+                                    <tr>
+                                        <td class="mono small nowrap" dir="ltr">@cells[0]</td>
+                                        <td class="num mono">@cells[1]</td>
+                                        <td class="small"><span class="text-full" dir="auto">@cells[2]</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @(Empty(_loaded && (_results?.Comments.Count ?? 0) == 0))
+                        break;
+
+                    default:
+                        <table class="grid" data-grid="log">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in PatientMessagingScreenRules.Columns(_tab))
+                                    {
+                                        <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in _log)
+                                {
+                                    var cells = PatientMessagingScreenRules.Cells(m, Offset(m.SentAt), Texts.T);
+                                    var tone = PatientMessagingScreenRules.Tone(m.Status);
+                                    <tr data-row="@m.PatientName" data-state="@m.Status">
+                                        <td class="mono small nowrap" dir="ltr">@cells[0]</td>
+                                        <td class="small"><span class="list-name" title="@cells[1]">@cells[1]</span></td>
+                                        <td><span class="list-name strong" title="@cells[2]">@cells[2]</span></td>
+                                        <td class="mono small nowrap" dir="ltr">@cells[3]</td>
+                                        <td class="nowrap"><Pill Text="@StockTones.Label(tone, cells[4])" Tone="@StockTones.Pill(tone)" /></td>
+                                        <td class="small messaging-text @(tone == StockTone.Critical ? "critical" : null)"><span class="list-name" title="@cells[5]" dir="auto">@cells[5]</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @(Empty(_loaded && _log.Count == 0))
+                        break;
+                }
+            </div>
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="@actions.SurveyTools">
+        <Secondary>
+            <ActionButton Key="Action.Edit" Hidden="@(!actions.Rules)" Disabled="@(!actions.EditRule || _busy)" OnClick="() => AskRuleAsync(SelectedRule)" />
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+            <ActionButton Key="Action.Refresh" Disabled="_busy" OnClick="LoadAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Messaging.RecordAnswer" Hidden="@(!actions.SurveyTools)" Disabled="_busy" OnClick="() => Ask(Prompt.Answer)" />
+            <ActionButton Key="Messaging.ImportReplies" Hidden="@(!actions.SurveyTools)" Disabled="_busy" OnClick="() => Ask(Prompt.Import)" />
+            <ActionButton Key="Messaging.SurveySettings" Hidden="@(!actions.SurveyTools)" Disabled="_busy" OnClick="AskSettingsAsync" />
+        </More>
+        <Primary>
+            @if (actions.Rules)
+            {
+                <ActionButton Key="Messaging.NewRule" Primary="true" Disabled="_busy" OnClick="() => AskRuleAsync(null)" />
+            }
+            else
+            {
+                <ActionButton Key="Messaging.SendSelected" Primary="true" Hidden="@(!actions.Send)"
+                              Disabled="@(!actions.SendEnabled || !_canSendSms || _busy)" Title="@(_canSendSms ? null : Texts["Messaging.SmsNotConfiguredNotice"])"
+                              OnClick="() => Ask(Prompt.Send)" />
+            }
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Send:
+        <ConfirmPrompt Title="@Texts["Messaging.SendSelected"]" Message="@PatientMessagingScreenRules.ConfirmSend(Ticked, Texts.T)"
+                       OnYes="SendAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Rule:
+        <ReminderRuleDialog Rule="_editingRule" Targets="PatientMessagingScreenRules.Targets(_targets, _editingRule)"
+                            Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveRuleAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Answer:
+        <SurveyAnswerDialog Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveAnswerAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Settings when _settings is { } settings:
+        <SurveySettingsDialog Settings="settings" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                              OnSave="SaveSettingsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Import:
+        <Modal Name="survey-replies" Title="@Texts["Messaging.ImportReplies"]" Hint="@Texts["Messaging.ImportRepliesIntro"]" Wide="true" OnCancel="ClosePrompt">
+            <ChildContent>
+                @if (_imported is { } imported)
+                {
+                    <p class="message is-info text-full" data-state="import-outcome">@imported.Summary</p>
+                    @if (imported.Details.Count > 0)
+                    {
+                        <ul class="small text-full import-details" data-state="import-details">
+                            @foreach (var line in imported.Details)
+                            {
+                                <li dir="auto">@line</li>
+                            }
+                        </ul>
+                    }
+                }
+                else
+                {
+                    <p class="small muted text-full" data-state="import-help">@Texts["Messaging.ImportRepliesHelp"]</p>
+                    <label class="field">
+                        <span class="field-label">@Texts["Messaging.Replies"]</span>
+                        <textarea class="input mono @(_fieldRefusal?.Field == PatientMessagingScreenRules.RepliesField ? "is-refused" : null)" rows="8" dir="auto"
+                                  maxlength="@PatientMessagingScreenRules.RepliesMaxLength" data-field="@PatientMessagingScreenRules.RepliesField"
+                                  @bind="_replies" @bind:event="oninput"></textarea>
+                        <FieldMessage Refusal="_fieldRefusal" Field="@PatientMessagingScreenRules.RepliesField" />
+                    </label>
+                    @if (_dialogRefusal is { Length: > 0 } refused)
+                    {
+                        <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+                    }
+                }
+            </ChildContent>
+            <Footer>
+                @if (_imported is null)
+                {
+                    <ActionButton Key="Action.Cancel" OnClick="ClosePrompt" />
+                    <ActionButton Key="Messaging.ImportReplies" Primary="true" Disabled="@(_busy || string.IsNullOrWhiteSpace(_replies))" OnClick="ImportAsync" />
+                }
+                else
+                {
+                    <ActionButton Key="Action.Close" Primary="true" OnClick="ClosePrompt" />
+                }
+            </Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Send, Rule, Answer, Import, Settings }
+
+    private PeriodState _period = default!;
+    private MessagingTab _tab = MessagingTab.Reminders;
+    private IReadOnlyList<ReminderCandidate> _reminders = [];
+    private IReadOnlyList<SurveyCandidate> _surveys = [];
+    private IReadOnlyList<ReminderRuleRow> _rules = [];
+    private IReadOnlyList<PatientMessageRow> _log = [];
+    private IReadOnlyList<ReminderTarget> _targets = [];
+    private SurveyResults? _results;
+    private readonly HashSet<string> _unticked = [];
+    private Guid? _ruleId;
+    private bool _canSendSms, _loaded, _busy;
+
+    private Prompt _prompt;
+    private ReminderRuleRow? _editingRule;
+    private MessagingSettings? _settings;
+    private string? _replies;
+    private (string Summary, IReadOnlyList<string> Details)? _imported;
+    private FieldRefusal? _refusal;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private ReminderRuleRow? SelectedRule => _rules.FirstOrDefault(r => r.Id == _ruleId);
+
+    private int Ticked => _tab switch
+    {
+        MessagingTab.Reminders => _reminders.Count(c => !_unticked.Contains(KeyOf(c))),
+        MessagingTab.Surveys => _surveys.Count(c => !_unticked.Contains(c.OrderId.ToString())),
+        _ => 0
+    };
+
+    private MessagingActions Actions => PatientMessagingScreenRules.Actions(Context.User.Has, _tab, Ticked, SelectedRule);
+
+    private RenderFragment Empty(bool shown) => __builder =>
+    {
+        if (shown)
+        {
+            <p class="muted small card-pad" data-state="empty">@Texts["App.NoData"]</p>
+        }
+    };
+
+    private static string KeyOf(ReminderCandidate c) => $"{c.RuleId}/{c.PatientId}/{c.OrderId}";
+
+    /// <summary>The laboratory's offset at that moment: the times are read in its clock, as the workstation's.</summary>
+    private static TimeSpan Offset(DateTimeOffset at) => TimeZoneInfo.Local.GetUtcOffset(at);
+
+    /// <summary>The count beside a tab's name, once its list was read (the results have their figures).</summary>
+    private int? CountOf(MessagingTab tab) => !_loaded || tab != _tab ? null : tab switch
+    {
+        MessagingTab.Reminders => _reminders.Count,
+        MessagingTab.Surveys => _surveys.Count,
+        MessagingTab.Rules => _rules.Count,
+        MessagingTab.Log => _log.Count,
+        _ => null
+    };
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The tab in view read again: a preview is read afresh, every patient ticked again.</summary>
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _canSendSms = await Scopes.RunAsync<PatientMessagingService, bool>(s => Task.FromResult(s.CanSendSms));
+            var (from, to) = (_period.From, _period.To);
+            switch (_tab)
+            {
+                case MessagingTab.Reminders:
+                    var reminders = await Scopes.RunAsync<PatientMessagingService, Result<IReadOnlyList<ReminderCandidate>>>(s => s.PreviewRemindersAsync());
+                    if (Failed(reminders)) return;
+                    _reminders = reminders.Value;
+                    _unticked.Clear();
+                    break;
+
+                case MessagingTab.Rules:
+                    var rules = await Scopes.RunAsync<PatientMessagingService, Result<IReadOnlyList<ReminderRuleRow>>>(s => s.GetRulesAsync());
+                    if (Failed(rules)) return;
+                    _rules = rules.Value;
+                    _ruleId = SelectedRule?.Id ?? _rules.FirstOrDefault()?.Id;
+                    break;
+
+                case MessagingTab.Surveys:
+                    var surveys = await Scopes.RunAsync<PatientMessagingService, Result<IReadOnlyList<SurveyCandidate>>>(s => s.PreviewSurveysAsync(from, to));
+                    if (Failed(surveys)) return;
+                    _surveys = surveys.Value;
+                    _unticked.Clear();
+                    break;
+
+                case MessagingTab.SurveyResults:
+                    var results = await Scopes.RunAsync<PatientMessagingService, Result<SurveyResults>>(s => s.GetSurveyResultsAsync(from, to));
+                    if (Failed(results)) return;
+                    _results = results.Value;
+                    break;
+
+                default:
+                    var log = await Scopes.RunAsync<PatientMessagingService, Result<IReadOnlyList<PatientMessageRow>>>(s => s.GetLogAsync(from, to));
+                    if (Failed(log)) return;
+                    _log = log.Value;
+                    break;
+            }
+
+            _refusal = null;
+            _loaded = true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading patient messaging failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private bool Failed(Result result)
+    {
+        if (result.IsSuccess) return false;
+        var error = result.FirstError;
+        if (PatientMessagingScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+        else _status = (Texts.Describe(result.Errors), "critical");
+        return true;
+    }
+
+    private Task ChooseAsync(MessagingTab tab)
+    {
+        if (tab == _tab) return Task.CompletedTask;
+        _tab = tab;
+        _loaded = false;
+        _status = null;
+        return LoadAsync();
+    }
+
+    private void Tick(string key, ChangeEventArgs e)
+    {
+        if (e.Value is true) _unticked.Remove(key);
+        else _unticked.Add(key);
+    }
+
+    private void TickAll(ChangeEventArgs e)
+    {
+        _unticked.Clear();
+        if (e.Value is true) return;
+        if (_tab == MessagingTab.Reminders) _unticked.UnionWith(_reminders.Select(KeyOf));
+        else if (_tab == MessagingTab.Surveys) _unticked.UnionWith(_surveys.Select(c => c.OrderId.ToString()));
+    }
+
+    // ---- Sending -------------------------------------------------------------------------------------
+
+    private Task SendAsync() =>
+        RunAsync(async () =>
+        {
+            ClosePrompt();
+            if (!Actions.SendEnabled) return;
+            Result<CampaignOutcome> result;
+            if (_tab == MessagingTab.Reminders)
+            {
+                List<ReminderSelection> picked = [.. _reminders.Where(c => !_unticked.Contains(KeyOf(c)))
+                                                               .Select(c => new ReminderSelection(c.RuleId, c.PatientId, c.OrderId))];
+                result = await Scopes.RunAsync<PatientMessagingService, Result<CampaignOutcome>>(s => s.SendRemindersAsync(picked));
+            }
+            else
+            {
+                List<Guid> picked = [.. _surveys.Where(c => !_unticked.Contains(c.OrderId.ToString())).Select(c => c.OrderId)];
+                var (from, to) = (_period.From, _period.To);
+                result = await Scopes.RunAsync<PatientMessagingService, Result<CampaignOutcome>>(s => s.SendSurveysAsync(from, to, picked));
+            }
+
+            await ReloadAsync();
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            var (text, ink) = PatientMessagingScreenRules.Outcome(result.Value, Texts.T);
+            _status = (text, ink == StockInk.Abnormal ? "warning" : "normal");
+        });
+
+    // ---- Rules ---------------------------------------------------------------------------------------
+
+    private Task EditRuleOnDoubleClickAsync() => Actions.EditRule ? AskRuleAsync(SelectedRule) : Task.CompletedTask;
+
+    private Task AskRuleAsync(ReminderRuleRow? rule) =>
+        RunAsync(async () =>
+        {
+            if (rule is null ? !Actions.Rules : !Actions.EditRule) return;
+            if (_targets.Count == 0)
+            {
+                var loaded = await Scopes.RunAsync<PatientMessagingService, Result<IReadOnlyList<ReminderTarget>>>(s => s.GetTargetsAsync());
+                if (loaded.IsFailure)
+                {
+                    _status = (Texts.Describe(loaded.Errors), "critical");
+                    return;
+                }
+                _targets = loaded.Value;
+            }
+
+            _editingRule = rule;
+            Ask(Prompt.Rule);
+        });
+
+    private Task SaveRuleAsync(SaveReminderRuleRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<PatientMessagingService, Result<Guid>>(s => s.SaveRuleAsync(request));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.Errors, PatientMessagingScreenRules.RuleFieldOf(saved.FirstError.ResourceKey));
+                return;
+            }
+
+            ClosePrompt();
+            _ruleId = saved.Value;
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Surveys -------------------------------------------------------------------------------------
+
+    private Task SaveAnswerAsync((string Code, int Score, string? Comment) answer) =>
+        RunAsync(async () =>
+        {
+            if (!Actions.SurveyTools) return;
+            var recorded = await Scopes.RunAsync<PatientMessagingService, Result>(
+                s => s.RecordAnswerAsync(answer.Code, answer.Score, answer.Comment, SurveyAnswerChannel.Manual));
+            if (recorded.IsFailure)
+            {
+                Refuse(recorded.Errors, PatientMessagingScreenRules.AnswerFieldOf(recorded.FirstError.ResourceKey));
+                return;
+            }
+
+            ClosePrompt();
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task ImportAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.SurveyTools || string.IsNullOrWhiteSpace(_replies)) return;
+            var text = _replies;
+            var result = await Scopes.RunAsync<PatientMessagingService, Result<ReplyImportOutcome>>(s => s.ImportRepliesAsync(text));
+            if (result.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(result.Errors);
+                return;
+            }
+
+            _imported = PatientMessagingScreenRules.ImportOutcome(result.Value, Texts.T);
+            _status = (_imported.Value.Summary, "normal");
+            await ReloadAsync();
+        });
+
+    private Task AskSettingsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.SurveyTools) return;
+            var current = await Scopes.RunAsync<PatientMessagingService, Result<MessagingSettings>>(s => s.GetSettingsAsync());
+            if (current.IsFailure)
+            {
+                _status = (Texts.Describe(current.Errors), "critical");
+                return;
+            }
+
+            _settings = current.Value;
+            Ask(Prompt.Settings);
+        });
+
+    private Task SaveSettingsAsync(MessagingSettings settings) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<PatientMessagingService, Result>(s => s.SaveSettingsAsync(settings));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.Errors, PatientMessagingScreenRules.SettingsFieldOf(saved.FirstError.ResourceKey));
+                return;
+            }
+
+            ClosePrompt();
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Export --------------------------------------------------------------------------------------
+
+    // The reminder, survey and log lists name patients, their mobile and the analyses in the texts:
+    // their export is in the data-access log, like any patient list that leaves as a file.
+    private Task CsvAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Export) return;
+            IReadOnlyList<IReadOnlyList<string>> rows = _tab switch
+            {
+                MessagingTab.Reminders => [.. _reminders.Select(c => PatientMessagingScreenRules.Cells(c, Texts.Culture))],
+                MessagingTab.Surveys => [.. _surveys.Select(c => PatientMessagingScreenRules.Cells(c, Offset(c.ReportedAt), Texts.Culture))],
+                MessagingTab.Rules => [.. _rules.Select(r => PatientMessagingScreenRules.Cells(r, Texts.Language, Texts.T, Texts.Culture))],
+                MessagingTab.SurveyResults => [.. (_results?.Comments ?? []).Select(c => PatientMessagingScreenRules.Cells(c, Texts.Culture))],
+                _ => [.. _log.Select(m => PatientMessagingScreenRules.Cells(m, Offset(m.SentAt), Texts.T))]
+            };
+            var csv = PatientMessagingScreenRules.Csv(_tab, rows, Texts.T);
+            if (csv is null)
+            {
+                _status = (Texts["App.NoData"], "muted");
+                return;
+            }
+
+            if (PatientMessagingScreenRules.ExportContext(_tab) is { } context)
+            {
+                var count = rows.Count;
+                var logged = await Scopes.RunAsync<PatientMessagingService, Result>(s => s.LogExportAsync(context, count));
+                if (logged.IsFailure)
+                {
+                    _status = (Texts.Describe(logged.Errors), "critical");
+                    return;
+                }
+            }
+
+            var name = PatientMessagingScreenRules.FileName(_tab, _period.From, _period.To, Clock.Today);
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private void Ask(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _imported = null;
+        _replies = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(IReadOnlyList<Error> errors, string? field)
+    {
+        _fieldRefusal = field is null ? null : FieldRefusal.Of(field, errors[0]);
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A patient messaging operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _editingRule = null;
+        _settings = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _imported = null;
+        _replies = null;
+    }
+}

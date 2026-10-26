@@ -155,6 +155,11 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Dashboard.IDashboardQueries, DashboardQueries>();
         services.AddScoped<Application.Statistics.IStatisticsQueries, StatisticsQueries>();
         services.AddScoped<Application.Steering.ISteeringQueries, SteeringQueries>();
+        // « Statistiques prescripteurs », « Visites et conventions » and « Rappels et enquêtes »: the
+        // prescribers' activity, the delegate's visits and the conventions, the patient campaigns.
+        services.AddScoped<Application.Relations.IPrescriberStatisticsQueries, PrescriberStatisticsQueries>();
+        services.AddScoped<Application.Relations.IRelationsQueries, RelationsQueries>();
+        services.AddScoped<Application.Relations.IPatientMessagingQueries, PatientMessagingQueries>();
         // « Dossiers du personnel », « Habilitations » and « Échéances RH », and the leave, planning,
         // payroll and accident screens built on them: the staff and their files, the absences, the
         // rota, the pay and the HR documents. (The demo data's HR part needs them all too.)

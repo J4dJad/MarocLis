@@ -1,0 +1,603 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Relations
+@using MarocLIS.Domain.Common
+@using MarocLIS.Web.Components.Screens.Steering
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<RelationsScreen> Logger
+
+@*
+    « Visites et conventions », the workstation's RelationsView: the delegate's visits to the
+    prescribers over a period, the visits whose next date has come (in orange) and the conventions
+    with clinics, companies and partner laboratories — one ending soon on the warning's colour with
+    its pill — with the signed convention attached. Under the list, the file of the row selected:
+    the visit's report in full, or the convention's terms, figures and whom to call. Recording a
+    visit or a convention is for whom may manage the relations; anyone who may see them opens the
+    signed document and downloads the list. What is shown and offered is RelationsScreenRules'; what
+    is done, RelationsService's.
+*@
+<div class="screen relations" data-screen="relations">
+    @{ var actions = Actions; }
+    <PeriodFilters State="_period" Prefix="relations" PeriodField="@RelationsScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@(_loaded ? RelationsScreenRules.Counts(_visits.Count, _due.Count, _partnerships.Count, Texts.T) : null)" OnChosen="LoadAsync" />
+    <div class="list-tools relations-notice" data-tools="notice">
+        <span class="small muted text-full relations-notice-text" data-state="notice">@Texts["Relations.FollowUpNotice"]</span>
+        @if (actions.ShowInactive)
+        {
+            <label class="field-check list-tools-end">
+                <input type="checkbox" data-field="relations-inactive" checked="@_inactive" @onchange="InactiveChangedAsync" />
+                <span class="small">@Texts["Relations.ShowInactive"]</span>
+            </label>
+        }
+    </div>
+
+    <div class="screen-body split split-single relations-body">
+        <div class="card card-flush">
+            <div class="tabs" role="tablist">
+                @foreach (var tab in Enum.GetValues<RelationsTab>())
+                {
+                    <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
+                            data-tab="@tab" @onclick="() => ChooseAsync(tab)">
+                        @Texts[RelationsScreenRules.TabKey(tab)]
+                        @if (_loaded)
+                        {
+                            <span class="pill pill-waiting">@CountOf(tab)</span>
+                        }
+                    </button>
+                }
+            </div>
+            <div class="table-scroll">
+                @if (_tab == RelationsTab.Partnerships)
+                {
+                    <table class="grid grid-select" data-grid="partnerships">
+                        <thead>
+                            <tr>
+                                @foreach (var column in RelationsScreenRules.Columns(_tab))
+                                {
+                                    <th class="@(column.Numeric ? "num" : null)" data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _partnerships)
+                            {
+                                var cells = RelationsScreenRules.Cells(p, Texts.T, Texts.Culture);
+                                var state = RelationsScreenRules.State(p);
+                                var row = p;
+                                <tr class="@(p.Id == _partnershipId ? "is-selected" : null) @(RelationsScreenRules.EndingSoon(p) ? "is-abnormal" : null) @(p.IsActive ? null : "is-tone-muted")"
+                                    data-row="@p.Reference" data-state="@state" @onclick="() => SelectPartnershipAsync(row.Id)" @ondblclick="EditPartnershipOnDoubleClickAsync">
+                                    <td><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[1]">@cells[1]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
+                                    <td class="mono small nowrap" dir="ltr">@cells[3]</td>
+                                    <td class="mono small nowrap" dir="ltr">@cells[4]</td>
+                                    <td class="mono small nowrap" dir="ltr">@cells[5]</td>
+                                    <td class="nowrap"><Pill Text="@StockTones.Label(RelationsScreenRules.Tone(state), cells[6])" Tone="@StockTones.Pill(RelationsScreenRules.Tone(state))" /></td>
+                                    <td class="num mono nowrap">@cells[7]</td>
+                                    <td class="small"><span class="list-name" title="@cells[8]">@cells[8]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[9]">@cells[9]</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_loaded && _partnerships.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="empty">@Texts["App.NoData"]</p>
+                    }
+                }
+                else
+                {
+                    var visits = _tab == RelationsTab.DueVisits ? _due : _visits;
+                    <table class="grid grid-select" data-grid="@(_tab == RelationsTab.DueVisits ? "due-visits" : "visits")">
+                        <thead>
+                            <tr>
+                                @foreach (var column in RelationsScreenRules.Columns(_tab))
+                                {
+                                    <th data-column="@column.Name">@Texts[column.CaptionKey]</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var v in visits)
+                            {
+                                var cells = RelationsScreenRules.Cells(v, Texts.T);
+                                var row = v;
+                                <tr class="@(v.Id == _visitId ? "is-selected" : null)" data-row="@v.PrescriberName" @onclick="() => SelectVisit(row.Id)"
+                                    @ondblclick="EditVisitOnDoubleClickAsync">
+                                    <td class="mono small nowrap" dir="ltr">@cells[0]</td>
+                                    <td><span class="list-name strong" title="@cells[1]">@cells[1]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[3]">@cells[3]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[4]">@cells[4]</span></td>
+                                    <td class="small"><span class="list-name" title="@cells[5]">@cells[5]</span></td>
+                                    <td class="mono small nowrap @(RelationsScreenRules.NextVisitDue(v) ? "abnormal strong" : null)" dir="ltr" data-state="next">@cells[6]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_loaded && visits.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="empty">@Texts["App.NoData"]</p>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card card-flush relation-file" data-state="file">
+            @if (_tab == RelationsTab.Partnerships && _detail is { } detail && SelectedPartnership is { } shown)
+            {
+                <div class="relation-file-body">
+                    <div class="relation-file-facts">
+                        <p class="strong text-full" data-state="title">@detail.PartnerName</p>
+                        <dl class="facts facts-compact relation-facts">
+                            @foreach (var fact in RelationsScreenRules.Facts(detail, shown, Texts.T, Texts.Culture))
+                            {
+                                <dt>@fact.Label</dt>
+                                <dd class="@(fact.Mono ? "mono" : null) text-full" dir="@(fact.Mono ? "ltr" : null)">@fact.Value</dd>
+                            }
+                        </dl>
+                    </div>
+                    <div class="relation-file-text">
+                        <span class="field-label">@Texts["Relations.Terms"]</span>
+                        <p class="text-full small" data-state="terms">@(detail.Terms ?? "—")</p>
+                        <span class="field-label">@Texts["Field.Notes"]</span>
+                        <p class="text-full small" data-state="notes">@(detail.Notes ?? "—")</p>
+                    </div>
+                </div>
+            }
+            else if (_tab != RelationsTab.Partnerships && SelectedVisit is { } visit)
+            {
+                <div class="relation-file-body">
+                    <div class="relation-file-facts">
+                        <p class="strong text-full" data-state="title">@visit.PrescriberName</p>
+                        <dl class="facts facts-compact relation-facts">
+                            @foreach (var fact in RelationsScreenRules.Facts(visit, Texts.T))
+                            {
+                                <dt>@fact.Label</dt>
+                                <dd class="@(fact.Mono ? "mono" : null) text-full @(fact.Label == Texts["Relations.Column.next"] && visit.NextVisitDue ? "abnormal" : null)"
+                                    dir="@(fact.Mono ? "ltr" : null)">@fact.Value</dd>
+                            }
+                        </dl>
+                    </div>
+                    <div class="relation-file-text">
+                        <span class="field-label">@Texts["Relations.Column.notes"]</span>
+                        <p class="text-full small" data-state="notes">@(visit.Notes ?? "—")</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="muted small card-pad" data-state="no-file">@Texts["App.NoData"]</p>
+            }
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="@(actions.ShowInactive)">
+        <Secondary>
+            <ActionButton Key="Action.Edit" Hidden="@(!actions.VisitActions && !actions.PartnershipActions)"
+                          Disabled="@(_busy || (_tab == RelationsTab.Partnerships ? !actions.EditPartnership : !actions.EditVisit))" OnClick="EditAsync" />
+            <ActionButton Key="Statistics.ExportCsv" Disabled="_busy" OnClick="CsvAsync" />
+            <ActionButton Key="Action.Refresh" Disabled="_busy" OnClick="LoadAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Relations.AttachDocument" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Hidden="@(!actions.PartnershipActions)"
+                          Disabled="@(!actions.Attach || _busy)" OnClick="() => Ask(Prompt.Attach)" />
+            <ActionButton Key="Relations.OpenDocument" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSearch"
+                          Disabled="@(!actions.OpenFile || _busy)" OnClick="OpenDocumentAsync" />
+        </More>
+        <Destructive>
+            <ActionButton Key="Action.Delete" Hidden="@(!actions.VisitActions)" Disabled="@(!actions.DeleteVisit || _busy)" OnClick="() => Ask(Prompt.Delete)" />
+        </Destructive>
+        <Primary>
+            @if (actions.PartnershipActions)
+            {
+                <ActionButton Key="Relations.NewPartnership" Primary="true" Disabled="_busy" OnClick="() => AskPartnershipAsync(null)" />
+            }
+            else
+            {
+                <ActionButton Key="Relations.NewVisit" Primary="true" Hidden="@(!actions.VisitActions)" Disabled="_busy" OnClick="() => AskVisitAsync(null)" />
+            }
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Visit when _options is { } options:
+        <VisitDialog Visit="_editingVisit" Options="options" CurrentUserId="Context.User.UserId" Today="Clock.Today"
+                     Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveVisitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Partnership when _options is { } options:
+        <PartnershipDialog Detail="_editingPartnership" Options="options" Today="Clock.Today"
+                           Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SavePartnershipAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Delete when SelectedVisit is { } visit:
+        <ReasonPrompt Title="@Texts["Action.Delete"]" Prompt="@RelationsScreenRules.DeletePrompt(visit, Texts.T)"
+                      MaxLength="RelationsService.DeletionReasonMaxLength" OnConfirm="DeleteVisitAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Attach when SelectedPartnership is { } partnership:
+        <Modal Name="partner-document" Title="@Texts["Relations.AttachDocument"]" Hint="@partnership.PartnerName" OnCancel="ClosePrompt">
+            <ChildContent>
+                <div class="list-tools">
+                    <label class="btn btn-secondary @(_busy ? "is-disabled" : null)" data-action="partner-pick-file">
+                        <MarocLIS.Web.Components.Shared.Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                        @Texts["Relations.AttachDocument"]
+                        <InputFile class="file-input" accept="@RelationsScreenRules.DocumentAccept" disabled="@_busy" OnChange="AttachAsync" />
+                    </label>
+                    <span class="small muted text-full">@Texts["Purchasing_FileType"]</span>
+                </div>
+                <FieldMessage Refusal="_fieldRefusal" Field="@RelationsScreenRules.DocumentField" />
+                @if (_dialogRefusal is { Length: > 0 } refused)
+                {
+                    <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+                }
+            </ChildContent>
+            <Footer><ActionButton Key="Action.Close" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Visit, Partnership, Delete, Attach }
+
+    private PeriodState _period = default!;
+    private RelationsTab _tab = RelationsTab.Visits;
+    private IReadOnlyList<DelegateVisitRow> _visits = [], _due = [];
+    private IReadOnlyList<PartnershipRow> _partnerships = [];
+    private Guid? _visitId, _partnershipId;
+    private PartnershipDetail? _detail;
+    private bool _inactive, _loaded, _busy;
+
+    private Prompt _prompt;
+    private RelationOptions? _options;
+    private DelegateVisitRow? _editingVisit;
+    private PartnershipDetail? _editingPartnership;
+    private FieldRefusal? _refusal;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+
+    private IReadOnlyList<DelegateVisitRow> ShownVisits => _tab == RelationsTab.DueVisits ? _due : _visits;
+
+    private DelegateVisitRow? SelectedVisit =>
+        _tab == RelationsTab.Partnerships ? null : ShownVisits.FirstOrDefault(v => v.Id == _visitId);
+
+    private PartnershipRow? SelectedPartnership =>
+        _tab == RelationsTab.Partnerships ? _partnerships.FirstOrDefault(p => p.Id == _partnershipId) : null;
+
+    private RelationsActions Actions => RelationsScreenRules.Actions(Context.User.Has, _tab, SelectedVisit, SelectedPartnership);
+
+    private int CountOf(RelationsTab tab) => tab switch
+    {
+        RelationsTab.DueVisits => _due.Count,
+        RelationsTab.Partnerships => _partnerships.Count,
+        _ => _visits.Count
+    };
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    /// <summary>The three lists read again, the rows selected kept when they are still there (else the first).</summary>
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            var (from, to, inactive) = (_period.From, _period.To, _inactive);
+            var visits = await Scopes.RunAsync<RelationsService, Result<IReadOnlyList<DelegateVisitRow>>>(s => s.GetVisitsAsync(from, to));
+            if (visits.IsFailure)
+            {
+                var error = visits.FirstError;
+                if (RelationsScreenRules.FieldOf(error) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(visits.Errors), "critical");
+                return;
+            }
+
+            var due = await Scopes.RunAsync<RelationsService, Result<IReadOnlyList<DelegateVisitRow>>>(s => s.GetDueVisitsAsync());
+            var partnerships = await Scopes.RunAsync<RelationsService, Result<IReadOnlyList<PartnershipRow>>>(s => s.GetPartnershipsAsync(inactive));
+
+            _refusal = null;
+            _visits = visits.Value;
+            if (due.IsSuccess) _due = due.Value;
+            if (partnerships.IsSuccess) _partnerships = partnerships.Value;
+            _loaded = true;
+            KeepSelection();
+            await LoadDetailAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Loading the relations failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private void KeepSelection()
+    {
+        _visitId = ShownVisits.FirstOrDefault(v => v.Id == _visitId)?.Id ?? ShownVisits.FirstOrDefault()?.Id;
+        _partnershipId = _partnerships.FirstOrDefault(p => p.Id == _partnershipId)?.Id ?? _partnerships.FirstOrDefault()?.Id;
+    }
+
+    private async Task LoadDetailAsync()
+    {
+        _detail = null;
+        if (_tab != RelationsTab.Partnerships || _partnershipId is not { } id) return;
+        var detail = await Scopes.RunAsync<RelationsService, Result<PartnershipDetail>>(s => s.GetPartnershipAsync(id));
+        if (detail.IsFailure) _status = (Texts.Describe(detail.Errors), "critical");
+        else _detail = detail.Value;
+    }
+
+    private Task ChooseAsync(RelationsTab tab)
+    {
+        if (tab == _tab) return Task.CompletedTask;
+        _tab = tab;
+        _visitId = null;
+        KeepSelection();
+        return RunAsync(LoadDetailAsync);
+    }
+
+    private void SelectVisit(Guid id) => _visitId = id;
+
+    private Task SelectPartnershipAsync(Guid id)
+    {
+        if (id == _partnershipId && _detail?.Id == id) return Task.CompletedTask;
+        _partnershipId = id;
+        return RunAsync(LoadDetailAsync);
+    }
+
+    private Task InactiveChangedAsync(ChangeEventArgs e)
+    {
+        _inactive = e.Value is true;
+        return LoadAsync();
+    }
+
+    private Task EditAsync() =>
+        _tab == RelationsTab.Partnerships ? AskPartnershipAsync(SelectedPartnership?.Id) : AskVisitAsync(SelectedVisit);
+
+    private Task EditVisitOnDoubleClickAsync() => Actions.EditVisit ? AskVisitAsync(SelectedVisit) : Task.CompletedTask;
+
+    private Task EditPartnershipOnDoubleClickAsync() => Actions.EditPartnership ? AskPartnershipAsync(SelectedPartnership?.Id) : Task.CompletedTask;
+
+    // ---- Visits --------------------------------------------------------------------------------------
+
+    private Task AskVisitAsync(DelegateVisitRow? visit) =>
+        RunAsync(async () =>
+        {
+            if (visit is null ? !Actions.VisitActions : !Actions.EditVisit) return;
+            IReadOnlyCollection<Guid>? keep = visit is null ? null : [visit.PrescriberId, visit.DelegateUserId];
+            var options = await Scopes.RunAsync<RelationsService, Result<RelationOptions>>(s => s.GetOptionsAsync(keep));
+            if (options.IsFailure)
+            {
+                _status = (Texts.Describe(options.Errors), "critical");
+                return;
+            }
+
+            _options = options.Value;
+            _editingVisit = visit;
+            Ask(Prompt.Visit);
+        });
+
+    private Task SaveVisitAsync(SaveDelegateVisitRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<RelationsService, Result<Guid>>(s => s.SaveVisitAsync(request));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.FirstError, saved.Errors, partnership: false);
+                return;
+            }
+
+            ClosePrompt();
+            _visitId = saved.Value;
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task DeleteVisitAsync(string reason) =>
+        RunAsync(async () =>
+        {
+            if (SelectedVisit is not { } visit || !Actions.DeleteVisit) return;
+            var deleted = await Scopes.RunAsync<RelationsService, Result>(s => s.DeleteVisitAsync(visit.Id, reason));
+            ClosePrompt();
+            if (deleted.IsFailure)
+            {
+                _status = (Texts.Describe(deleted.Errors), "critical");
+                return;
+            }
+
+            _visitId = null;
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- Conventions ---------------------------------------------------------------------------------
+
+    private Task AskPartnershipAsync(Guid? id) =>
+        RunAsync(async () =>
+        {
+            if (id is null ? !Actions.PartnershipActions : !Actions.EditPartnership) return;
+            PartnershipDetail? detail = null;
+            if (id is { } found)
+            {
+                var loaded = await Scopes.RunAsync<RelationsService, Result<PartnershipDetail>>(s => s.GetPartnershipAsync(found));
+                if (loaded.IsFailure)
+                {
+                    _status = (Texts.Describe(loaded.Errors), "critical");
+                    return;
+                }
+                detail = loaded.Value;
+            }
+
+            IReadOnlyCollection<Guid>? keep = detail?.PrescriberId is { } linked ? [linked] : null;
+            var options = await Scopes.RunAsync<RelationsService, Result<RelationOptions>>(s => s.GetOptionsAsync(keep));
+            if (options.IsFailure)
+            {
+                _status = (Texts.Describe(options.Errors), "critical");
+                return;
+            }
+
+            _options = options.Value;
+            _editingPartnership = detail;
+            Ask(Prompt.Partnership);
+        });
+
+    private Task SavePartnershipAsync(SavePartnershipRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<RelationsService, Result<Guid>>(s => s.SavePartnershipAsync(request));
+            if (saved.IsFailure)
+            {
+                Refuse(saved.FirstError, saved.Errors, partnership: true);
+                return;
+            }
+
+            ClosePrompt();
+            _partnershipId = saved.Value;
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task AttachAsync(InputFileChangeEventArgs e) =>
+        RunAsync(async () =>
+        {
+            if (SelectedPartnership is not { } partnership || !Actions.Attach) return;
+            _dialogRefusal = null;
+            _fieldRefusal = RelationsScreenRules.CheckDocument(e.File.Name, e.File.Size);
+            if (_fieldRefusal is not null) return;
+
+            byte[] content;
+            await using (var stream = e.File.OpenReadStream(maxAllowedSize: MarocLIS.Domain.Relations.PartnershipDocument.MaximumBytes))
+            {
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+
+            var (id, name) = (partnership.Id, e.File.Name);
+            var attached = await Scopes.RunAsync<RelationsService, Result>(s => s.AttachDocumentAsync(id, name, content));
+            if (attached.IsFailure)
+            {
+                var field = RelationsScreenRules.FieldOf(attached.FirstError.ResourceKey, partnership: true);
+                _fieldRefusal = field is null ? null : FieldRefusal.Of(field, attached.FirstError);
+                _dialogRefusal = field is null ? Texts.Describe(attached.Errors) : null;
+                return;
+            }
+
+            ClosePrompt();
+            await ReloadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task OpenDocumentAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedPartnership is not { FileName: not null } partnership || !Actions.OpenFile) return;
+            var id = partnership.Id;
+            var file = await Scopes.RunAsync<RelationsService, Result<(string FileName, byte[] Content)>>(s => s.GetDocumentAsync(id));
+            if (file.IsFailure)
+            {
+                _status = (Texts.Describe(file.Errors), "critical");
+                return;
+            }
+
+            var (name, content) = file.Value;
+            await JS.InvokeVoidAsync("marocLis.download", name, SafeDocumentFile.ContentTypeFor(name) ?? "application/octet-stream", content);
+            _status = (Texts.T("Web.DocDownloaded", name), "normal");
+        });
+
+    // ---- Export --------------------------------------------------------------------------------------
+
+    private async Task CsvAsync()
+    {
+        var csv = RelationsScreenRules.Csv(_tab, ShownVisits, _partnerships, Texts.T, Texts.Culture);
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        var name = RelationsScreenRules.FileName(_tab, _period.From, _period.To, Clock.Today);
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+    }
+
+    // ---- Plumbing ---------------------------------------------------------------------------------
+
+    private void Ask(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    /// <summary>A refusal the rules name a box for goes next to that box; any other under the dialog.</summary>
+    private void Refuse(Error first, IEnumerable<Error> errors, bool partnership)
+    {
+        var field = RelationsScreenRules.FieldOf(first.ResourceKey, partnership);
+        _fieldRefusal = field is null ? null : FieldRefusal.Of(field, first);
+        _dialogRefusal = field is null ? Texts.Describe(errors) : null;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A relations operation failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _options = null;
+        _editingVisit = null;
+        _editingPartnership = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

@@ -41,6 +41,9 @@ public sealed record RelationsActions(
     bool OpenFile,
     bool ShowInactive);
 
+/// <summary>One fact of a visit's or a convention's file: its label, its value, and whether the value is a code or a date (in the fixed face).</summary>
+public sealed record RelationFact(string Label, string Value, bool Mono = false);
+
 /// <summary>A visit as its editor holds it.</summary>
 public sealed record VisitForm(DateOnly VisitDate, Guid PrescriberId, Guid DelegateUserId, VisitPurpose Purpose, string? Notes,
                                DateOnly? NextVisitOn);
@@ -233,6 +236,54 @@ public static class RelationsScreenRules
         ArgumentNullException.ThrowIfNull(lookup);
         ArgumentNullException.ThrowIfNull(text);
         return lookup.IsActive ? lookup.Display : $"{lookup.Display} {text("Contracts.InactiveSuffix")}";
+    }
+
+    // ---- The file of the row selected ----------------------------------------------------------------
+
+    /// <summary>
+    /// The visit selected, under the list: when, whom, by whom, why and the next visit (its notes are
+    /// read in full beside it).
+    /// </summary>
+    public static IReadOnlyList<RelationFact> Facts(DelegateVisitRow visit, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(visit);
+        ArgumentNullException.ThrowIfNull(text);
+        return
+        [
+            new(text(ColumnKey("date")), Date(visit.VisitDate), true),
+            new(text(ColumnKey("prescriber")), visit.PrescriberName),
+            new(text(ColumnKey("institution")), visit.Institution ?? "—"),
+            new(text(ColumnKey("delegate")), visit.DelegateName),
+            new(text(ColumnKey("purpose")), text($"VisitPurpose.{visit.Purpose}")),
+            new(text(ColumnKey("next")), visit.NextVisitOn is { } next ? Date(next) : "—", visit.NextVisitOn is not null)
+        ];
+    }
+
+    /// <summary>
+    /// The convention selected, under the list: the partner and the agreement, its period and state,
+    /// the terms agreed in figures, the partner's identifier and whom to call (its terms and notes are
+    /// read in full beside it).
+    /// </summary>
+    public static IReadOnlyList<RelationFact> Facts(PartnershipDetail detail, PartnershipRow? row, ScreenText text, IFormatProvider culture)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+        ArgumentNullException.ThrowIfNull(text);
+        string Or(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+        return
+        [
+            new(text(ColumnKey("partnerKind")), text($"PartnerKind.{detail.PartnerKind}")),
+            new(text(ColumnKey("kind")), text($"PartnershipKind.{detail.Kind}")),
+            new(text(ColumnKey("reference")), Or(detail.Reference), detail.Reference is not null),
+            new(text(ColumnKey("start")), Date(detail.StartDate), true),
+            new(text(ColumnKey("end")), detail.EndDate is { } end ? Date(end) : "—", detail.EndDate is not null),
+            new(text(ColumnKey("discount")), Or(Discount(detail.DiscountPercent, culture))),
+            new(text("Relations.PaymentTermsDays"), detail.PaymentTermsDays is { } days ? days.ToString(culture) : "—"),
+            new(text("Billing.Ice"), Or(detail.PartnerIce), detail.PartnerIce is not null),
+            new(text("Relations.ContactName"), Or(detail.ContactName)),
+            new(text("Field.Phone"), Or(detail.ContactPhone), detail.ContactPhone is not null),
+            new(text("Field.Email"), Or(detail.ContactEmail), detail.ContactEmail is not null),
+            new(text(ColumnKey("file")), Or(row?.FileName))
+        ];
     }
 
     // ---- Visits --------------------------------------------------------------------------------------

@@ -1,0 +1,85 @@
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Relations
+@using MarocLIS.Domain.Relations
+@inject WebTexts Texts
+
+@*
+    The survey's settings, the workstation's « Paramètres de l'enquête »: the invitation's wording in
+    French and in Arabic (the fields it may use under it), the link to the survey and the least
+    number of days between two surveys of a patient. Checked as PatientMessagingScreenRules.Check
+    checks them, a refusal beside its box.
+*@
+<Modal Name="survey-settings" Title="@Texts["Messaging.SurveySettings"]" Hint="@Texts["Messaging.SurveySettingsIntro"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Messaging.TemplateFr"]</span>
+                <textarea class="input @Refused(PatientMessagingScreenRules.SettingsTemplateFrField)" rows="3" maxlength="@MessageWording.MaximumLength"
+                          data-field="@PatientMessagingScreenRules.SettingsTemplateFrField" @bind="_fr" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="Shown" Field="@PatientMessagingScreenRules.SettingsTemplateFrField" />
+            </label>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Messaging.TemplateAr"]</span>
+                <textarea class="input @Refused(PatientMessagingScreenRules.SettingsTemplateArField)" rows="3" dir="rtl" maxlength="@MessageWording.MaximumLength"
+                          data-field="@PatientMessagingScreenRules.SettingsTemplateArField" @bind="_ar" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="Shown" Field="@PatientMessagingScreenRules.SettingsTemplateArField" />
+            </label>
+            <p class="field-span-all small muted text-full" data-state="placeholders" dir="auto">@PatientMessagingScreenRules.PlaceholdersHelp(Texts.T)</p>
+            <label class="field">
+                <span class="field-label">@Texts["Messaging.SurveyUrl"]</span>
+                <input class="input mono @Refused(PatientMessagingScreenRules.SettingsUrlField)" type="url" dir="ltr" autocomplete="off"
+                       maxlength="@PatientMessagingScreenRules.SurveyUrlMaxLength" data-field="@PatientMessagingScreenRules.SettingsUrlField"
+                       title="@_url" @bind="_url" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@PatientMessagingScreenRules.SettingsUrlField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Messaging.SurveyInterval"]</span>
+                <input class="input mono num @Refused(PatientMessagingScreenRules.SettingsIntervalField)" type="text" inputmode="numeric" dir="ltr" autocomplete="off"
+                       maxlength="5" data-field="@PatientMessagingScreenRules.SettingsIntervalField" @bind="_interval" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@PatientMessagingScreenRules.SettingsIntervalField" />
+            </label>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public MessagingSettings Settings { get; set; } = MessagingSettings.Default;
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<MessagingSettings> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string? _fr, _ar, _url, _interval;
+    private FieldRefusal? _checked;
+
+    private FieldRefusal? Shown => _checked ?? FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized()
+    {
+        var f = PatientMessagingScreenRules.FormFor(Settings, Texts.Culture);
+        (_fr, _ar, _url, _interval) = (f.TemplateFr, f.TemplateAr, f.Url, f.Interval);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (FieldRefusal is not null) _checked = null;
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, settings) = PatientMessagingScreenRules.Check(new SurveySettingsForm(_fr, _ar, _url, _interval), Settings);
+        _checked = refused;
+        return refused is null ? OnSave.InvokeAsync(settings!) : Task.CompletedTask;
+    }
+}
