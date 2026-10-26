@@ -38,7 +38,7 @@ public sealed class PlanningView : LocalizedView
     private readonly Label _issuesHeading = new();
     private readonly Label _issuesCount = new();
 
-    private DateOnly _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateOnly _month = PlanningScreenRules.MonthOf(DateOnly.FromDateTime(DateTime.Today));
     private PlanningMonth? _data;
 
     public PlanningView(PlanningService planning, IUserDialogs dialogs, ILocalizer localizer,
@@ -164,10 +164,7 @@ public sealed class PlanningView : LocalizedView
         _issues.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _issues.Rows[e.RowIndex].Tag is not PlanningIssue issue) return;
-            e.CellStyle!.ForeColor = issue.Kind is PlanningIssueKind.NoBiologist or PlanningIssueKind.ShiftDuringLeave
-                                         or PlanningIssueKind.TraineeAlone
-                ? UiTheme.Critical
-                : UiTheme.Abnormal;
+            e.CellStyle!.ForeColor = PlanningScreenRules.IsCritical(issue) ? UiTheme.Critical : UiTheme.Abnormal;
         };
     }
 
@@ -210,18 +207,9 @@ public sealed class PlanningView : LocalizedView
         }
     }
 
-    private string Code(ShiftCell s) => T($"ShiftKindShort.{s.Kind}");
-
-    private string ShiftText(ShiftCell s) =>
-        s.Kind == ShiftKind.OnCall ? T("ShiftKind.OnCall") : $"{T($"ShiftKind.{s.Kind}")} {s.Start:HH\\:mm}-{s.End:HH\\:mm}";
-
-    private sealed record DayCell(PlanningEmployee Employee, DateOnly Date, IReadOnlyList<ShiftCell> Shifts,
-                                  LeaveSpan? Leave, HolidayRow? Holiday, bool Employed);
-
     private void Render()
     {
-        var culture = CultureInfo.CurrentUICulture;
-        _monthLabel.Text = culture.TextInfo.ToTitleCase(_month.ToDateTime(TimeOnly.MinValue).ToString("MMMM yyyy", culture));
+        _monthLabel.Text = PlanningScreenRules.MonthLabel(_month, CultureInfo.CurrentUICulture);
         if (_data is null) return;
 
         var selected = _grid.CurrentCell is { } current ? (current.RowIndex, current.ColumnIndex) : (-1, -1);
@@ -243,42 +231,26 @@ public sealed class PlanningView : LocalizedView
         _grid.Columns[0].Frozen = _grid.Columns[1].Frozen = true;
         _grid.Columns[1].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
 
-        for (var d = 1; d <= days; d++)
+        foreach (var date in PlanningScreenRules.Dates(_data.Year, _data.Month))
         {
-            var date = new DateOnly(_data.Year, _data.Month, d);
-            var dayName = T($"WeekdayShort.{date.DayOfWeek}");
-            var column = Column($"d{d}", $"{dayName}\n{d:00}", 32, UiTheme.SmallBold);
+            var d = date.Day;
+            var (dayName, number) = PlanningScreenRules.DayHeader(date, T);
+            var column = Column($"d{d}", $"{dayName}\n{number}", 32, UiTheme.SmallBold);
             column.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             column.MinimumWidth = 28;
             _grid.Columns.Add(column);
         }
 
-        foreach (var employee in _data.Employees)
+        foreach (var line in PlanningScreenRules.Lines(_data, T, CultureInfo.CurrentCulture))
         {
-            var mine = _data.Shifts.Where(s => s.EmployeeId == employee.EmployeeId).ToList();
             var values = new object[FixedColumns + days];
-            values[0] = $"{employee.FullName} · {T($"EmployeeJobShort.{employee.Job}")}";
-            values[1] = mine.Sum(s => s.Hours).ToString("0.#");
-
-            var cells = new DayCell[days];
-            for (var d = 1; d <= days; d++)
-            {
-                var date = new DateOnly(_data.Year, _data.Month, d);
-                var shifts = mine.Where(s => s.Date == date).ToList();
-                var leave = _data.Leaves.FirstOrDefault(l => l.EmployeeId == employee.EmployeeId && l.Covers(date));
-                var employed = date >= employee.HireDate && (employee.ExitDate is null || date <= employee.ExitDate);
-                cells[d - 1] = new DayCell(employee, date, shifts,
-                                           leave, _data.Holidays.FirstOrDefault(h => h.Date == date), employed);
-
-                values[FixedColumns + d - 1] =
-                    shifts.Count > 0 ? string.Join("+", shifts.Select(Code))
-                    : leave is not null ? T($"LeaveTypeShort.{leave.Type}")
-                    : string.Empty;
-            }
+            values[0] = line.Name;
+            values[1] = line.Hours;
+            for (var d = 0; d < days; d++) values[FixedColumns + d] = PlanningScreenRules.Code(line.Days[d], T);
 
             var index = _grid.Rows.Add(values);
-            _grid.Rows[index].Tag = employee;
-            for (var d = 0; d < days; d++) _grid.Rows[index].Cells[FixedColumns + d].Tag = cells[d];
+            _grid.Rows[index].Tag = line.Employee;
+            for (var d = 0; d < days; d++) _grid.Rows[index].Cells[FixedColumns + d].Tag = line.Days[d];
         }
 
         _grid.ResumeLayout(performLayout: true);
@@ -288,133 +260,102 @@ public sealed class PlanningView : LocalizedView
         else if (_grid.RowCount > 0)
         {
             // Opens on today, or on the first of the month, so the next click is already on a day.
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            var day = today.Year == _data.Year && today.Month == _data.Month ? today.Day : 1;
+            var day = PlanningScreenRules.InitialDay(_data.Year, _data.Month, DateOnly.FromDateTime(DateTime.Today)).Day;
             _grid.CurrentCell = _grid.Rows[0].Cells[FixedColumns + day - 1];
         }
 
         _issues.Rows.Clear();
         foreach (var issue in _data.Issues)
         {
-            var index = _issues.Rows.Add(issue.Date.ToString("dd/MM/yyyy"), issue.EmployeeName ?? "—", IssueText(issue));
+            var index = _issues.Rows.Add(LeaveScreenRules.Date(issue.Date), issue.EmployeeName ?? "—",
+                                         PlanningScreenRules.IssueText(issue, T, CultureInfo.CurrentCulture));
             _issues.Rows[index].Tag = issue;
         }
         _issues.RestoreFillWeights();
 
-        _heading.Text = T("QualityHr.Planning.Count", _data.Employees.Count, _data.Shifts.Count, _data.Issues.Count);
+        _heading.Text = PlanningScreenRules.Count(_data, T);
         _issuesCount.Text = _data.Issues.Count.ToString(CultureInfo.CurrentCulture);
         ShowDetail();
     }
 
-    private string IssueText(PlanningIssue issue) => issue.Kind switch
-    {
-        PlanningIssueKind.RestTooShort => T("PlanningIssue.RestTooShort", (issue.Value ?? 0m).ToString("0.#")),
-        PlanningIssueKind.WeeklyHoursExceeded => T("PlanningIssue.WeeklyHoursExceeded", (issue.Value ?? 0m).ToString("0.#"),
-                                                   PlanningChecks.WeekStart(issue.Date).ToString("dd/MM")),
-        PlanningIssueKind.NoWeeklyRest => T("PlanningIssue.NoWeeklyRest", PlanningChecks.WeekStart(issue.Date).ToString("dd/MM")),
-        _ => T($"PlanningIssue.{issue.Kind}")
-    };
-
     private void FormatCell(DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex < FixedColumns) return;
-        if (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is not DayCell cell) return;
+        if (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is not PlanningDay cell) return;
 
         var style = e.CellStyle!;
-        if (!cell.Employed)
-        {
-            style.BackColor = UiTheme.SurfaceSunken;
-            return;
-        }
+        if (PlanningScreenRules.Shaded(cell)) style.BackColor = UiTheme.SurfaceSunken;
 
-        if (cell.Holiday is not null || cell.Date.DayOfWeek == DayOfWeek.Sunday)
-            style.BackColor = UiTheme.SurfaceSunken;
-
-        if (cell.Leave is { } leave && cell.Shifts.Count == 0)
+        switch (PlanningScreenRules.Ink(cell))
         {
-            style.BackColor = leave.Status == LeaveStatus.Approved ? UiTheme.AccentSubtle : UiTheme.Surface;
-            style.ForeColor = UiTheme.Accent;
-            style.Font = leave.Status == LeaveStatus.Approved ? UiTheme.SmallBold : UiTheme.Small;
-            return;
-        }
-
-        if (cell.Shifts.Count > 0)
-        {
-            var flagged = _data?.Issues.Any(i => i.EmployeeId == cell.Employee.EmployeeId && i.Date == cell.Date) == true;
-            style.ForeColor = flagged ? UiTheme.Critical
-                            : cell.Shifts.Any(s => s.Kind is ShiftKind.Night or ShiftKind.SundayHoliday or ShiftKind.OnCall)
-                                ? UiTheme.Abnormal
-                                : UiTheme.Normal;
-            if (flagged) style.BackColor = UiTheme.CriticalBackground;
+            case PlanningInk.LeaveApproved:
+                style.BackColor = UiTheme.AccentSubtle;
+                style.ForeColor = UiTheme.Accent;
+                style.Font = UiTheme.SmallBold;
+                break;
+            case PlanningInk.LeavePending:
+                style.BackColor = UiTheme.Surface;
+                style.ForeColor = UiTheme.Accent;
+                style.Font = UiTheme.Small;
+                break;
+            case PlanningInk.ShiftFlagged:
+                style.ForeColor = UiTheme.Critical;
+                style.BackColor = UiTheme.CriticalBackground;
+                break;
+            case PlanningInk.ShiftUnusual:
+                style.ForeColor = UiTheme.Abnormal;
+                break;
+            case PlanningInk.Shift:
+                style.ForeColor = UiTheme.Normal;
+                break;
         }
     }
 
-    private List<DayCell> SelectedDays() =>
-    [
-        .. _grid.SelectedCells.Cast<DataGridViewCell>()
-               .Where(c => c.ColumnIndex >= FixedColumns)
-               .Select(c => c.Tag).OfType<DayCell>()
-               .OrderBy(c => c.Employee.FullName).ThenBy(c => c.Date)
-    ];
+    private IReadOnlyList<PlanningDay> SelectedDays() =>
+        PlanningScreenRules.Ordered(_grid.SelectedCells.Cast<DataGridViewCell>()
+                                         .Where(c => c.ColumnIndex >= FixedColumns)
+                                         .Select(c => c.Tag).OfType<PlanningDay>());
 
     private void ShowDetail()
     {
         var days = SelectedDays();
-        _assign.Enabled = days.Count > 0;
-        _clear.Enabled = days.Any(d => d.Shifts.Count > 0);
-        _copyWeek.Enabled = days.Count > 0;
-
-        if (days.Count != 1)
-        {
-            _detail.Text = days.Count > 1 ? T("Planning.CellsSelected", days.Count) : T("Planning.Hint");
-            return;
-        }
-
-        var cell = days[0];
-        var parts = new List<string> { $"{cell.Employee.FullName} — {cell.Date.ToDateTime(TimeOnly.MinValue):dddd dd/MM/yyyy}" };
-        parts.AddRange(cell.Shifts.Select(s => s.Note is null ? ShiftText(s) : $"{ShiftText(s)} ({s.Note})"));
-        if (cell.Leave is { } leave) parts.Add($"{T($"LeaveType.{leave.Type}")} ({T($"LeaveStatus.{leave.Status}")})");
-        if (cell.Holiday is { } holiday) parts.Add(holiday.Name);
-        _detail.Text = string.Join(" · ", parts);
+        // The right stays PermissionGate's; what the selection allows is the shared rules'.
+        var actions = PlanningScreenRules.Actions(days, _ => true);
+        _assign.Enabled = actions.Assign;
+        _clear.Enabled = actions.Clear;
+        _copyWeek.Enabled = actions.CopyWeek;
+        _detail.Text = PlanningScreenRules.Detail(days, T);
     }
 
     private async Task AssignAsync()
     {
-        var days = SelectedDays().Where(d => d.Employed).ToList();
+        var days = PlanningScreenRules.Assignable(SelectedDays());
         if (days.Count == 0) return;
 
-        var first = days[0];
-        var subtitle = days.Count == 1
-            // The date first: a long name cut the date off the heading, and the operator could not
-            // see which day the shift was for.
-            ? $"{first.Date:dd/MM/yyyy} — {first.Employee.FullName}"
-            : T("Planning.CellsSelected", days.Count);
+        // The date first: a long name cut the date off the heading, and the operator could not see
+        // which day the shift was for.
+        var subtitle = PlanningScreenRules.AssignSubtitle(days, T);
 
-        using var dialog = new ShiftDialog(Localizer, _dialogs, subtitle, first.Shifts.Count > 0 ? first.Shifts[0] : null);
+        using var dialog = new ShiftDialog(Localizer, _dialogs, subtitle, PlanningScreenRules.Current(days));
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         var refused = new List<string>();
         foreach (var day in days)
         {
-            var done = await _planning.AssignAsync(new ShiftRequest
-            {
-                EmployeeId = day.Employee.EmployeeId, Date = day.Date, Kind = dialog.Kind,
-                Start = dialog.Start, End = dialog.End, Note = dialog.Note
-            });
+            var done = await _planning.AssignAsync(PlanningScreenRules.Request(day, dialog.Kind, dialog.Start, dialog.End, dialog.Note));
             if (done.IsFailure)
-                refused.Add($"{day.Employee.FullName} {day.Date:dd/MM} : {Describe(done)}");
+                refused.Add(PlanningScreenRules.RefusedLine(day, Describe(done)));
         }
 
         await ActivateAsync();
 
         if (refused.Count > 0)
-            _dialogs.Warn(T("Planning.SomeRefused", refused.Count) + "\n\n" + string.Join("\n", refused.Take(12)),
-                          _assign.Text);
+            _dialogs.Warn(PlanningScreenRules.SomeRefused(refused, T), _assign.Text);
     }
 
     private async Task ClearAsync()
     {
-        var shifts = SelectedDays().SelectMany(d => d.Shifts).ToList();
+        var shifts = PlanningScreenRules.Removable(SelectedDays());
         if (shifts.Count == 0) return;
         if (!_dialogs.Confirm(T("Planning.ClearPrompt", shifts.Count), _clear.Text)) return;
 
@@ -429,12 +370,11 @@ public sealed class PlanningView : LocalizedView
 
     private async Task CopyWeekAsync()
     {
-        if (SelectedDays().FirstOrDefault() is not { } cell) return;
+        if (SelectedDays() is not { Count: > 0 } selected) return;
+        var cell = selected[0];
 
-        var target = PlanningChecks.WeekStart(cell.Date);
-        var source = target.AddDays(-7);
-        if (!_dialogs.Confirm(T("Planning.CopyWeekPrompt", source.ToString("dd/MM"), target.ToString("dd/MM")),
-                              _copyWeek.Text)) return;
+        var (source, target) = PlanningScreenRules.CopyWeek(cell.Date);
+        if (!_dialogs.Confirm(PlanningScreenRules.CopyWeekPrompt(cell.Date, T), _copyWeek.Text)) return;
 
         var done = await _planning.CopyWeekAsync(source, target);
         if (done.IsFailure) { _dialogs.ShowFailure(done, _copyWeek.Text); return; }
@@ -482,11 +422,11 @@ internal sealed class ShiftDialog : MasterDataEditor
         Controls.Add(_hours);
 
         _note = TextField("Field.Notes", 20, 84, 480, current?.Note);
-        _note.MaxLength = 300;
+        _note.MaxLength = PlanningScreenRules.NoteMaxLength;
         Notice(20, 138, 480, 56, "Planning.ShiftNotice");
 
-        SetHours(current?.Start, current?.End);
-        _kind.SelectedIndexChanged += (_, _) => SetHours(null, null);
+        SetHours(current);
+        _kind.SelectedIndexChanged += (_, _) => SetHours(null);
         _start.ValueChanged += (_, _) => ShowHours();
         _end.ValueChanged += (_, _) => ShowHours();
 
@@ -494,17 +434,17 @@ internal sealed class ShiftDialog : MasterDataEditor
         QhDialog.Dress(this, localizer, null);
     }
 
-    private void SetHours(TimeOnly? start, TimeOnly? end)
+    private void SetHours(ShiftCell? current)
     {
-        var (s, e) = ShiftRules.DefaultHours(Kind);
-        _start.Value = DateTime.Today.Add((start ?? s).ToTimeSpan());
-        _end.Value = DateTime.Today.Add((end ?? e).ToTimeSpan());
-        _start.Enabled = _end.Enabled = Kind != ShiftKind.OnCall;
+        var (s, e) = PlanningScreenRules.HoursOf(Kind, current);
+        _start.Value = DateTime.Today.Add(s.ToTimeSpan());
+        _end.Value = DateTime.Today.Add(e.ToTimeSpan());
+        _start.Enabled = _end.Enabled = PlanningScreenRules.TimesEditable(Kind);
         ShowHours();
     }
 
     private void ShowHours() =>
-        _hours.Text = Localizer.Format("Planning.HoursCounted", ShiftRules.Hours(Kind, Start, End).ToString("0.#"));
+        _hours.Text = PlanningScreenRules.HoursCounted(Kind, Start, End, (k, a) => Localizer.Format(k, a), CultureInfo.CurrentCulture);
 
     protected override void Accept() => DialogResult = DialogResult.OK;
 }

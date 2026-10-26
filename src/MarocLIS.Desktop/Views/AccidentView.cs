@@ -78,8 +78,7 @@ public sealed class AccidentView : LocalizedView
 
         _year.DropDownStyle = ComboBoxStyle.DropDownList;
         _year.FlatStyle = FlatStyle.Flat;
-        var thisYear = DateTime.Today.Year;
-        for (var y = thisYear; y >= thisYear - 5; y--) _year.Items.Add(y);
+        foreach (var y in AccidentScreenRules.Years(DateOnly.FromDateTime(DateTime.Today))) _year.Items.Add(y);
         _year.SelectedIndex = 0;
 
         var toolbar = QhPage.Toolbar(QhPage.Caption(_yearCaption), QhPage.Filter(_year, 110), QhPage.Fit(_register));
@@ -180,17 +179,19 @@ public sealed class AccidentView : LocalizedView
 
         // The state as a pill: an open file in amber, a closed one muted. A late declaration and an
         // overdue check keep their red, on their own cells.
-        QhGridPills.Attach(_grid, "state", r => r.Tag is AccidentRow row ? (row.IsClosed ? QhTone.Muted : QhTone.Warn) : null);
+        QhGridPills.Attach(_grid, "state", r => r.Tag is AccidentRow row
+            ? (AccidentScreenRules.State(row, T).Tone == "Muted" ? QhTone.Muted : QhTone.Warn)
+            : null);
 
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not AccidentRow row) return;
-            if (row.DeclarationLate(_clock.Now.LocalDateTime) && _grid.Columns[e.ColumnIndex].Name is "declared" or "number")
+            if (AccidentScreenRules.DeclarationLate(row, _clock.Now.LocalDateTime) && _grid.Columns[e.ColumnIndex].Name is "declared" or "number")
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
             }
-            else if (row.NextCheckDue is { } due && due < _clock.Today && _grid.Columns[e.ColumnIndex].Name == "check")
+            else if (AccidentScreenRules.CheckOverdue(row, _clock.Today) && _grid.Columns[e.ColumnIndex].Name == "check")
             {
                 e.CellStyle!.BackColor = UiTheme.CriticalBackground;
                 e.CellStyle.ForeColor = UiTheme.Critical;
@@ -297,15 +298,12 @@ public sealed class AccidentView : LocalizedView
 
         foreach (var r in _rows)
         {
-            var declared = r.DeclaredToInsurerOn is { } d ? d.ToString("dd/MM/yyyy", Fr)
-                         : r.DeclarationLate(now) ? T("Accident.DeclarationLate")
-                         : T("Accident.DeclareBefore", (r.OccurredAt + WorkAccident.DeclarationDelay).ToString("dd/MM HH:mm", Fr));
-            var index = _grid.Rows.Add(r.Number, r.OccurredAt.ToString("dd/MM/yyyy HH:mm", Fr),
+            var index = _grid.Rows.Add(r.Number, AccidentScreenRules.At(r.OccurredAt),
                                        $"{r.EmployeeNumber} {r.EmployeeName}", r.DepartmentName ?? "—",
-                                       T($"AccidentKind.{r.Kind}"), declared, r.StoppageDays.ToString("0.#", Fr),
-                                       r.ReturnedToWorkOn?.ToString("dd/MM/yyyy", Fr) ?? string.Empty,
-                                       r.NextCheckDue?.ToString("dd/MM/yyyy", Fr) ?? string.Empty,
-                                       r.IsClosed ? T("Accident.Closed") : T("Accident.Open"));
+                                       T($"AccidentKind.{r.Kind}"), AccidentScreenRules.Declared(r, now, T),
+                                       AccidentScreenRules.Days(r.StoppageDays, Fr),
+                                       AccidentScreenRules.Date(r.ReturnedToWorkOn), AccidentScreenRules.Date(r.NextCheckDue),
+                                       AccidentScreenRules.State(r, T).Text);
             _grid.Rows[index].Tag = r;
             if (r.AccidentId == select) _grid.CurrentCell = _grid.Rows[index].Cells[0];
         }
@@ -313,9 +311,7 @@ public sealed class AccidentView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        var late = _rows.Count(r => r.DeclarationLate(now));
-        _heading.Text = T("Accident.Heading", _rows.Count(r => r.OccurredAt.Year == Year),
-                          _rows.Count(r => !r.IsClosed), late);
+        _heading.Text = AccidentScreenRules.Heading(_rows, Year, now, T);
     }
 
     private AccidentRow? Selected() => _grid.CurrentRow?.Tag as AccidentRow;
@@ -357,35 +353,29 @@ public sealed class AccidentView : LocalizedView
         var r = a.Request;
 
         foreach (var e in a.Events)
-            _events.Rows.Add(e.On.ToString("dd/MM/yyyy", Fr), T($"AccidentEventKind.{e.Kind}"), e.Text ?? string.Empty, e.By ?? string.Empty);
+            _events.Rows.Add(AccidentScreenRules.Date(e.On), AccidentScreenRules.EventKind(e, T), e.Text ?? string.Empty, e.By ?? string.Empty);
         foreach (var c in a.Checks)
         {
-            var index = _checks.Rows.Add(c.Label, c.DueOn.ToString("dd/MM/yyyy", Fr), c.DoneOn?.ToString("dd/MM/yyyy", Fr) ?? "—");
+            var index = _checks.Rows.Add(c.Label, AccidentScreenRules.Date(c.DueOn), PersonnelScreenRules.DateOrDash(c.DoneOn));
             _checks.Rows[index].Tag = c;
         }
         _events.RestoreFillWeights();
         _checks.RestoreFillWeights();
 
-        var parts = new List<string> { $"{a.Number} · {a.EmployeeName} · {T($"AccidentKind.{r.Kind}")}" };
-        if (r.Kind == AccidentKind.BloodExposure && r.Exposure is { } exposure)
-            parts.Add(T($"ExposureType.{exposure}") + (r.SourceIdentified ? " · " + T("Accident.SourceIdentified") : string.Empty));
-        if (!string.IsNullOrWhiteSpace(r.InsurerName))
-            parts.Add($"{r.InsurerName}{(r.InsurerClaimNumber is { } claim ? " n° " + claim : string.Empty)}");
-        if (r.Subrogation) parts.Add(T("Accident.Subrogation"));
-        if (r.IncapacityRate is { } rate) parts.Add(T("Accident.IncapacityShort", rate.ToString("0.##", Fr)));
-        _detail.Text = string.Join("   ·   ", parts) + Environment.NewLine + r.Circumstances;
+        _detail.Text = AccidentScreenRules.Summary(a, T, Fr) + Environment.NewLine + r.Circumstances;
     }
 
     private void RefreshButtons()
     {
-        var has = _current is not null;
-        var open = _current is { IsClosed: false };
-        _edit.Enabled = _declaration.Enabled = has;
-        _stoppage.Enabled = has;
-        _return.Enabled = open && _current!.Stoppages.Any(s => s.Status == LeaveStatus.Approved);
-        _log.Enabled = has;
-        _checkDone.Enabled = open && _current!.Checks.Any(c => c.DoneOn is null);
-        _close.Enabled = open;
+        // The right stays PermissionGate's; the state of the file is the shared rules'.
+        var actions = AccidentScreenRules.Actions(_current, _ => true);
+        _edit.Enabled = actions.Edit;
+        _declaration.Enabled = actions.Declaration;
+        _stoppage.Enabled = actions.Stoppage;
+        _return.Enabled = actions.Return;
+        _log.Enabled = actions.Log;
+        _checkDone.Enabled = actions.CheckDone;
+        _close.Enabled = actions.Close;
     }
 
     private async Task EditAsync(AccidentDetail? detail)
@@ -397,8 +387,7 @@ public sealed class AccidentView : LocalizedView
 
             // Whoever serves a notice is still on the staff: a departure recorded ahead does not hide them.
             var today = DateOnly.FromDateTime(_clock.Now.LocalDateTime);
-            var choices = people.Value.Where(p => AccidentService.IsDeclarableFor(p.ExitDate, today)
-                                                  || detail?.Request.EmployeeId == p.EmployeeId).ToList();
+            var choices = AccidentScreenRules.Declarable(people.Value, today, detail?.Request.EmployeeId);
             if (choices.Count == 0) { _dialogs.Warn(T("Leave_NoEmployees"), _new.Text); return; }
 
             var insurer = detail is null ? await _accidents.LastInsurerAsync() : null;
@@ -447,9 +436,9 @@ public sealed class AccidentView : LocalizedView
     private async Task ReturnAsync()
     {
         if (_current is not { } a || a.Request.AccidentId is not { } id) return;
-        var last = a.Stoppages.Where(s => s.Status == LeaveStatus.Approved).Max(s => s.EndDate);
+        var (value, min) = AccidentScreenRules.ReturnDefaults(a);
         using var dialog = new AccidentDateDialog(Localizer, _dialogs, "Accident.Return", a.Number, "Accident.ReturnedOn",
-                                                  last.AddDays(1), DateOnly.FromDateTime(a.Request.OccurredAt), null);
+                                                  value, min, null);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         await Run(() => _accidents.RecordReturnAsync(id, dialog.Date), dialog.Text);
     }
@@ -465,9 +454,7 @@ public sealed class AccidentView : LocalizedView
     private async Task CheckDoneAsync()
     {
         if (_current is not { } a || a.Request.AccidentId is not { } id) return;
-        var check = (_checks.CurrentRow?.Tag as SerologyCheckRow) is { DoneOn: null } chosen
-            ? chosen
-            : a.Checks.Where(c => c.DoneOn is null).OrderBy(c => c.DueOn).FirstOrDefault();
+        var check = AccidentScreenRules.CheckToMark(a, (_checks.CurrentRow?.Tag as SerologyCheckRow)?.CheckId);
         if (check is null) return;
 
         using var dialog = new AccidentDateDialog(Localizer, _dialogs, "Accident.CheckDone", $"{a.Number} — {check.Label}",
@@ -480,7 +467,8 @@ public sealed class AccidentView : LocalizedView
     private async Task CloseAsync()
     {
         if (_current is not { } a || a.Request.AccidentId is not { } id) return;
-        var note = _dialogs.PromptForText(T("Accident.ClosePrompt"), $"{T("Accident.Close")} — {a.Number}", maxLength: 1000);
+        var note = _dialogs.PromptForText(T("Accident.ClosePrompt"), AccidentScreenRules.CloseTitle(a, T),
+                                          maxLength: AccidentScreenRules.NoteMaxLength);
         if (note is null) return;
         await Run(() => _accidents.CloseAsync(id, note), _close.Text);
     }
@@ -555,17 +543,17 @@ internal sealed class AccidentDialog : MasterDataEditor
         _time.Value = DateTime.Today + (r?.OccurredAt ?? now).TimeOfDay;
         Controls.AddRange([_date, _time]);
         _place = TextField("Accident.Place", 380, 62, 360, r?.Place);
-        _place.MaxLength = 200;
+        _place.MaxLength = AccidentScreenRules.PlaceMaxLength;
 
         _circumstances = TextField("Accident.Circumstances", 20, 114, 720, r?.Circumstances);
         _circumstances.Multiline = true;
         _circumstances.Height = 60;
         _circumstances.ScrollBars = ScrollBars.Vertical;
-        _circumstances.MaxLength = 2000;
+        _circumstances.MaxLength = AccidentScreenRules.CircumstancesMaxLength;
         _injuries = TextField("Accident.Injuries", 20, 196, 450, r?.Injuries);
         _witnesses = TextField("Accident.Witnesses", 490, 196, 250, r?.Witnesses);
-        _injuries.MaxLength = 1000;
-        _witnesses.MaxLength = 500;
+        _injuries.MaxLength = AccidentScreenRules.InjuriesMaxLength;
+        _witnesses.MaxLength = AccidentScreenRules.WitnessesMaxLength;
         _firstAid = Check("Accident.FirstAid", 20, 250, r?.FirstAidGiven ?? false);
 
         _exposure = Choice("Accident.Exposure", 20, 280, 340, r?.Exposure ?? ExposureType.Needlestick, "ExposureType");
@@ -575,15 +563,15 @@ internal sealed class AccidentDialog : MasterDataEditor
 
         _insurer = TextField("Accident.Insurer", 20, 340, 340, r?.InsurerName ?? lastInsurer);
         _claim = TextField("Accident.ClaimNumber", 380, 340, 170, r?.InsurerClaimNumber);
-        _insurer.MaxLength = 150;
-        _claim.MaxLength = 60;
+        _insurer.MaxLength = AccidentScreenRules.InsurerMaxLength;
+        _claim.MaxLength = AccidentScreenRules.ClaimMaxLength;
         _declared = OptionalDate("Accident.DeclaredOn", 560, 340, r?.DeclaredToInsurerOn, max: now.Date);
         _subrogation = Check("Accident.SubrogationAsk", 20, 396, r?.Subrogation ?? false);
         _rate = TextField("Accident.Incapacity", 560, 392, 180,
                           r?.IncapacityRate?.ToString("0.##", CultureInfo.InvariantCulture), mono: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _rate);
         _note = TextField("Field.Notes", 20, 444, 720, r?.Note);
-        _note.MaxLength = 1000;
+        _note.MaxLength = AccidentScreenRules.NoteMaxLength;
 
         Notice(20, 498, 720, 64, "Accident.Notice");
         Buttons(578, 760);
@@ -595,59 +583,44 @@ internal sealed class AccidentDialog : MasterDataEditor
 
     private void Toggle()
     {
-        var blood = Selected<AccidentKind>(_kind) == AccidentKind.BloodExposure;
+        var blood = AccidentScreenRules.IsBloodExposure(Selected<AccidentKind>(_kind));
         _exposure.Enabled = _source.Enabled = blood;
     }
 
     protected override void Accept()
     {
         if (SelectedId(_employee) is not { } employee) return;
-        if (string.IsNullOrWhiteSpace(_circumstances.Text))
+
+        var form = new AccidentForm
         {
-            Dialogs.Warn(Localizer["Accident_CircumstancesRequired"], Text);
-            _circumstances.Focus();
+            EmployeeId = employee,
+            Kind = Selected<AccidentKind>(_kind),
+            OccurredAt = _date.Value.Date + _time.Value.TimeOfDay,
+            Place = _place.Text,
+            Circumstances = _circumstances.Text,
+            Injuries = _injuries.Text,
+            Witnesses = _witnesses.Text,
+            FirstAidGiven = _firstAid.Checked,
+            Exposure = Selected<ExposureType>(_exposure),
+            SourceIdentified = _source.Checked,
+            ConsultedOn = DateOrNull(_consulted.Toggle, _consulted.Picker),
+            InsurerName = _insurer.Text,
+            ClaimNumber = _claim.Text,
+            DeclaredOn = DateOrNull(_declared.Toggle, _declared.Picker),
+            Subrogation = _subrogation.Checked,
+            IncapacityRate = _rate.Text,
+            Note = _note.Text
+        };
+
+        var (refused, request) = AccidentScreenRules.Check(form, _detail?.Request.AccidentId, DateTime.Now);
+        if (refused is not null)
+        {
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            (refused.Field == AccidentScreenRules.RateField ? _rate : _circumstances).Focus();
             return;
         }
 
-        decimal? rate = null;
-        if (!string.IsNullOrWhiteSpace(_rate.Text))
-        {
-            rate = DecimalOrNull(_rate);
-            if (rate is null or < 0 or > 100)
-            {
-                Dialogs.Warn(Localizer["Accident_IncapacityInvalid"], Text);
-                _rate.Focus();
-                return;
-            }
-        }
-
-        var kind = Selected<AccidentKind>(_kind);
-        var occurred = _date.Value.Date + _time.Value.TimeOfDay;
-        var consulted = DateOrNull(_consulted.Toggle, _consulted.Picker);
-        Request = new AccidentRequest
-        {
-            AccidentId = _detail?.Request.AccidentId,
-            EmployeeId = employee,
-            Kind = kind,
-            OccurredAt = new DateTime(occurred.Year, occurred.Month, occurred.Day, occurred.Hour, occurred.Minute, 0),
-            Place = Blank(_place),
-            Circumstances = _circumstances.Text.Trim(),
-            Injuries = Blank(_injuries),
-            Witnesses = Blank(_witnesses),
-            FirstAidGiven = _firstAid.Checked,
-            Exposure = kind == AccidentKind.BloodExposure ? Selected<ExposureType>(_exposure) : null,
-            SourceIdentified = kind == AccidentKind.BloodExposure && _source.Checked,
-            // The day of the consultation; the same day as the accident keeps its hour.
-            ConsultedAt = consulted is { } day
-                ? (day == DateOnly.FromDateTime(occurred) ? occurred : day.ToDateTime(new TimeOnly(9, 0)))
-                : null,
-            InsurerName = Blank(_insurer),
-            InsurerClaimNumber = Blank(_claim),
-            DeclaredToInsurerOn = DateOrNull(_declared.Toggle, _declared.Picker),
-            Subrogation = _subrogation.Checked,
-            IncapacityRate = rate,
-            Note = Blank(_note)
-        };
+        Request = request;
         DialogResult = DialogResult.OK;
     }
 }
@@ -657,6 +630,7 @@ internal sealed class AccidentStoppageDialog : MasterDataEditor
 {
     private readonly DateTimePicker _from = new(), _to = new();
     private readonly CheckBox _relapse;
+    private readonly AccidentDetail _accident;
 
     internal DateOnly From => DateOnly.FromDateTime(_from.Value.Date);
     internal DateOnly To => DateOnly.FromDateTime(_to.Value.Date);
@@ -665,22 +639,21 @@ internal sealed class AccidentStoppageDialog : MasterDataEditor
     internal AccidentStoppageDialog(ILocalizer localizer, IUserDialogs dialogs, AccidentDetail accident)
         : base(localizer, dialogs, "Accident.Stoppage", accident.Number, 520, 280)
     {
-        var day = DateOnly.FromDateTime(accident.Request.OccurredAt);
-        var last = accident.Stoppages.Where(s => s.Status == LeaveStatus.Approved).Select(s => (DateOnly?)s.EndDate).Max();
-        var start = (last ?? day).AddDays(1);
+        _accident = accident;
+        var (min, start, end, relapse) = AccidentScreenRules.StoppageDefaults(accident);
 
         Label("Leave.From", 20, 10);
         _from.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
         _from.Format = DateTimePickerFormat.Short;
-        _from.MinDate = day.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        _from.MinDate = min.ToDateTime(TimeOnly.MinValue);
         _from.Value = start.ToDateTime(TimeOnly.MinValue);
         Label("Leave.To", 240, 10);
         _to.Bounds = new Rectangle(240, 28, 180, UiTheme.InputHeight);
         _to.Format = DateTimePickerFormat.Short;
-        _to.Value = start.AddDays(6).ToDateTime(TimeOnly.MinValue);
+        _to.Value = end.ToDateTime(TimeOnly.MinValue);
         Controls.AddRange([_from, _to]);
 
-        _relapse = Check("Accident.Relapse", 20, 72, accident.IsClosed);
+        _relapse = Check("Accident.Relapse", 20, 72, relapse);
         Notice(20, 104, 480, 96, "Accident.StoppageNotice");
         Buttons(218, 520);
         QhDialog.Dress(this, localizer, null);
@@ -688,9 +661,9 @@ internal sealed class AccidentStoppageDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (To < From)
+        if (AccidentScreenRules.CheckStoppage(_accident, From, To) is { } refused)
         {
-            Dialogs.Warn(Localizer["Leave_EndBeforeStart"], Text);
+            Dialogs.Warn(Localizer[refused.Key], Text);
             return;
         }
         DialogResult = DialogResult.OK;
@@ -738,20 +711,20 @@ internal sealed class AccidentLogDialog : MasterDataEditor
         : base(localizer, dialogs, "Accident.Log", number, 560, 250)
     {
         _kind = Choice("Accident.Event", 20, 10, 300, AccidentEventKind.InsurerReminder, "AccidentEventKind",
-                       [AccidentEventKind.InsurerReminder, AccidentEventKind.InsurerResponse, AccidentEventKind.Note]);
+                       AccidentScreenRules.LogKinds);
         _text = TextField("Accident.EventText", 20, 62, 520);
         _text.Multiline = true;
         _text.Height = 70;
-        _text.MaxLength = 1000;
+        _text.MaxLength = AccidentScreenRules.NoteMaxLength;
         Buttons(186, 560);
         QhDialog.Dress(this, localizer, "QualityHr.Hint.AccidentLog");
     }
 
     protected override void Accept()
     {
-        if (Kind != AccidentEventKind.InsurerReminder && Note is null)
+        if (AccidentScreenRules.CheckLog(Kind, Note) is { } refused)
         {
-            Dialogs.Warn(Localizer["Accident_EventTextRequired"], Text);
+            Dialogs.Warn(Localizer[refused.Key], Text);
             _text.Focus();
             return;
         }

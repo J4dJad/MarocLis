@@ -154,8 +154,8 @@ public sealed class PayrollView : LocalizedView
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not PayslipRow row) return;
-            if (e.ColumnIndex == _grid.Column("alert").Index && row.Warnings.Count > 0)
-                e.CellStyle!.ForeColor = row.Warnings.Contains(PayslipWarning.NegativeNet) ? UiTheme.Critical : UiTheme.Abnormal;
+            if (e.ColumnIndex == _grid.Column("alert").Index && PayrollScreenRules.WarningTone(row) is { } tone)
+                e.CellStyle!.ForeColor = tone == "critical" ? UiTheme.Critical : UiTheme.Abnormal;
             if (e.ColumnIndex == _grid.Column("net").Index) e.CellStyle!.Font = UiTheme.SmallBold;
         };
     }
@@ -202,8 +202,7 @@ public sealed class PayrollView : LocalizedView
         public override string ToString() => Display;
     }
 
-    private static string MonthName(int year, int month) =>
-        CultureInfo.CurrentUICulture.TextInfo.ToTitleCase(new DateTime(year, month, 1).ToString("MMMM yyyy", CultureInfo.CurrentUICulture));
+    private static string MonthName(int year, int month) => PayrollScreenRules.MonthName(year, month, CultureInfo.CurrentUICulture);
 
     private void FillPeriods(Guid? select)
     {
@@ -213,7 +212,7 @@ public sealed class PayrollView : LocalizedView
             _period.Items.Clear();
             foreach (var row in _periods)
             {
-                var index = _period.Items.Add(new PeriodChoice(row, $"{MonthName(row.Year, row.Month)} — {T($"PayrollStatus.{row.Status}")}"));
+                var index = _period.Items.Add(new PeriodChoice(row, PayrollScreenRules.PeriodCaption(row, T, CultureInfo.CurrentUICulture)));
                 if (row.PeriodId == select) _period.SelectedIndex = index;
             }
             if (_period.SelectedIndex < 0 && _period.Items.Count > 0) _period.SelectedIndex = 0;
@@ -260,11 +259,6 @@ public sealed class PayrollView : LocalizedView
         Render();
     }
 
-    private string WarningsText(PayslipRow row) =>
-        string.Join(" · ", row.Warnings.Select(w => T($"PayslipWarning.{w}"))
-                              .Concat(row.Amounts.Exemption == PayrollExemption.None
-                                  ? [] : [T($"PayrollExemption.{row.Amounts.Exemption}")]));
-
     private void Render()
     {
         var selected = (_grid.CurrentRow?.Tag as PayslipRow)?.PayslipId;
@@ -275,9 +269,9 @@ public sealed class PayrollView : LocalizedView
         foreach (var row in _detail?.Payslips ?? [])
         {
             var a = row.Amounts;
-            var index = _grid.Rows.Add(row.Number, row.FullName, a.PaidDays.ToString("0.#", Fr), Dh(row.BaseSalary),
-                                       Dh(a.Gross), Dh(a.CnssEmployee + a.AmoEmployee), Dh(a.IncomeTax), Dh(a.NetPay),
-                                       Dh(a.EmployerCost), WarningsText(row));
+            var index = _grid.Rows.Add(row.Number, row.FullName, PayrollScreenRules.Days(a.PaidDays, Fr), Dh(row.BaseSalary),
+                                       Dh(a.Gross), Dh(PayrollScreenRules.Social(a)), Dh(a.IncomeTax), Dh(a.NetPay),
+                                       Dh(a.EmployerCost), PayrollScreenRules.Warnings(row, T));
             _grid.Rows[index].Tag = row;
             if (row.PayslipId == selected) _grid.CurrentCell = _grid.Rows[index].Cells[0];
         }
@@ -285,35 +279,29 @@ public sealed class PayrollView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        if (_detail is { } d)
-        {
-            _heading.Text = T("QualityHr.Payroll.Count", MonthName(d.Period.Year, d.Period.Month), T($"PayrollStatus.{d.Period.Status}"),
-                              d.Payslips.Count);
-            _totals.Text = T("Payroll.Totals", Dh(d.Total(a => a.Gross)), Dh(d.Total(a => a.CnssEmployee + a.AmoEmployee)),
-                             Dh(d.Total(a => a.IncomeTax)), Dh(d.Total(a => a.NetPay)), Dh(d.Total(a => a.EmployerCost)));
-        }
-        else
-        {
-            _heading.Text = string.Empty;
-            _totals.Text = T("Payroll.NoPeriod");
-        }
+        _heading.Text = PayrollScreenRules.Heading(_detail, T, CultureInfo.CurrentUICulture);
+        _totals.Text = PayrollScreenRules.Totals(_detail, "Payroll.Totals", T, Dh);
 
         RefreshButtons();
     }
 
     private void RefreshButtons()
     {
-        var draft = _detail?.Period.Status == PayrollStatus.Draft;
-        var row = _grid.CurrentRow?.Tag is PayslipRow;
+        // The screen is the salary right's: the state of the month is the shared rules'.
+        var actions = PayrollScreenRules.Actions(_detail, _grid.CurrentRow?.Tag is PayslipRow, _ => true);
 
-        _variables.Enabled = draft && row;
-        _update.Enabled = draft;
-        _payslip.Enabled = row;
-        _allPayslips.Enabled = _journal.Enabled = _cnss.Enabled = _close.Enabled = _detail is not null;
-        _close.Text = _detail?.Period.Status == PayrollStatus.Closed ? T("Payroll.Reopen") : T("Payroll.Close");
+        _variables.Enabled = actions.Variables;
+        _update.Enabled = actions.Update;
+        _payslip.Enabled = actions.Payslip;
+        _allPayslips.Enabled = actions.AllPayslips;
+        _journal.Enabled = actions.Journal;
+        _cnss.Enabled = actions.Cnss;
+        _close.Enabled = actions.Close;
+        _close.Text = T(actions.CloseKey);
 
         // Only a closed month goes to the bank or to the CNSS: its amounts no longer change.
-        _transfer.Enabled = _bds.Enabled = _detail?.Period.Status == PayrollStatus.Closed;
+        _transfer.Enabled = actions.Transfer;
+        _bds.Enabled = actions.Bds;
     }
 
     private async Task TransferAsync(bool file)
@@ -344,9 +332,7 @@ public sealed class PayrollView : LocalizedView
 
     private async Task OpenMonthAsync()
     {
-        var next = _periods.Count == 0
-            ? new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)
-            : new DateOnly(_periods[0].Year, _periods[0].Month, 1).AddMonths(1);
+        var next = PayrollScreenRules.NextMonth(_periods, DateOnly.FromDateTime(DateTime.Today));
 
         using var dialog = new PayrollMonthDialog(Localizer, _dialogs, next);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -390,16 +376,16 @@ public sealed class PayrollView : LocalizedView
         Domain.Common.Result done;
         if (d.Period.Status == PayrollStatus.Draft)
         {
-            if (!_dialogs.Confirm(T("Payroll.ClosePrompt", MonthName(d.Period.Year, d.Period.Month)), _close.Text)) return;
+            if (!_dialogs.Confirm(PayrollScreenRules.ClosePrompt(d, T, CultureInfo.CurrentUICulture), _close.Text)) return;
             done = await _payroll.CloseAsync(d.Period.PeriodId);
         }
         else
         {
-            var reason = _dialogs.PromptForReason(T("Payroll.ReopenPrompt", MonthName(d.Period.Year, d.Period.Month)), _close.Text);
+            var reason = _dialogs.PromptForReason(PayrollScreenRules.ReopenPrompt(d, T, CultureInfo.CurrentUICulture), _close.Text);
             if (reason is null) return;
             // Normally the month keeps the rates it was closed with; taking the year's current
             // ones is only for a rate typed wrong and corrected since. "No" is the default answer.
-            var currentRates = _dialogs.Confirm(T("Payroll.ReopenCurrentRatesPrompt", d.Period.Year), _close.Text);
+            var currentRates = _dialogs.Confirm(PayrollScreenRules.ReopenRatesPrompt(d, T), _close.Text);
             done = await _payroll.ReopenAsync(d.Period.PeriodId, reason, currentRates);
         }
 
@@ -493,14 +479,14 @@ public sealed class PayrollView : LocalizedView
         var path = Save(built.Value, $"{T("Payroll.TextFiles")} (*.txt)|*.txt", _bds.Text,
                         Path.GetDirectoryName(picker.FileName));
         if (path is not null)
-            _dialogs.Info(T("Payroll.BdsSaved", path, built.Value.Declared, built.Value.Entrants), _bds.Text);
+            _dialogs.Info(PayrollScreenRules.BdsSaved(built.Value with { FileName = path }, T), _bds.Text);
     }
 
     /// <summary>The year's état 9421: the DGI codes asked (and remembered on this workstation), then the XML saved.</summary>
     private async Task SimplIrAsync()
     {
         var remembered = SimplIrCodesStore.Load(_logger);
-        using var dialog = new SimplIrDialog(Localizer, _dialogs, DateTime.Today.Year - 1, remembered);
+        using var dialog = new SimplIrDialog(Localizer, _dialogs, PayrollScreenRules.SimplIrYear(DateOnly.FromDateTime(DateTime.Today)), remembered);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         SimplIrCodesStore.Save(dialog.Codes, _logger);
@@ -508,7 +494,7 @@ public sealed class PayrollView : LocalizedView
         if (built.IsFailure) { _dialogs.ShowFailure(built, _simplIr.Text); return; }
 
         var path = Save(built.Value, $"{T("Payroll.XmlFiles")} (*.xml)|*.xml", _simplIr.Text, null);
-        if (path is not null) _dialogs.Info(T("Payroll.SimplIrSaved", path, built.Value.Declared), _simplIr.Text);
+        if (path is not null) _dialogs.Info(PayrollScreenRules.SimplIrSaved(built.Value with { FileName = path }, T), _simplIr.Text);
     }
 
     /// <summary>Asks where to write a declaration file, under the name proposed; null when cancelled or not written.</summary>
@@ -593,52 +579,38 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
     internal PayslipVariables Variables { get; private set; } = new();
 
     internal PayslipVariablesDialog(ILocalizer localizer, IUserDialogs dialogs, PayslipRow row)
-        : base(localizer, dialogs, "Payroll.Variables", $"{row.Number} {row.FullName}", 620, 430)
+        : base(localizer, dialogs, "Payroll.Variables", PayrollScreenRules.Who(row), 620, 430)
     {
-        var v = _original = row.Variables;
-        static string N(decimal d) => d == 0 ? string.Empty : d.ToString("0.##", CultureInfo.InvariantCulture);
+        _original = row.Variables;
+        var form = PayrollScreenRules.FormFor(row.Variables);
 
-        TextBox Field(string key, int x, int y, decimal value)
+        TextBox Field(string key, int x, int y, string? value)
         {
-            var box = TextField(key, x, y, 180, N(value), mono: true, right: true);
-            Numeric(EditorValues.AmountMaxLength, box);
+            var box = TextField(key, x, y, 180, value, mono: true, right: true);
+            Numeric(PayrollScreenRules.AmountMaxLength, box);
             return box;
         }
 
         // Only the days entered by hand: those from the leave are taken again at each refresh.
-        _absence = Field("Payroll.ManualAbsenceDays", 20, 10, v.ManualAbsenceDays);
-        _ot25 = Field("Payroll.Overtime25", 220, 10, v.OvertimeHours25);
-        _ot50 = Field("Payroll.Overtime50", 420, 10, v.OvertimeHours50);
-        _ot100 = Field("Payroll.Overtime100", 20, 62, v.OvertimeHours100);
-        _bonus = Field("Payroll.TaxableBonus", 220, 62, v.TaxableBonus);
-        _transport = Field("Payroll.Transport", 420, 62, v.TransportAllowance);
-        _exempt = Field("Payroll.OtherExempt", 20, 114, v.OtherExemptAllowance);
-        _advance = Field("Payroll.Advance", 220, 114, v.AdvanceDeduction);
-        _other = Field("Payroll.OtherDeduction", 420, 114, v.OtherDeduction);
-        _note = TextField("Field.Notes", 20, 166, 580, v.Note);
-        _note.MaxLength = 300;
+        _absence = Field("Payroll.ManualAbsenceDays", 20, 10, form.ManualAbsenceDays);
+        _ot25 = Field("Payroll.Overtime25", 220, 10, form.Overtime25);
+        _ot50 = Field("Payroll.Overtime50", 420, 10, form.Overtime50);
+        _ot100 = Field("Payroll.Overtime100", 20, 62, form.Overtime100);
+        _bonus = Field("Payroll.TaxableBonus", 220, 62, form.TaxableBonus);
+        _transport = Field("Payroll.Transport", 420, 62, form.Transport);
+        _exempt = Field("Payroll.OtherExempt", 20, 114, form.OtherExempt);
+        _advance = Field("Payroll.Advance", 220, 114, form.Advance);
+        _other = Field("Payroll.OtherDeduction", 420, 114, form.OtherDeduction);
+        _note = TextField("Field.Notes", 20, 166, 580, form.Note);
+        _note.MaxLength = PayrollScreenRules.NoteMaxLength;
 
-        var a = row.Amounts;
         var fr = CultureInfo.GetCultureInfo("fr-FR");
         var current = new Label
         {
             Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary, AutoSize = false,
             Bounds = new Rectangle(20, 222, 580, 60),
-            Text = localizer.Format("Payroll.CurrentResult", a.Gross.ToString("N2", fr), a.CnssEmployee.ToString("N2", fr),
-                                    a.AmoEmployee.ToString("N2", fr), a.IncomeTax.ToString("N2", fr), a.NetPay.ToString("N2", fr),
-                                    a.SeniorityRate.ToString("0.#", fr))
+            Text = PayrollScreenRules.CurrentResult(row, (k, a) => localizer.Format(k, a), v => v.ToString("N2", fr), fr)
         };
-        if (v.AbsenceDays > 0)
-            current.Text += " " + localizer.Format("Payroll.LeaveAbsenceIncluded", v.AbsenceDays.ToString("0.#", fr));
-        if (v.IsProrated)
-            current.Text += " " + localizer.Format("Payroll.ProratedMonth", v.ContractWorkingDays.ToString("0.#", fr),
-                                                   v.MonthWorkingDays.ToString("0.#", fr));
-        var departure = v.LeaveIndemnity + v.NoticeIndemnity + v.SeverancePay;
-        if (departure > 0)
-            current.Text += " " + localizer.Format("Payroll.DepartureIncluded", departure.ToString("N2", fr));
-        if (v.WorkAccidentDays > 0)
-            current.Text += " " + localizer.Format("Payroll.AccidentIncluded", v.WorkAccidentDays.ToString("0.#", fr),
-                                                   v.WorkAccidentAllowance.ToString("N2", fr));
         Controls.Add(current);
 
         Notice(20, 290, 580, 74, "Payroll.VariablesNotice");
@@ -646,74 +618,68 @@ internal sealed class PayslipVariablesDialog : MasterDataEditor
         QhDialog.Dress(this, localizer, null);
     }
 
-    // The shared reader: "1 250,50" with the no-break space of the French culture, or "1.250,50",
-    // was refused here as a negative variable.
-    private static bool Read(TextBox box, out decimal value) => EditorValues.TryParseOrZero(box.Text, out value);
-
     protected override void Accept()
     {
-        var values = new decimal[9];
-        TextBox[] boxes = [_absence, _ot25, _ot50, _ot100, _bonus, _transport, _exempt, _advance, _other];
-        for (var i = 0; i < boxes.Length; i++)
-            if (!Read(boxes[i], out values[i]) || values[i] < 0)
-            {
-                Dialogs.Warn(Localizer["Payroll_NegativeVariable"], Text);
-                boxes[i].Focus();
-                return;
-            }
+        var form = new PayslipVariablesForm
+        {
+            ManualAbsenceDays = _absence.Text, Overtime25 = _ot25.Text, Overtime50 = _ot50.Text, Overtime100 = _ot100.Text,
+            TaxableBonus = _bonus.Text, Transport = _transport.Text, OtherExempt = _exempt.Text, Advance = _advance.Text,
+            OtherDeduction = _other.Text, Note = _note.Text
+        };
+
+        // The shared reader: "1 250,50" with the no-break space of the French culture, or "1.250,50",
+        // was refused here as a negative variable.
+        var (refused, variables) = PayrollScreenRules.Check(form, _original);
+        if (refused is not null)
+        {
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            BoxOf(refused.Field).Focus();
+            return;
+        }
 
         // The departure indemnities and the leave-derived days come from the files and are kept as they are.
-        Variables = _original with
-        {
-            ManualAbsenceDays = values[0], OvertimeHours25 = values[1], OvertimeHours50 = values[2], OvertimeHours100 = values[3],
-            TaxableBonus = values[4], TransportAllowance = values[5], OtherExemptAllowance = values[6],
-            AdvanceDeduction = values[7], OtherDeduction = values[8], Note = Blank(_note)
-        };
+        Variables = variables!;
         DialogResult = DialogResult.OK;
     }
+
+    private TextBox BoxOf(string field) => field switch
+    {
+        PayrollScreenRules.Overtime25Field => _ot25,
+        PayrollScreenRules.Overtime50Field => _ot50,
+        PayrollScreenRules.Overtime100Field => _ot100,
+        PayrollScreenRules.BonusField => _bonus,
+        PayrollScreenRules.TransportField => _transport,
+        PayrollScreenRules.ExemptField => _exempt,
+        PayrollScreenRules.AdvanceField => _advance,
+        PayrollScreenRules.OtherDeductionField => _other,
+        _ => _absence
+    };
 }
 
 /// <summary>The year's legal rates. Draft months of the year are recomputed when they change.</summary>
 internal sealed class PayrollParametersDialog : MasterDataEditor
 {
-    private readonly (TextBox Box, Action<PayrollParameters, decimal> Set)[] _fields;
+    private readonly TextBox[] _boxes;
     private readonly TextBox _scale;
     private decimal[] _values = [];
 
     internal PayrollParametersDialog(ILocalizer localizer, IUserDialogs dialogs, PayrollParameters p)
         : base(localizer, dialogs, "Payroll.Settings", p.Year.ToString(CultureInfo.InvariantCulture), 700, 470)
     {
-        static string N(decimal d) => d.ToString("0.##", CultureInfo.InvariantCulture);
-        (TextBox, Action<PayrollParameters, decimal>) F(string key, int x, int y, decimal value, Action<PayrollParameters, decimal> set)
+        var fields = PayrollScreenRules.RateFields;
+        _boxes = new TextBox[fields.Count];
+        for (var i = 0; i < fields.Count; i++)
         {
-            var box = TextField(key, x, y, 200, N(value), mono: true, right: true);
+            var box = TextField(fields[i].Key, 20 + i % 3 * 220, 10 + i / 3 * 52, 200, PayrollScreenRules.Rate(fields[i].Get(p)),
+                                mono: true, right: true);
             // decimal(18,6) columns, ceilings and SMIG included: the shared check refuses a
             // fifteen-figure amount the save could not store.
-            Numeric(EditorValues.AmountMaxLength, box);
-            return (box, set);
+            Numeric(PayrollScreenRules.AmountMaxLength, box);
+            _boxes[i] = box;
         }
 
-        _fields =
-        [
-            F("PayrollRate.CnssCeiling", 20, 10, p.CnssCeiling, (r, v) => r.CnssCeiling = v),
-            F("PayrollRate.CnssEmployee", 240, 10, p.CnssEmployeeRate, (r, v) => r.CnssEmployeeRate = v),
-            F("PayrollRate.CnssEmployer", 460, 10, p.CnssEmployerRate, (r, v) => r.CnssEmployerRate = v),
-            F("PayrollRate.FamilyAllowance", 20, 62, p.FamilyAllowanceRate, (r, v) => r.FamilyAllowanceRate = v),
-            F("PayrollRate.TrainingTax", 240, 62, p.TrainingTaxRate, (r, v) => r.TrainingTaxRate = v),
-            F("PayrollRate.AmoEmployee", 460, 62, p.AmoEmployeeRate, (r, v) => r.AmoEmployeeRate = v),
-            F("PayrollRate.AmoEmployer", 20, 114, p.AmoEmployerRate, (r, v) => r.AmoEmployerRate = v),
-            F("PayrollRate.ExpensesLow", 240, 114, p.ProfessionalExpensesLowRate, (r, v) => r.ProfessionalExpensesLowRate = v),
-            F("PayrollRate.ExpensesHigh", 460, 114, p.ProfessionalExpensesHighRate, (r, v) => r.ProfessionalExpensesHighRate = v),
-            F("PayrollRate.ExpensesThreshold", 20, 166, p.ProfessionalExpensesThreshold, (r, v) => r.ProfessionalExpensesThreshold = v),
-            F("PayrollRate.ExpensesCap", 240, 166, p.ProfessionalExpensesAnnualCap, (r, v) => r.ProfessionalExpensesAnnualCap = v),
-            F("PayrollRate.FamilyDeduction", 460, 166, p.FamilyDeductionPerPerson, (r, v) => r.FamilyDeductionPerPerson = v),
-            F("PayrollRate.Smig", 20, 218, p.SmigMonthly, (r, v) => r.SmigMonthly = v),
-            F("PayrollRate.MonthlyHours", 240, 218, p.MonthlyHours, (r, v) => r.MonthlyHours = v),
-            F("PayrollRate.Transport", 460, 218, p.TransportExemptionCap, (r, v) => r.TransportExemptionCap = v)
-        ];
-
         _scale = TextField("PayrollRate.Scale", 20, 270, 660, p.IncomeTaxScale, latin: true, mono: true);
-        _scale.MaxLength = 300;
+        _scale.MaxLength = PayrollScreenRules.ScaleMaxLength;
         Notice(20, 322, 660, 84, "PayrollRate.Notice");
         Buttons(414, 700);
         QhDialog.Dress(this, localizer, null);
@@ -721,33 +687,20 @@ internal sealed class PayrollParametersDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        _values = new decimal[_fields.Length];
-        for (var i = 0; i < _fields.Length; i++)
+        var (refused, values) = PayrollScreenRules.CheckRates([.. _boxes.Select(b => b.Text)], _scale.Text);
+        if (refused is not null)
         {
-            if (EditorValues.ParseDecimal(_fields[i].Box.Text) is not { } value || value < 0)
-            {
-                Dialogs.Warn(Localizer["Payroll_RateInvalid"], Text);
-                _fields[i].Box.Focus();
-                return;
-            }
-            _values[i] = value;
-        }
-
-        if (PayrollParameters.ParseScale(_scale.Text).Count == 0)
-        {
-            Dialogs.Warn(Localizer["Payroll_ScaleInvalid"], Text);
-            _scale.Focus();
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            var index = PayrollScreenRules.RateFields.ToList().FindIndex(f => f.Field == refused.Field);
+            (index >= 0 ? _boxes[index] : _scale).Focus();
             return;
         }
 
+        _values = values;
         DialogResult = DialogResult.OK;
     }
 
-    internal void Apply(PayrollParameters target)
-    {
-        for (var i = 0; i < _fields.Length; i++) _fields[i].Set(target, _values[i]);
-        target.IncomeTaxScale = _scale.Text.Trim();
-    }
+    internal void Apply(PayrollParameters target) => PayrollScreenRules.Apply(target, _values, _scale.Text);
 }
 
 /// <summary>
@@ -759,14 +712,14 @@ internal sealed class SimplIrDialog : MasterDataEditor
     private readonly TextBox _commune, _lowRate, _highRate;
 
     internal int Year => (int)_year.Value;
-    internal SimplIrCodes Codes => new(_commune.Text.Trim(), _lowRate.Text.Trim(), _highRate.Text.Trim());
+    internal SimplIrCodes Codes => PayrollScreenRules.Codes(_commune.Text, _lowRate.Text, _highRate.Text);
 
     internal SimplIrDialog(ILocalizer localizer, IUserDialogs dialogs, int year, SimplIrCodes remembered)
         : base(localizer, dialogs, "Payroll.SimplIr", null, 560, 330)
     {
-        _year = Number("Payroll.SimplIrYear", 20, 10, 120, year, max: 2100);
-        _year.Minimum = 2000;
-        _year.Value = Math.Clamp(year, 2000, 2100);
+        _year = Number("Payroll.SimplIrYear", 20, 10, 120, year, max: PayrollScreenRules.LastYear);
+        _year.Minimum = PayrollScreenRules.FirstYear;
+        _year.Value = Math.Clamp(year, PayrollScreenRules.FirstYear, PayrollScreenRules.LastYear);
         _commune = TextField("Payroll.SimplIrCommune", 160, 10, 380, remembered.Commune, latin: true, mono: true);
         _lowRate = TextField("Payroll.SimplIrLowRateCode", 20, 62, 520, remembered.LowIncomeRateCode, latin: true, mono: true);
         _highRate = TextField("Payroll.SimplIrHighRateCode", 20, 114, 520, remembered.HighIncomeRateCode, latin: true, mono: true);
@@ -778,13 +731,17 @@ internal sealed class SimplIrDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        foreach (var box in new[] { _commune, _lowRate, _highRate })
-            if (box.Text.Trim().Length == 0)
+        if (PayrollScreenRules.CheckSimplIr(Year, Codes) is { } refused)
+        {
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            (refused.Field switch
             {
-                Dialogs.Warn(Localizer["Payroll_SimplIrCodesRequired"], Text);
-                box.Focus();
-                return;
-            }
+                PayrollScreenRules.LowRateField => _lowRate,
+                PayrollScreenRules.HighRateField => _highRate,
+                _ => _commune
+            }).Focus();
+            return;
+        }
 
         DialogResult = DialogResult.OK;
     }
@@ -802,22 +759,16 @@ internal static class SimplIrCodesStore
 
     internal static SimplIrCodes Load(ILogger? logger)
     {
-        var defaults = new SimplIrCodes(string.Empty, SimplIrCodes.DefaultLowIncomeRateCode, SimplIrCodes.DefaultHighIncomeRateCode);
         try
         {
-            if (!File.Exists(FilePath)) return defaults;
-            var stored = System.Text.Json.JsonSerializer.Deserialize<SimplIrCodes>(File.ReadAllText(FilePath));
-            return stored is null
-                ? defaults
-                : new SimplIrCodes(stored.Commune ?? string.Empty,
-                                   string.IsNullOrWhiteSpace(stored.LowIncomeRateCode) ? defaults.LowIncomeRateCode : stored.LowIncomeRateCode,
-                                   string.IsNullOrWhiteSpace(stored.HighIncomeRateCode) ? defaults.HighIncomeRateCode : stored.HighIncomeRateCode);
+            if (!File.Exists(FilePath)) return PayrollScreenRules.Remembered(null);
+            return PayrollScreenRules.Remembered(System.Text.Json.JsonSerializer.Deserialize<SimplIrCodes>(File.ReadAllText(FilePath)));
         }
         catch (Exception ex)
         {
             // A damaged file only costs the codes typed last time.
             logger?.LogWarning(ex, "Reading the Simpl-IR codes failed.");
-            return defaults;
+            return PayrollScreenRules.Remembered(null);
         }
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using MarocLIS.Application.HumanResources;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.HumanResources;
@@ -65,9 +66,9 @@ public sealed class LeaveView : LocalizedView
 
         _year.DropDownStyle = ComboBoxStyle.DropDownList;
         _year.FlatStyle = FlatStyle.Flat;
-        var thisYear = DateTime.Today.Year;
-        for (var y = thisYear - 2; y <= thisYear + 1; y++) _year.Items.Add(y);
-        _year.SelectedItem = thisYear;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        foreach (var y in LeaveScreenRules.Years(today)) _year.Items.Add(y);
+        _year.SelectedItem = today.Year;
 
         var toolbar = QhPage.Toolbar(QhPage.Caption(_yearCaption), QhPage.Filter(_year, 90),
                                      QhPage.Chip(_pendingOnly), _pendingOnly,
@@ -131,21 +132,21 @@ public sealed class LeaveView : LocalizedView
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not LeaveRow row) return;
 
-            if (row.Status is LeaveStatus.Refused or LeaveStatus.Cancelled)
+            var ink = LeaveScreenRules.Ink(row);
+            if (ink == LeaveInk.Closed)
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
-            else if (row.Status == LeaveStatus.Pending && e.ColumnIndex == _grid.Column("name").Index)
+            else if (ink == LeaveInk.Pending && e.ColumnIndex == _grid.Column("name").Index)
                 e.CellStyle!.Font = UiTheme.BodyBold;
 
-            if (e.ColumnIndex == _grid.Column("proof").Index && !row.JustificationProvided
-                && LeaveRules.RequiresJustification(row.Type) && row.Status == LeaveStatus.Pending)
+            if (e.ColumnIndex == _grid.Column("proof").Index && LeaveScreenRules.ProofMissing(row))
                 e.CellStyle!.ForeColor = UiTheme.Critical;
         };
     }
 
-    private static (Color Back, Color Fore)? StatusTone(LeaveStatus status) => status switch
+    private static (Color Back, Color Fore)? StatusTone(LeaveStatus status) => LeaveScreenRules.Tone(status) switch
     {
-        LeaveStatus.Pending => QhTone.Warn,
-        LeaveStatus.Approved => QhTone.Ok,
+        "Warning" => QhTone.Warn,
+        "Ok" => QhTone.Ok,
         _ => QhTone.Muted
     };
 
@@ -197,9 +198,6 @@ public sealed class LeaveView : LocalizedView
         }
     }
 
-    private static string Half(DateOnly date, bool half, string halfText) =>
-        half ? $"{date:dd/MM/yyyy} {halfText}" : date.ToString("dd/MM/yyyy");
-
     private void Render()
     {
         var selected = Current()?.LeaveRequestId;
@@ -207,23 +205,14 @@ public sealed class LeaveView : LocalizedView
         _grid.SuspendLayout();
         _grid.Rows.Clear();
 
+        var culture = CultureInfo.CurrentCulture;
         foreach (var row in _rows)
         {
-            var proof = !LeaveRules.RequiresJustification(row.Type) ? string.Empty
-                      : row.JustificationProvided ? T("Leave.ProofGiven") : T("Leave.ProofMissing");
-
-            var decision = row.Status switch
-            {
-                LeaveStatus.Pending => T("Leave.SubmittedOn", row.SubmittedAt.LocalDateTime.ToString("dd/MM/yyyy")),
-                _ => string.Join(" · ", new[] { row.DecidedBy, row.DecisionComment }.Where(s => !string.IsNullOrEmpty(s)))
-            };
-
             var index = _grid.Rows.Add(T($"LeaveStatus.{row.Status}"), $"{row.EmployeeNumber} {row.EmployeeName}",
                                        row.DepartmentName ?? "—", T($"LeaveType.{row.Type}"),
-                                       Half(row.StartDate, row.StartsAfternoon, T("Leave.AfternoonShort")),
-                                       Half(row.EndDate, row.EndsMorning, T("Leave.MorningShort")),
-                                       row.Days.ToString("0.#"), proof,
-                                       row.ColleaguesAway == 0 ? "—" : row.ColleaguesAway.ToString(), decision);
+                                       LeaveScreenRules.From(row, T), LeaveScreenRules.To(row, T),
+                                       LeaveScreenRules.Days(row.Days, culture), LeaveScreenRules.Proof(row, T),
+                                       LeaveScreenRules.Away(row, culture), LeaveScreenRules.Decision(row, T));
             _grid.Rows[index].Tag = row;
             if (row.LeaveRequestId == selected) _grid.CurrentCell = _grid.Rows[index].Cells[0];
         }
@@ -231,8 +220,7 @@ public sealed class LeaveView : LocalizedView
         _grid.ResumeLayout(performLayout: true);
         _grid.RestoreFillWeights();
 
-        _heading.Text = T("QualityHr.Leave.Count", _rows.Count(r => r.Status == LeaveStatus.Pending),
-                          _rows.Count(r => r.Status == LeaveStatus.Approved));
+        _heading.Text = LeaveScreenRules.Count(_rows, T);
         ShowDetail();
     }
 
@@ -241,22 +229,15 @@ public sealed class LeaveView : LocalizedView
     private void ShowDetail()
     {
         var row = Current();
-        var pending = row?.Status == LeaveStatus.Pending;
+        // The rights stay PermissionGate's; the state of the request is the shared rules'.
+        var actions = LeaveScreenRules.Actions(row, DateOnly.FromDateTime(DateTime.Today), _ => true);
 
-        _approve.Enabled = _refuse.Enabled = pending;
-        _proofReceived.Enabled = pending && row is { JustificationProvided: false }
-                                 && LeaveRules.RequiresJustification(row.Type);
-        _cancel.Enabled = row is { IsLive: true } && (row.Status == LeaveStatus.Pending
-                                                      || row.StartDate > DateOnly.FromDateTime(DateTime.Today));
+        _approve.Enabled = actions.Approve;
+        _refuse.Enabled = actions.Refuse;
+        _proofReceived.Enabled = actions.ProofReceived;
+        _cancel.Enabled = actions.Cancel;
 
-        _detail.Text = row is null ? string.Empty
-            : string.Join(" · ", new[]
-              {
-                  T($"LeaveType.{row.Type}"),
-                  T("Leave.DaysCounted", row.Days.ToString("0.#")),
-                  row.Reason,
-                  row.ColleaguesAway > 0 ? T("Leave.AwayWarning", row.ColleaguesAway, row.DepartmentName) : null
-              }.Where(s => !string.IsNullOrEmpty(s)));
+        _detail.Text = LeaveScreenRules.Detail(row, T, CultureInfo.CurrentCulture);
     }
 
     private async Task NewAsync()
@@ -267,11 +248,11 @@ public sealed class LeaveView : LocalizedView
             if (balances.IsFailure) { _dialogs.ShowFailure(balances); return; }
 
             var own = await _leave.OwnEmployeeIdAsync();
-            var people = _leave.CanActForOthers ? balances.Value : balances.Value.Where(b => b.EmployeeId == own).ToList();
+            var people = LeaveScreenRules.People(balances.Value, _leave.CanActForOthers, own);
             if (people.Count == 0)
             {
                 // HR acting for others with nobody on file needs another hint than an unlinked account.
-                _dialogs.Warn(T(_leave.CanActForOthers ? "Leave_NoEmployees" : "Leave_NoPersonnelFile"), _new.Text);
+                _dialogs.Warn(T(LeaveScreenRules.NobodyKey(_leave.CanActForOthers)), _new.Text);
                 return;
             }
 
@@ -301,10 +282,7 @@ public sealed class LeaveView : LocalizedView
     {
         if (Current() is not { Status: LeaveStatus.Pending } row) return;
 
-        var question = T("Leave.ApprovePrompt", T($"LeaveType.{row.Type}"), row.EmployeeName,
-                         row.StartDate.ToString("dd/MM/yyyy"), row.EndDate.ToString("dd/MM/yyyy"), row.Days.ToString("0.#"));
-        if (row.ColleaguesAway > 0) question += "\n\n" + T("Leave.AwayWarning", row.ColleaguesAway, row.DepartmentName);
-        if (!_dialogs.Confirm(question, _approve.Text)) return;
+        if (!_dialogs.Confirm(LeaveScreenRules.ApprovePrompt(row, T, CultureInfo.CurrentCulture), _approve.Text)) return;
 
         var done = await _leave.ApproveAsync(row.LeaveRequestId, null);
         if (done.IsFailure) { _dialogs.ShowFailure(done, _approve.Text); return; }
@@ -315,9 +293,7 @@ public sealed class LeaveView : LocalizedView
     {
         if (Current() is not { Status: LeaveStatus.Pending, JustificationProvided: false } row) return;
 
-        if (!_dialogs.Confirm(T("Leave.ProofReceivedPrompt", T($"LeaveType.{row.Type}"), row.EmployeeName,
-                                row.StartDate.ToString("dd/MM/yyyy"), row.EndDate.ToString("dd/MM/yyyy")),
-                              _proofReceived.Text))
+        if (!_dialogs.Confirm(LeaveScreenRules.ProofReceivedPrompt(row, T), _proofReceived.Text))
             return;
 
         var done = await _leave.RecordJustificationReceivedAsync(row.LeaveRequestId);
@@ -329,7 +305,8 @@ public sealed class LeaveView : LocalizedView
     {
         if (Current() is not { Status: LeaveStatus.Pending } row) return;
 
-        var reason = _dialogs.PromptForReason(T("Leave.RefusePrompt", row.EmployeeName), _refuse.Text, maxLength: 500);
+        var reason = _dialogs.PromptForReason(LeaveScreenRules.RefusePrompt(row, T), _refuse.Text,
+                                              maxLength: LeaveScreenRules.ReasonMaxLength);
         if (reason is null) return;
 
         var done = await _leave.RefuseAsync(row.LeaveRequestId, reason);
@@ -341,8 +318,8 @@ public sealed class LeaveView : LocalizedView
     {
         if (Current() is not { IsLive: true } row) return;
 
-        var reason = _dialogs.PromptForText(T("Leave.CancelPrompt", T($"LeaveType.{row.Type}"),
-                                              row.StartDate.ToString("dd/MM/yyyy")), _cancel.Text, maxLength: 500);
+        var reason = _dialogs.PromptForText(LeaveScreenRules.CancelPrompt(row, T), _cancel.Text,
+                                            maxLength: LeaveScreenRules.ReasonMaxLength);
         if (reason is null) return;
 
         var done = await _leave.CancelAsync(row.LeaveRequestId, reason);
@@ -394,28 +371,28 @@ internal sealed class LeaveRequestDialog : MasterDataEditor
 
         _employee = Lookup("Leave.Employee", 20, 10, 560,
                            people.Select(p => (p.EmployeeId, $"{p.Number} — {p.FullName}")),
-                           own ?? people[0].EmployeeId, allowNone: false);
+                           LeaveScreenRules.DefaultPerson(people, own), allowNone: false);
         _employee.Enabled = people.Count > 1;
 
-        var types = Enum.GetValues<LeaveType>().Where(t => hrTypes || !LeaveRules.IsHrOnly(t));
-        _type = Choice("Leave.Type", 20, 62, 270, LeaveType.Annual, "LeaveType", types);
+        _type = Choice("Leave.Type", 20, 62, 270, LeaveType.Annual, "LeaveType", LeaveScreenRules.Types(hrTypes));
 
         Label("Leave.From", 20, 114);
         _start.Bounds = new Rectangle(20, 132, 180, UiTheme.InputHeight);
         _start.Format = DateTimePickerFormat.Short;
-        _start.Value = DateTime.Today.AddDays(1);
+        var first = LeaveScreenRules.DefaultDay(DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue);
+        _start.Value = first;
         Controls.Add(_start);
         _startsAfternoon = Check("Leave.StartsAfternoon", 210, 136, false);
 
         Label("Leave.To", 20, 166);
         _end.Bounds = new Rectangle(20, 184, 180, UiTheme.InputHeight);
         _end.Format = DateTimePickerFormat.Short;
-        _end.Value = DateTime.Today.AddDays(1);
+        _end.Value = first;
         Controls.Add(_end);
         _endsMorning = Check("Leave.EndsMorning", 210, 188, false);
 
         _reason = TextField("Leave.Reason", 20, 218, 560);
-        _reason.MaxLength = 500;
+        _reason.MaxLength = LeaveScreenRules.ReasonMaxLength;
         _proof = Check("Leave.ProofProvided", 20, 274, false);
 
         _count = new Label
@@ -437,7 +414,8 @@ internal sealed class LeaveRequestDialog : MasterDataEditor
         _employee.SelectedIndexChanged += async (_, _) => await PreviewAsync();
         _start.ValueChanged += async (_, _) =>
         {
-            if (_end.Value < _start.Value) _end.Value = _start.Value;
+            var end = LeaveScreenRules.EndAfter(DateOnly.FromDateTime(_start.Value.Date), DateOnly.FromDateTime(_end.Value.Date));
+            if (end != DateOnly.FromDateTime(_end.Value.Date)) _end.Value = end.ToDateTime(TimeOnly.MinValue);
             await PreviewAsync();
         };
         _end.ValueChanged += async (_, _) => await PreviewAsync();
@@ -460,37 +438,19 @@ internal sealed class LeaveRequestDialog : MasterDataEditor
         if (version != _previewVersion || IsDisposed) return;
 
         var count = days.IsSuccess ? days.Value : 0m;
-        _count.Text = Localizer.Format(LeaveRules.CountsCalendarDays(Type) ? "Leave.CalendarDays" : "Leave.WorkingDays",
-                                       count.ToString("0.#"));
-
         var person = _people.FirstOrDefault(p => p.EmployeeId == SelectedId(_employee));
-        if (LeaveRules.DebitsBalance(Type) && person is not null)
-        {
-            _balance.ForeColor = count > person.Available ? UiTheme.Critical : UiTheme.TextSecondary;
-            _balance.Text = Localizer.Format("Leave.AvailableBalance", person.Available.ToString("0.#"));
-        }
-        else
-        {
-            _balance.ForeColor = UiTheme.TextSecondary;
-            _balance.Text = LeaveRules.Entitlement(Type) is { } allowed
-                ? Localizer.Format("Leave.Entitlement", allowed.ToString("0.#"))
-                : string.Empty;
-        }
+        var preview = LeaveScreenRules.Preview(Type, count, person, (k, a) => a.Length == 0 ? Localizer[k] : Localizer.Format(k, a),
+                                               CultureInfo.CurrentCulture);
+        _count.Text = preview.Count;
+        _balance.Text = preview.Balance;
+        _balance.ForeColor = preview.Over ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
     protected override void Accept()
     {
-        Submission = new LeaveSubmission
-        {
-            EmployeeId = SelectedId(_employee),
-            Type = Type,
-            StartDate = DateOnly.FromDateTime(_start.Value.Date),
-            EndDate = DateOnly.FromDateTime(_end.Value.Date),
-            StartsAfternoon = _startsAfternoon.Checked,
-            EndsMorning = _endsMorning.Checked,
-            Reason = Blank(_reason),
-            JustificationProvided = _proof.Checked
-        };
+        Submission = LeaveScreenRules.Submission(SelectedId(_employee), Type, DateOnly.FromDateTime(_start.Value.Date),
+                                                 DateOnly.FromDateTime(_end.Value.Date), _startsAfternoon.Checked,
+                                                 _endsMorning.Checked, _reason.Text, _proof.Checked);
         DialogResult = DialogResult.OK;
     }
 }
@@ -566,7 +526,7 @@ internal sealed class LeaveBalancesDialog : Form
         _grid.CellFormatting += (_, e) =>
         {
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not LeaveBalanceRow row) return;
-            if (e.ColumnIndex == _grid.Columns["available"]!.Index && row.Available < 0)
+            if (e.ColumnIndex == _grid.Columns["available"]!.Index && LeaveScreenRules.Overdrawn(row))
                 e.CellStyle!.ForeColor = UiTheme.Critical;
         };
         QhDialog.Dress(this, localizer, null);
@@ -578,12 +538,13 @@ internal sealed class LeaveBalancesDialog : Form
         if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
 
         _grid.Rows.Clear();
+        var culture = CultureInfo.CurrentCulture;
         foreach (var b in result.Value)
         {
-            var index = _grid.Rows.Add(b.Number, b.FullName, b.AnnualEntitlement.ToString("0.#"),
-                                       b.Credited.ToString("0.##"), b.Taken.ToString("0.#"),
-                                       b.Pending.ToString("0.#"), b.Balance.ToString("0.##"),
-                                       b.Available.ToString("0.##"));
+            var index = _grid.Rows.Add(b.Number, b.FullName, LeaveScreenRules.Days(b.AnnualEntitlement, culture),
+                                       LeaveScreenRules.Balance(b.Credited, culture), LeaveScreenRules.Days(b.Taken, culture),
+                                       LeaveScreenRules.Days(b.Pending, culture), LeaveScreenRules.Balance(b.Balance, culture),
+                                       LeaveScreenRules.Balance(b.Available, culture));
             _grid.Rows[index].Tag = b;
         }
 
@@ -594,7 +555,7 @@ internal sealed class LeaveBalancesDialog : Form
     {
         if (_grid.CurrentRow?.Tag is not LeaveBalanceRow row) return;
 
-        using var editor = new LeaveAdjustmentDialog(_localizer, _dialogs, $"{row.Number} {row.FullName}");
+        using var editor = new LeaveAdjustmentDialog(_localizer, _dialogs, LeaveScreenRules.Who(row));
         while (editor.ShowDialog(this) == DialogResult.OK)
         {
             var done = await _leave.AdjustAsync(row.EmployeeId, editor.Days, editor.Comment);
@@ -622,7 +583,7 @@ internal sealed class LeaveAdjustmentDialog : MasterDataEditor
         _days = TextField("Leave.AdjustDays", 20, 10, 140, mono: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _days);
         _comment = TextField("Leave.AdjustReason", 180, 10, 320);
-        _comment.MaxLength = 500;
+        _comment.MaxLength = LeaveScreenRules.ReasonMaxLength;
         Notice(20, 66, 480, 90, "Leave.AdjustNotice");
         Buttons(172, 520);
         QhDialog.Dress(this, localizer, null);
@@ -630,9 +591,11 @@ internal sealed class LeaveAdjustmentDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        if (DecimalOrNull(_days) is not { } days || days == 0m)
+        var (refused, days) = LeaveScreenRules.CheckAdjustment(_days.Text);
+        if (refused is not null)
         {
-            Dialogs.Warn(Localizer["Leave_AdjustmentInvalid"], Text);
+            Dialogs.Warn(Localizer[refused.Key], Text);
+            _days.Focus();
             return;
         }
 
@@ -664,7 +627,7 @@ internal sealed class HolidaysDialog : Form
         _leave = leave;
         _year = year;
 
-        Text = $"{localizer["Leave.Holidays"]} {year}";
+        Text = LeaveScreenRules.HolidaysTitle(year, (k, _) => localizer[k]);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = MaximizeBox = false;
@@ -723,9 +686,8 @@ internal sealed class HolidaysDialog : Form
         _grid.Rows.Clear();
         foreach (var h in result.Value)
         {
-            var index = _grid.Rows.Add(h.Date.ToString("dd/MM/yyyy"),
-                                       _localizer[$"Weekday.{h.Date.DayOfWeek}"], h.Name,
-                                       _localizer[h.IsReligious ? "Holiday.Religious" : "Holiday.Civil"]);
+            var index = _grid.Rows.Add(LeaveScreenRules.Date(h.Date), LeaveScreenRules.Weekday(h, Text_),
+                                       h.Name, LeaveScreenRules.Kind(h, Text_));
             _grid.Rows[index].Tag = h;
         }
     }
@@ -742,12 +704,8 @@ internal sealed class HolidaysDialog : Form
                 await LoadAsync();
                 // The leaves the new holiday falls in were recounted: named, so HR knows whose
                 // balance moved.
-                if (done.Value.Count > 0)
-                    _dialogs.Info(_localizer["Holiday.Recounted"] + Environment.NewLine + string.Join(Environment.NewLine,
-                        done.Value.Select(r => _localizer.Format("Holiday.RecountedLine", r.EmployeeNumber, r.EmployeeName,
-                                                                 r.StartDate.ToString("dd/MM/yyyy"), r.EndDate.ToString("dd/MM/yyyy"),
-                                                                 r.Status, r.DaysBefore.ToString("0.#"), r.DaysAfter.ToString("0.#")))),
-                        editor.Text);
+                if (LeaveScreenRules.Recounted(done.Value, Text_, CultureInfo.CurrentCulture) is { } recounted)
+                    _dialogs.Info(recounted, editor.Text);
                 return;
             }
 
@@ -755,11 +713,12 @@ internal sealed class HolidaysDialog : Form
         }
     }
 
+    private string Text_(string key, params object?[] args) => args.Length == 0 ? _localizer[key] : _localizer.Format(key, args);
+
     private async Task RemoveAsync()
     {
         if (_grid.CurrentRow?.Tag is not HolidayRow row) return;
-        if (!_dialogs.Confirm(_localizer.Format("Holiday.RemovePrompt", row.Name, row.Date.ToString("dd/MM/yyyy")),
-                              _remove.Text)) return;
+        if (!_dialogs.Confirm(LeaveScreenRules.RemoveHolidayPrompt(row, Text_), _remove.Text)) return;
 
         var done = await _leave.RemoveHolidayAsync(row.HolidayId);
         if (done.IsFailure) { _dialogs.ShowFailure(done); return; }
@@ -785,13 +744,14 @@ internal sealed class HolidayEditorDialog : MasterDataEditor
         Label("Field.Date", 20, 10);
         _date.Bounds = new Rectangle(20, 28, 180, UiTheme.InputHeight);
         _date.Format = DateTimePickerFormat.Short;
-        _date.MinDate = new DateTime(year, 1, 1);
-        _date.MaxDate = new DateTime(year, 12, 31);
-        _date.Value = DateTime.Today.Year == year ? DateTime.Today : new DateTime(year, 1, 1);
+        var (first, last, initial) = LeaveScreenRules.HolidayDates(year, DateOnly.FromDateTime(DateTime.Today));
+        _date.MinDate = first.ToDateTime(TimeOnly.MinValue);
+        _date.MaxDate = last.ToDateTime(TimeOnly.MinValue);
+        _date.Value = initial.ToDateTime(TimeOnly.MinValue);
         Controls.Add(_date);
 
         _name = TextField("Field.Name", 220, 10, 280);
-        _name.MaxLength = 150;
+        _name.MaxLength = LeaveScreenRules.HolidayNameMaxLength;
         _religious = Check("Holiday.Religious", 20, 76, true);
         Buttons(132, 520);
         QhDialog.Dress(this, localizer, null);
