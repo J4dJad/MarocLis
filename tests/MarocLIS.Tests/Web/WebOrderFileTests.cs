@@ -66,6 +66,26 @@ public sealed class WebOrderFileTests : WebScreenContext
         page.FindAll("[data-filter]").Select(c => c.GetAttribute("aria-pressed")).Should().OnlyContain(v => v == "true" || v == "false");
     }
 
+    /// <summary>
+    /// « ?recherche= » (a file's number, from another screen) opens that file, not the first of the
+    /// day with the list filtered beside it.
+    /// </summary>
+    [Fact]
+    public void ASearchGivenToTheScreen_OpensThatFile()
+    {
+        SignIn(AppLanguage.French, Permissions.Orders.View);
+        var other = Detail(items: [Item(LabOrderItemStatus.Pending, code: "NFS")], samples: [Sample(SampleStatus.Received)])
+                    with { OrderId = Guid.NewGuid(), AccessionNumber = "2610-000041" };
+        Orders.On(nameof(IOrderQueries.ResolveOrderIdAsync), args => (string)args[0]! == "2610-000041" ? other.OrderId : (Guid?)null)
+              .On(nameof(IOrderQueries.GetDetailAsync), args => (Guid)args[0]! == other.OrderId ? other
+                                                                : (Guid)args[0]! == _file.OrderId ? _file : null);
+
+        var page = Render<OrderFile>(p => p.Add(x => x.Search, "2610-000041"));
+
+        page.Find("[data-file]").GetAttribute("data-file").Should().Be("2610-000041");
+        page.Find("[data-field=order-search]").GetAttribute("value").Should().Be("2610-000041");
+    }
+
     [Fact]
     public void WithOnlyTheRightToSee_EveryChangeIsOff()
     {

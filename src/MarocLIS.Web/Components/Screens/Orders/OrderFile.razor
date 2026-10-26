@@ -401,6 +401,13 @@
     /// <summary>The file to open: <c>?dossier=</c>, from the patient's history or a new order.</summary>
     [Parameter] public Guid? OrderId { get; set; }
 
+    /// <summary>
+    /// A file looked for from elsewhere (« ?recherche= », a number or a tube's barcode): typed in the
+    /// search box and opened as Enter opens it. The list was filtered on it, but the first file of
+    /// the day stayed open beside it.
+    /// </summary>
+    [Parameter] public string? Search { get; set; }
+
     private enum FileTab { Analyses, Tubes, Billing, History }
 
     private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, Message }
@@ -441,6 +448,14 @@
     {
         if (_openedFor == OrderId && _rows.Count > 0) return;
         _openedFor = OrderId;
+
+        if (OrderId is null && !string.IsNullOrWhiteSpace(Search) && _rows.Count == 0)
+        {
+            _term = Search.Trim();
+            await SearchAsync();
+            if (OrderId is not null || _rows.Count > 0) return;
+        }
+
         await ActivateAsync();
     }
 
