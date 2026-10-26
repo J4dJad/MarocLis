@@ -180,9 +180,9 @@
         <Secondary>
             <ActionButton Key="Treasury.Match" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Merge" Title="@NoRight" Disabled="@(!actions.Match || _busy)" OnClick="AskMatchAsync" />
             <ActionButton Key="Treasury.Justify" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePen" Title="@NoRight" Disabled="@(!actions.Justify || _busy)" OnClick="AskJustify" />
-            <ActionButton Key="Treasury.ImportStatement" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Title="@NoRight" Disabled="@(!actions.Import || _busy)" OnClick="AskImport" />
         </Secondary>
         <More>
+            <ActionButton Key="Treasury.ImportStatement" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Title="@NoRight" Disabled="@(!actions.Import || _busy)" OnClick="AskImport" />
             <ActionButton Key="Treasury.BankAccounts" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Landmark" Title="@NoRight" Disabled="@(!actions.Accounts || _busy)" OnClick="() => Open(Prompt.Accounts)" />
             <ActionButton Key="Treasury.WithdrawImport" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileX" Title="@NoRight" Disabled="@(!actions.WithdrawImport || _busy)" OnClick="() => Open(Prompt.Withdraw)" />
         </More>
