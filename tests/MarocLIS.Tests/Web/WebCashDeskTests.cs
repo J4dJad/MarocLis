@@ -54,7 +54,7 @@ public sealed class WebCashDeskTests : WebFinanceContext
 
         page.Find("[data-line='Payment.Withdrawals']").TextContent.Should().Contain(Mad(-1000m));
         page.Find("[data-state=expected]").TextContent.Should().Contain(Mad(950m));
-        page.Find("[data-field=counted]").GetAttribute("value").Should().Be("950.00");
+        page.Find("[data-field=counted]").GetAttribute("value").Should().Be("950,00", "pre-filled as the workstation writes it, with the decimal comma");
         page.Find("[data-state=variance]").ClassList.Should().Contain("normal");
 
         page.Find("[data-field=counted]").Input("900");

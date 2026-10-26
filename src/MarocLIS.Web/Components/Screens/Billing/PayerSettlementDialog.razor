@@ -60,7 +60,7 @@
     private bool _writeOff;
     private FieldRefusal? _refusal;
 
-    protected override void OnInitialized() => _accepted = Invoice.PayerDue.ToString("0.00", CultureInfo.InvariantCulture);
+    protected override void OnInitialized() => _accepted = TypedNumber.ForEditing(Invoice.PayerDue, 2, Texts.Culture);
 
     private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
 

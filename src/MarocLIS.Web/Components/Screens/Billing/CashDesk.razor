@@ -179,7 +179,7 @@
 
             // The count starts at what the drawer should hold.
             if (_summary is { } summary && string.IsNullOrWhiteSpace(_counted))
-                _counted = summary.ExpectedClosingCash.ToString("0.00", CultureInfo.InvariantCulture);
+                _counted = TypedNumber.ForEditing(summary.ExpectedClosingCash, 2, Texts.Culture);
         }
         catch (Exception ex)
         {

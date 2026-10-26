@@ -96,7 +96,7 @@
     // Pre-filled with the balance: settling in full is by far the commonest case.
     protected override void OnInitialized()
     {
-        _amount = Ceiling.ToString("0.00", CultureInfo.InvariantCulture);
+        _amount = TypedNumber.ForEditing(Ceiling, 2, Texts.Culture);
         _maturity = Clock.Today;
     }
 

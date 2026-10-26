@@ -125,7 +125,7 @@ public sealed class WebBillingTests : WebFinanceContext
         page.Find("[data-tick='FA-2026-000045']").Change(true);
         page.Find("[data-action='Payment.Title']").Click();
 
-        page.Find("[data-field=amount]").GetAttribute("value").Should().Be("360.00");
+        page.Find("[data-field=amount]").GetAttribute("value").Should().Be("360,00", "pre-filled as the workstation writes it, with the decimal comma");
         page.FindAll("[data-field=reference]").Should().BeEmpty("cash needs no reference");
         page.Find("[data-field=method]").Change(nameof(PaymentMethod.Cheque));
         page.Find("[data-field=reference]").Should().NotBeNull();
