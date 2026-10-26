@@ -86,6 +86,9 @@ public sealed partial class DemoDataSeeder(
     private readonly Dictionary<DemoActor, Guid> _actors = [];
 
     private Guid _siteId;
+
+    /// <summary>The demonstration user the steps are done as, given to each scope that has its own operator.</summary>
+    private AuthenticatedSession? _acting;
     private string _siteCode = string.Empty;
 
     /// <summary>
@@ -97,6 +100,7 @@ public sealed partial class DemoDataSeeder(
         _problems.Clear();
         _sessions.Clear();
         _actors.Clear();
+        _acting = null;
 
         // Whoever was signed in before — nobody, at start-up — is signed in again afterwards. The
         // sections switch between the demonstration users, and leaving the last of them in the
@@ -184,7 +188,7 @@ public sealed partial class DemoDataSeeder(
     /// </summary>
     private async Task<string?> FindRealDataAsync(CancellationToken ct)
     {
-        using var scope = scopes.CreateScope();
+        using var scope = NewScope();
         return await DemoAccountGuard.FindRealDataAsync(
             scope.ServiceProvider.GetRequiredService<LisDbContext>(), ct);
     }
@@ -211,7 +215,7 @@ public sealed partial class DemoDataSeeder(
     /// </summary>
     private async Task<bool> ResolveSiteAndAdministratorAsync(CancellationToken ct)
     {
-        using var scope = scopes.CreateScope();
+        using var scope = NewScope();
         var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
 
         // The seeded "admin" first; failing that, any active administrator — the laboratory may
@@ -267,7 +271,7 @@ public sealed partial class DemoDataSeeder(
             if (!_actors.TryGetValue(actor, out var userId))
                 throw new InvalidOperationException($"Demonstration user {actor} is not available.");
 
-            using var scope = scopes.CreateScope();
+            using var scope = NewScope();
             var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
 
             var user = await db.Users.IgnoreQueryFilters().AsNoTracking()
@@ -290,6 +294,27 @@ public sealed partial class DemoDataSeeder(
         }
 
         currentUser.Apply(session);
+        _acting = session;
+    }
+
+    /// <summary>
+    /// A scope of its own for one step, working as the demonstration user put in the session last.
+    /// <para>
+    /// On the workstation the operator is one accessor for the whole process, and every scope reads
+    /// the one <see cref="ActAsAsync"/> set. A host that keeps one operator per request — the web
+    /// interface, the API (<see cref="PerRequestIdentityServiceCollectionExtensions.UsePerRequestCurrentUser"/>) —
+    /// gives each scope an accessor of its own, empty: every step was then refused as if the
+    /// session had expired, and the start-up seeding wrote nothing. The scope's own accessor is
+    /// given the same session here, so its services, guard and audit see the demonstration user.
+    /// </para>
+    /// </summary>
+    private IServiceScope NewScope()
+    {
+        var scope = scopes.CreateScope();
+        var accessor = scope.ServiceProvider.GetService<CurrentUserAccessor>();
+        if (accessor is not null && !ReferenceEquals(accessor, currentUser) && _acting is { } session)
+            accessor.Apply(session);
+        return scope;
     }
 
     /// <summary>Runs one use case as one demonstration user, in a scope of its own.</summary>
@@ -303,14 +328,14 @@ public sealed partial class DemoDataSeeder(
     {
         await ActAsAsync(actor, ct);
 
-        using var scope = scopes.CreateScope();
+        using var scope = NewScope();
         return await action(scope.ServiceProvider.GetRequiredService<TService>());
     }
 
     /// <summary>A read straight from the database, outside any service.</summary>
     private async Task<T> QueryAsync<T>(Func<LisDbContext, Task<T>> query)
     {
-        using var scope = scopes.CreateScope();
+        using var scope = NewScope();
         return await query(scope.ServiceProvider.GetRequiredService<LisDbContext>());
     }
 
@@ -322,7 +347,7 @@ public sealed partial class DemoDataSeeder(
     {
         await ActAsAsync(DemoActor.Administrator, ct);
 
-        using var scope = scopes.CreateScope();
+        using var scope = NewScope();
         var db = scope.ServiceProvider.GetRequiredService<LisDbContext>();
 
         await write(db);
