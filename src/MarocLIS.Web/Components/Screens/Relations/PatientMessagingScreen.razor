@@ -75,7 +75,7 @@
                                     var cells = PatientMessagingScreenRules.Cells(c, Texts.Culture);
                                     <tr data-row="@c.PatientName" class="@(_unticked.Contains(key) ? "is-tone-muted" : null)">
                                         <td class="col-check"><input type="checkbox" data-field="tick" checked="@(!_unticked.Contains(key))" @onchange="e => Tick(key, e)" /></td>
-                                        <td class="col-name"><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                        <td class="col-name"><span dir="auto" class="list-name strong" title="@cells[0]">@cells[0]</span></td>
                                         <td class="mono small nowrap" dir="ltr">@cells[1]</td>
                                         <td class="small"><span class="list-name" title="@cells[2]">@cells[2]</span></td>
                                         <td class="mono small nowrap" dir="ltr">@cells[3]</td>
@@ -110,7 +110,7 @@
                                     var cells = PatientMessagingScreenRules.Cells(c, Offset(c.ReportedAt), Texts.Culture);
                                     <tr data-row="@c.AccessionNumber" class="@(_unticked.Contains(key) ? "is-tone-muted" : null)">
                                         <td class="col-check"><input type="checkbox" data-field="tick" checked="@(!_unticked.Contains(key))" @onchange="e => Tick(key, e)" /></td>
-                                        <td class="col-name"><span class="list-name strong" title="@cells[0]">@cells[0]</span></td>
+                                        <td class="col-name"><span dir="auto" class="list-name strong" title="@cells[0]">@cells[0]</span></td>
                                         <td class="mono small nowrap" dir="ltr">@cells[1]</td>
                                         <td class="mono small nowrap" dir="ltr">@cells[2]</td>
                                         <td class="mono small nowrap" dir="ltr">@cells[3]</td>
@@ -196,7 +196,7 @@
                                     <tr data-row="@m.PatientName" data-state="@m.Status">
                                         <td class="mono small nowrap" dir="ltr">@cells[0]</td>
                                         <td class="small"><span class="list-name" title="@cells[1]">@cells[1]</span></td>
-                                        <td class="col-name"><span class="list-name strong" title="@cells[2]">@cells[2]</span></td>
+                                        <td class="col-name"><span dir="auto" class="list-name strong" title="@cells[2]">@cells[2]</span></td>
                                         <td class="mono small nowrap" dir="ltr">@cells[3]</td>
                                         <td class="nowrap"><Pill Text="@StockTones.Label(tone, cells[4])" Tone="@StockTones.Pill(tone)" /></td>
                                         <td class="small messaging-text @(tone == StockTone.Critical ? "critical" : null)"><span class="list-name" title="@cells[5]" dir="auto">@cells[5]</span></td>
