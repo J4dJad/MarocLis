@@ -84,7 +84,7 @@
         @{ var status = AccountingExportScreenRules.Status(_preview, _form?.Journals ?? AccountingJournals.None, Texts.T); }
         <p class="message @StatusClass(status.Ink)" role="@(status.Ink == StockInk.CriticalBold ? "alert" : null)" data-state="check">@status.Text</p>
 
-        <div class="export-results">
+        <div class="export-results @(_preview is { Problems.Count: > 0 } ? "has-problems" : null)">
             <section class="card card-flush" data-card="journals">
                 <h2 class="card-title card-pad">@Texts["Accounting.Journals"]</h2>
                 <div class="table-scroll">

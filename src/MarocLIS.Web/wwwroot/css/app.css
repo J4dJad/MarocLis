@@ -1184,10 +1184,15 @@ html[dir=rtl] .equipment-card .facts dd[dir=ltr] { text-align: right; }
 .export-journal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px; }
 .export-results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .export-results > .card { min-inline-size: 0; }
+/* Entries to correct: the list takes the whole width, its long piece numbers broken rather than pushed past the edge. */
+.export-results.has-problems { grid-template-columns: minmax(0, 1fr); }
+[data-grid=problems] .cell-wrap { overflow-wrap: anywhere; }
 .export-results .table-scroll { border: 0; border-block-start: 1px solid var(--border); border-radius: 0; max-block-size: 360px; }
 /* « Comptes et journaux »: the value typed in place, wide enough for a twenty-character code. */
 [data-grid=settings] td.settings-value { inline-size: 260px; }
 [data-grid=settings] td.settings-value .input { inline-size: 100%; }
+[data-grid=settings] td.settings-value .input::placeholder { font-family: var(--font); font-size: 12px; }
+:is([data-grid=settings] td.settings-value, [data-grid=asset-accounts] td) [data-refusal] { display: block; margin-block-start: 4px; white-space: normal; overflow-wrap: break-word; }
 /* « Immobilisations »: the year narrow, the plan said under the amounts, the register and its dialogs clear of the edge. */
 .asset-year { inline-size: 96px; }
 .asset-form .asset-plan { justify-content: end; }

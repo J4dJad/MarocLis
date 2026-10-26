@@ -90,7 +90,7 @@
             </div>
             <label class="field">
                 <span class="field-label">@Texts["Inventory.Supplier"]</span>
-                <select class="input" data-field="asset-supplier" value="@(Form.SupplierId?.ToString() ?? string.Empty)" @onchange="SupplierChangedAsync">
+                <select class="input" data-field="asset-supplier" title="@(Options.Suppliers.FirstOrDefault(x => x.Id == Form.SupplierId) is { } chosen ? FixedAssetScreenRules.SupplierDisplay(chosen, Texts.T) : null)" value="@(Form.SupplierId?.ToString() ?? string.Empty)" @onchange="SupplierChangedAsync">
                     <option value="">—</option>
                     @foreach (var supplier in Options.Suppliers)
                     {
@@ -100,7 +100,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Assets.SupplierInvoice"]</span>
-                <select class="input" data-field="asset-invoice" disabled="@(Form.SupplierId is null)" value="@(Form.SupplierInvoiceId?.ToString() ?? string.Empty)" @onchange="InvoiceChanged">
+                <select class="input" data-field="asset-invoice" title="@(_invoices.FirstOrDefault(x => x.Id == Form.SupplierInvoiceId) is { } picked ? FixedAssetScreenRules.InvoiceDisplay(picked, Mad) : null)" disabled="@(Form.SupplierId is null)" value="@(Form.SupplierInvoiceId?.ToString() ?? string.Empty)" @onchange="InvoiceChanged">
                     <option value="">—</option>
                     @foreach (var invoice in _invoices)
                     {
@@ -204,7 +204,7 @@
     private void InvoiceChanged(ChangeEventArgs e)
     {
         if (Guid.TryParse(e.Value as string, out var id) && _invoices.FirstOrDefault(i => i.Id == id) is { } invoice)
-            FixedAssetScreenRules.ApplyInvoice(Form, invoice);
+            FixedAssetScreenRules.ApplyInvoice(Form, invoice, Texts.Culture);
         else
             Form.SupplierInvoiceId = null;
     }

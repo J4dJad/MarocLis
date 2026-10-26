@@ -370,7 +370,7 @@
             }
 
             _options = options.Value;
-            _form = FixedAssetScreenRules.Form(values, Clock.Today);
+            _form = FixedAssetScreenRules.Form(values, Clock.Today, Texts.Culture);
             Open(Prompt.Edit);
         });
 
