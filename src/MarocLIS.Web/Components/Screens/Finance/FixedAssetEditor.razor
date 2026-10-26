@@ -1,0 +1,222 @@
+@using MarocLIS.Application.Assets
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Assets
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+
+@*
+    An asset entered or edited, the workstation's FixedAssetDialog: its code, designation and
+    category, its dates, its plan — method, life, residual value — and its cost, with the plan it
+    gives said as it is typed; the supplier and one of its invoices, which fills the number, the
+    amounts still empty and the date; the instrument of the equipment module it is, one placed by
+    its supplier refused, one already capitalised said so. Refusals are said next to their box
+    (FixedAssetScreenRules.Check, then the service's).
+*@
+<Modal Name="fixed-asset" Title="@Title" Hint="@Texts["Finance.Dialog.FixedAsset"]" Large="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-3 asset-form">
+            <label class="field">
+                <span class="field-label">@Texts["Field.Code"]</span>
+                <input class="input mono @Refused(FixedAssetScreenRules.CodeField)" type="text" dir="ltr" autocomplete="off" maxlength="@FixedAsset.CodeMaxLength"
+                       data-field="@FixedAssetScreenRules.CodeField" @bind="Form.Code" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.CodeField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Assets.Label"]</span>
+                <input class="input @Refused(FixedAssetScreenRules.LabelField)" type="text" autocomplete="off" maxlength="@FixedAsset.LabelMaxLength"
+                       data-field="@FixedAssetScreenRules.LabelField" title="@Form.Label" @bind="Form.Label" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.LabelField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.Category"]</span>
+                <select class="input" data-field="asset-category" @bind="Form.Category">
+                    @foreach (var category in Enum.GetValues<FixedAssetCategory>())
+                    {
+                        <option value="@category">@Texts[FixedAssetScreenRules.CategoryKey(category)]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.AcquisitionDate"]</span>
+                <input class="input @Refused(FixedAssetScreenRules.AcquiredField)" type="date" data-field="@FixedAssetScreenRules.AcquiredField"
+                       @bind="Form.AcquisitionDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.AcquiredField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.InServiceDate"]</span>
+                <input class="input @Refused(FixedAssetScreenRules.InServiceField)" type="date" data-field="@FixedAssetScreenRules.InServiceField"
+                       @bind="Form.InServiceDate" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.InServiceField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.Method"]</span>
+                <select class="input" data-field="asset-method" @bind="Form.Method">
+                    @foreach (var method in Enum.GetValues<DepreciationMethod>())
+                    {
+                        <option value="@method">@Texts[FixedAssetScreenRules.MethodKey(method)]</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.UsefulLife"]</span>
+                <input class="input mono num @Refused(FixedAssetScreenRules.LifeField)" type="number" dir="ltr" min="1" max="@FixedAsset.MaximumUsefulLifeYears"
+                       data-field="@FixedAssetScreenRules.LifeField" @bind="Form.UsefulLifeYears" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.LifeField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.ResidualValue"]</span>
+                <input class="input mono num @Refused(FixedAssetScreenRules.ResidualField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.AmountMaxLength" data-field="@FixedAssetScreenRules.ResidualField" @bind="Form.Residual" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.ResidualField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.CostExcludingVat"]</span>
+                <input class="input mono num @Refused(FixedAssetScreenRules.CostField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.AmountMaxLength" data-field="@FixedAssetScreenRules.CostField" @bind="Form.Cost" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.CostField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.Vat"]</span>
+                <input class="input mono num @Refused(FixedAssetScreenRules.VatField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.AmountMaxLength" data-field="@FixedAssetScreenRules.VatField" @bind="Form.Vat" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.VatField" />
+            </label>
+            <div class="field asset-plan">
+                <label class="field-check">
+                    <input type="checkbox" data-field="asset-vat-recoverable" @bind="Form.VatRecoverable" />
+                    <span>@Texts["Assets.VatRecoverable"]</span>
+                </label>
+                <p class="small muted cell-wrap" data-state="asset-plan">@FixedAssetScreenRules.Plan(Form, Texts.T, Mad)</p>
+            </div>
+            <label class="field">
+                <span class="field-label">@Texts["Inventory.Supplier"]</span>
+                <select class="input" data-field="asset-supplier" value="@(Form.SupplierId?.ToString() ?? string.Empty)" @onchange="SupplierChangedAsync">
+                    <option value="">—</option>
+                    @foreach (var supplier in Options.Suppliers)
+                    {
+                        <option value="@supplier.Id">@FixedAssetScreenRules.SupplierDisplay(supplier, Texts.T)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.SupplierInvoice"]</span>
+                <select class="input" data-field="asset-invoice" disabled="@(Form.SupplierId is null)" value="@(Form.SupplierInvoiceId?.ToString() ?? string.Empty)" @onchange="InvoiceChanged">
+                    <option value="">—</option>
+                    @foreach (var invoice in _invoices)
+                    {
+                        <option value="@invoice.Id">@FixedAssetScreenRules.InvoiceDisplay(invoice, Mad)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Assets.InvoiceReference"]</span>
+                <input class="input mono @Refused(FixedAssetScreenRules.InvoiceReferenceField)" type="text" dir="ltr" autocomplete="off"
+                       maxlength="@FixedAsset.InvoiceReferenceMaxLength" data-field="@FixedAssetScreenRules.InvoiceReferenceField" @bind="Form.InvoiceReference" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.InvoiceReferenceField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Assets.Instrument"]</span>
+                <select class="input @Refused(FixedAssetScreenRules.InstrumentField)" data-field="@FixedAssetScreenRules.InstrumentField"
+                        value="@(Form.InstrumentId?.ToString() ?? string.Empty)" @onchange="InstrumentChanged">
+                    <option value="">—</option>
+                    @foreach (var instrument in Options.Instruments)
+                    {
+                        <option value="@instrument.Id">@FixedAssetScreenRules.InstrumentDisplay(instrument, Texts.Language, Texts.T)</option>
+                    }
+                </select>
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.InstrumentField" />
+            </label>
+            <div class="field">
+                @if (FixedAssetScreenRules.InstrumentState(SelectedInstrument, Texts.T) is { } state)
+                {
+                    <p class="small cell-wrap @(state.Critical ? "critical strong" : "muted")" data-state="asset-instrument">@state.Text</p>
+                }
+            </div>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Field.Notes"]</span>
+                <textarea class="input @Refused(FixedAssetScreenRules.NotesField)" rows="2" maxlength="@FixedAsset.NotesMaxLength"
+                          data-field="@FixedAssetScreenRules.NotesField" @bind="Form.Notes" @bind:event="oninput"></textarea>
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.NotesField" />
+            </label>
+            <p class="field-span-all small muted" data-state="editor-notice">@Texts["Assets.EditorNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public FixedAssetForm Form { get; set; } = default!;
+    [Parameter, EditorRequired] public FixedAssetOptions Options { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public Func<Guid, Task<IReadOnlyList<AssetInvoiceOption>>>? OnLoadInvoices { get; set; }
+    [Parameter] public EventCallback<SaveFixedAssetRequest> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private IReadOnlyList<AssetInvoiceOption> _invoices = [];
+    private FieldRefusal? _refusal;
+    private bool _checked, _first = true;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    private string Title => Form.Id is null ? Texts["Assets.New"] : $"{Texts["Action.Edit"]} — {Form.Code}";
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private AssetInstrumentOption? SelectedInstrument =>
+        Form.InstrumentId is { } id ? Options.Instruments.FirstOrDefault(i => i.Id == id) : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (FieldRefusal is not null) _checked = false;
+        if (!_first) return;
+        _first = false;
+        await LoadInvoicesAsync();
+    }
+
+    private async Task LoadInvoicesAsync()
+    {
+        _invoices = [];
+        if (Form.SupplierId is not { } supplierId || OnLoadInvoices is null) return;
+        var invoices = await OnLoadInvoices(supplierId);
+        if (Form.SupplierId == supplierId) _invoices = invoices;
+    }
+
+    /// <summary>Another supplier: its invoices offered, the one picked for the previous supplier dropped.</summary>
+    private async Task SupplierChangedAsync(ChangeEventArgs e)
+    {
+        Form.SupplierId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+        Form.SupplierInvoiceId = null;
+        await LoadInvoicesAsync();
+    }
+
+    private void InvoiceChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value as string, out var id) && _invoices.FirstOrDefault(i => i.Id == id) is { } invoice)
+            FixedAssetScreenRules.ApplyInvoice(Form, invoice);
+        else
+            Form.SupplierInvoiceId = null;
+    }
+
+    private void InstrumentChanged(ChangeEventArgs e) =>
+        Form.InstrumentId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+
+    private Task SaveAsync()
+    {
+        var (refused, request) = FixedAssetScreenRules.Check(Form, Options);
+        _refusal = refused;
+        _checked = true;
+        return request is not null ? OnSave.InvokeAsync(request) : Task.CompletedTask;
+    }
+}

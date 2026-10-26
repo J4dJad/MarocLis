@@ -1,0 +1,348 @@
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Accounting
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Common
+@using MarocLIS.Reporting
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<AccountingExport> Logger
+
+@*
+    « Export comptable », the workstation's AccountingExportView: a period, the sites, the journals
+    and the layout; the entries checked — each balanced, each line on a CGNC account — before the
+    file is written, and the entries that stop it listed. The file and the simple VAT statement of
+    the same period are downloaded by the browser, where the workstation opened them. What is offered
+    and refused is AccountingExportScreenRules'; the entries, their check and the files are
+    AccountingExportService's.
+*@
+<div class="screen accounting-export" data-screen="accountingexport">
+    @{ var actions = Actions; IReadOnlyList<AccountingJournalSummary> summary = _preview is { } p ? AccountingExportScreenRules.Summary(p) : []; }
+    <div class="screen-body">
+        <section class="card" data-card="scope">
+            <h2 class="card-title">@Texts["Finance.ExportScope"]</h2>
+            @if (_form is { } form)
+            {
+                <div class="form-grid export-scope">
+                    <label class="field">
+                        <span class="field-label">@Texts["Field.From"]</span>
+                        <input class="input" type="date" data-field="export-from" value="@form.From.ToString("yyyy-MM-dd")" @onchange="e => SetDate(e, from: true)" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Field.To"]</span>
+                        <input class="input @Refused(AccountingExportScreenRules.PeriodField)" type="date" data-field="@AccountingExportScreenRules.PeriodField"
+                               value="@form.To.ToString("yyyy-MM-dd")" @onchange="e => SetDate(e, from: false)" />
+                        <FieldMessage Refusal="_refusal" Field="@AccountingExportScreenRules.PeriodField" />
+                    </label>
+                    <label class="field field-span-2">
+                        <span class="field-label">@Texts["SupplierInvoices.ExportLayout"]</span>
+                        <select class="input" data-field="export-layout" @bind="form.Layout">
+                            @foreach (var choice in Enum.GetValues<AccountingExportLayout>())
+                            {
+                                <option value="@choice">@Texts[AccountingExportScreenRules.LayoutKey(choice)]</option>
+                            }
+                        </select>
+                    </label>
+                    <fieldset class="field export-sites @Refused(AccountingExportScreenRules.SitesField)" data-field="@AccountingExportScreenRules.SitesField">
+                        <legend class="field-label">@Texts["Accounting.Sites"]</legend>
+                        <ul class="check-list">
+                            @foreach (var site in _sites)
+                            {
+                                var display = AccountingExportScreenRules.SiteDisplay(site);
+                                <li>
+                                    <label class="field-check" title="@display">
+                                        <input type="checkbox" data-site="@site.Code" checked="@form.SiteIds.Contains(site.Id)" @onchange="e => ToggleSite(site, e)" />
+                                        <span class="list-name">@display</span>
+                                    </label>
+                                </li>
+                            }
+                        </ul>
+                        <FieldMessage Refusal="_refusal" Field="@AccountingExportScreenRules.SitesField" />
+                    </fieldset>
+                    <fieldset class="field export-journals @Refused(AccountingExportScreenRules.JournalsField)" data-field="@AccountingExportScreenRules.JournalsField">
+                        <legend class="field-label">@Texts["Accounting.Journals"]</legend>
+                        <div class="export-journal-grid">
+                            @foreach (var journal in AccountingExportScreenRules.JournalChoices)
+                            {
+                                <label class="field-check">
+                                    <input type="checkbox" data-journal="@journal" checked="@form.Journals.HasFlag(journal)" @onchange="e => ToggleJournal(journal, e)" />
+                                    <span>@Texts[AccountingExportScreenRules.JournalKey(journal)]</span>
+                                </label>
+                            }
+                        </div>
+                        <FieldMessage Refusal="_refusal" Field="@AccountingExportScreenRules.JournalsField" />
+                    </fieldset>
+                </div>
+            }
+        </section>
+
+        @{ var status = AccountingExportScreenRules.Status(_preview, _form?.Journals ?? AccountingJournals.None, Texts.T); }
+        <p class="message @StatusClass(status.Ink)" role="@(status.Ink == StockInk.CriticalBold ? "alert" : null)" data-state="check">@status.Text</p>
+
+        <div class="export-results">
+            <section class="card card-flush" data-card="journals">
+                <h2 class="card-title card-pad">@Texts["Accounting.Journals"]</h2>
+                <div class="table-scroll">
+                    <table class="grid" data-grid="journals">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Accounting.Journal"]</th>
+                                <th>@Texts["Accounting.JournalKind"]</th>
+                                <th class="num">@Texts["Accounting.Entries"]</th>
+                                <th class="num">@Texts["Accounting.Debit"]</th>
+                                <th class="num">@Texts["Accounting.Credit"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in summary)
+                            {
+                                <tr data-row="@($"{line.Journal}-{line.Kind}")">
+                                    <td class="mono strong" dir="ltr">@line.Journal</td>
+                                    <td class="small"><span class="cell-wrap">@Texts[AccountingExportScreenRules.JournalKey(line.Kind)]</span></td>
+                                    <td class="num mono">@line.Entries.ToString(Texts.Culture)</td>
+                                    <td class="num nowrap">@Mad(line.Debit)</td>
+                                    <td class="num nowrap">@Mad(line.Credit)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_preview is not null && summary.Count == 0)
+                    {
+                        <p class="muted small card-pad" data-state="no-entry">@Texts["Purchasing_NothingToExport"]</p>
+                    }
+                </div>
+            </section>
+
+            <section class="card card-flush" data-card="problems">
+                <h2 class="card-title card-pad">@Texts["Finance.ExportProblems"]</h2>
+                <div class="table-scroll">
+                    <table class="grid" data-grid="problems">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Accounting.Problem"]</th>
+                                <th>@Texts["Field.Date"]</th>
+                                <th>@Texts["Accounting.Piece"]</th>
+                                <th>@Texts["Accounting.Label"]</th>
+                                <th>@Texts["Accounting.Detail"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var problem in _preview?.Problems ?? [])
+                            {
+                                <tr class="critical" data-row="@problem.Piece">
+                                    <td class="small"><span class="cell-wrap">@Texts[AccountingExportScreenRules.ProblemKey(problem.Kind)]</span></td>
+                                    <td class="mono nowrap small" dir="ltr">@problem.Date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)</td>
+                                    <td class="small">
+                                        <span class="mono cell-wrap" dir="ltr">@problem.Piece</span>
+                                        <span class="cell-sub mono" dir="ltr" title="@Texts["Accounting.Journal"]">@problem.Journal</span>
+                                    </td>
+                                    <td class="small"><span class="cell-wrap" title="@problem.Label">@problem.Label</span></td>
+                                    <td class="small mono" dir="ltr"><span class="cell-wrap">@problem.Detail</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_preview is { Problems.Count: 0 })
+                    {
+                        <p class="muted small card-pad" data-state="no-problem">@Texts["Web.AccountingNoProblem"]</p>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Accounting.Check" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.ListChecks" Hidden="@(!actions.Right)" Disabled="@(!actions.Check || _busy || _form is null)" OnClick="CheckAsync" />
+            <ActionButton Key="Accounting.VatStatementCsv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSpreadsheet" Hidden="@(!actions.Right)" Disabled="@(!actions.VatStatement || _busy || _form is null)" OnClick="() => VatAsync(pdf: false)" />
+            <ActionButton Key="Accounting.VatStatementPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Hidden="@(!actions.Right)" Disabled="@(!actions.VatStatement || _busy || _form is null)" OnClick="() => VatAsync(pdf: true)" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Action.Export" Primary="true" Hidden="@(!actions.Right)" Disabled="@(!actions.Export || _busy)" OnClick="ExportAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@code {
+    private IReadOnlyList<AccountingSiteOption> _sites = [];
+    private AccountingExportForm? _form;
+    private AccountingExportPreview? _preview;
+    private FieldRefusal? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private AccountingExportActions Actions => AccountingExportScreenRules.Actions(Context.User.Has, _preview);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    private static string StatusClass(StockInk ink) => ink switch
+    {
+        StockInk.CriticalBold or StockInk.Critical => "is-critical",
+        StockInk.Muted => "is-muted",
+        _ => "is-normal"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var sites = await Scopes.RunAsync<AccountingExportService, Result<IReadOnlyList<AccountingSiteOption>>>(s => s.GetSitesAsync());
+            if (sites.IsFailure)
+            {
+                _status = (Texts.Describe(sites.Errors), "critical");
+                return;
+            }
+
+            _sites = sites.Value;
+            _form = AccountingExportScreenRules.NewForm(Clock.Today, _sites);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the sites of the accounting export failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    // ---- The choice --------------------------------------------------------------------------------
+
+    /// <summary>A period, a site or a journal changed: what was checked no longer says what would be exported.</summary>
+    private void Changed()
+    {
+        _preview = null;
+        _refusal = null;
+    }
+
+    private void SetDate(ChangeEventArgs e, bool from)
+    {
+        if (_form is null || !DateOnly.TryParseExact(e.Value as string, "yyyy-MM-dd", out var date)) return;
+        if (from) _form.From = date;
+        else _form.To = date;
+        Changed();
+    }
+
+    private void ToggleSite(AccountingSiteOption site, ChangeEventArgs e)
+    {
+        if (_form is null) return;
+        if (e.Value is true) _form.SiteIds.Add(site.Id);
+        else _form.SiteIds.Remove(site.Id);
+        Changed();
+    }
+
+    private void ToggleJournal(AccountingJournals journal, ChangeEventArgs e)
+    {
+        if (_form is null) return;
+        _form.Journals = AccountingExportScreenRules.Toggle(_form.Journals, journal, e.Value is true);
+        Changed();
+    }
+
+    /// <summary>The choice as the service takes it, or null with its refusal said on its box.</summary>
+    private AccountingExportRequest? Request()
+    {
+        if (_form is null) return null;
+        var (refusal, request) = AccountingExportScreenRules.Check(_form, _sites);
+        _refusal = refusal;
+        return request;
+    }
+
+    /// <summary>A refusal of the service: on its box when it names one, else in the bar.</summary>
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (AccountingExportScreenRules.FieldOf(error) is { } field)
+        {
+            _refusal = FieldRefusal.Of(field, error);
+            _status = null;
+        }
+        else
+        {
+            _status = (Texts.Describe(result.Errors), "critical");
+        }
+    }
+
+    // ---- The check, the file, the VAT statement ------------------------------------------------------
+
+    private Task CheckAsync() => RunAsync(PrepareAsync);
+
+    private async Task PrepareAsync()
+    {
+        if (!Actions.Check || Request() is not { } request) return;
+        var preview = await Scopes.RunAsync<AccountingExportService, Result<AccountingExportPreview>>(s => s.PrepareAsync(request));
+        if (preview.IsFailure)
+        {
+            Refused(preview);
+            return;
+        }
+
+        _preview = preview.Value;
+        _status = null;
+    }
+
+    /// <summary>
+    /// The file, downloaded. A refusal — an entry changed since the check — is said, and the check
+    /// run again so the entries to correct are listed, as at the workstation.
+    /// </summary>
+    private Task ExportAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Export || Request() is not { } request) return;
+            var file = await Scopes.RunAsync<AccountingExportService, Result<byte[]>>(s => s.ExportAsync(request));
+            if (file.IsFailure)
+            {
+                var said = Texts.Describe(file.Errors);
+                await PrepareAsync();
+                _status = (said, "critical");
+                return;
+            }
+
+            var name = AccountingExportScreenRules.ExportFileName(request);
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", file.Value);
+            _status = (Texts.T("Web.StockDownloaded", name), "normal");
+        });
+
+    private Task VatAsync(bool pdf) =>
+        RunAsync(async () =>
+        {
+            if (!Actions.VatStatement || Request() is not { } request) return;
+            var statement = await Scopes.RunAsync<AccountingExportService, Result<VatStatement>>(
+                s => s.GetVatStatementAsync(request.From, request.To, request.SiteIds));
+            if (statement.IsFailure)
+            {
+                Refused(statement);
+                return;
+            }
+
+            var file = pdf
+                ? Lists.Render(new ListDocument(AccountingExportScreenRules.VatTitle(request.From, request.To), VatStatement.Warning,
+                                               AccountingExportScreenRules.VatColumns, statement.Value.Rows()))
+                : statement.Value.ToCsv();
+            var name = AccountingExportScreenRules.VatFileName(request.From, request.To, pdf);
+            await JS.InvokeVoidAsync("marocLis.download", name, pdf ? "application/pdf" : "text/csv", file);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An accounting export step failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

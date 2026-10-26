@@ -159,6 +159,18 @@
             <MarocLIS.Web.Components.Screens.Equipment.InstrumentContracts />
             break;
 
+        case ScreenDecision.Open when Key == "accountingexport":
+            <MarocLIS.Web.Components.Screens.Finance.AccountingExport />
+            break;
+
+        case ScreenDecision.Open when Key == "accountingsettings":
+            <MarocLIS.Web.Components.Screens.Finance.AccountingSettings />
+            break;
+
+        case ScreenDecision.Open when Key == "fixedassets":
+            <MarocLIS.Web.Components.Screens.Finance.FixedAssets />
+            break;
+
         case ScreenDecision.Open when Key == "migration":
             <MarocLIS.Web.Components.Screens.Migration.DataMigration />
             break;

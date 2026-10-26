@@ -133,6 +133,10 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<Application.Inventory.ISupplierInvoiceQueries, SupplierInvoiceQueries>();
         // « Contrats automates »: the dashboard of the contracts, their interventions and the editor's choices.
         services.AddScoped<Application.Inventory.IInstrumentContractQueries, InstrumentContractQueries>();
+        // « Export comptable », « Comptes et journaux » and « Immobilisations »: the entries of the
+        // period across the sites, the settings of the export, the register and its instruments.
+        services.AddScoped<Application.Accounting.IAccountingQueries, AccountingQueries>();
+        services.AddScoped<Application.Assets.IFixedAssetQueries, FixedAssetQueries>();
 
         // ---- « Interfaces automates »: configuring the links, replaying a held transmission and
         // trying a frame, through the workstation's services. Never the host: the web server opens

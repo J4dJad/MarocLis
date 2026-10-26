@@ -1,0 +1,176 @@
+@using MarocLIS.Application.Accounting
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<AccountingSettings> Logger
+
+@*
+    « Comptes et journaux », the workstation's AccountingSettingsView: every journal and account of
+    the accounting export — sales, receipts, payroll and purchases alike — on one sheet, a line per
+    setting, the value typed in place. A department, site or payment method left blank follows the
+    default account of its section. Every line is checked before anything is sent, each refusal said
+    on its own line (AccountingSettingsScreenRules.Check); the sheet and the saving are
+    AccountingExportService's.
+*@
+<div class="screen accounting-settings" data-screen="accountingsettings">
+    @{ var actions = Actions; }
+    <p class="message is-warning small" data-state="settings-notice">@Texts["Accounting.SettingsNotice"]</p>
+
+    <div class="screen-body">
+        <section class="card card-flush card-fill" data-card="settings">
+            <div class="table-scroll">
+                <table class="grid" data-grid="settings">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Accounting.Section"]</th>
+                            <th>@Texts["Accounting.Setting"]</th>
+                            <th>@Texts["Accounting.Value"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            var label = AccountingSettingsScreenRules.Label(row, Texts.T);
+                            var refusal = _refusals.FirstOrDefault(r => r.Field == row.Key);
+                            <tr data-row="@row.Key" class="@(refusal is null ? null : "stock-warn")">
+                                <td class="small muted nowrap">@Texts[AccountingSettingsScreenRules.SectionKey(row)]</td>
+                                <td><span class="cell-wrap" title="@label">@label</span></td>
+                                <td class="settings-value">
+                                    @if (row.Kind == AccountingSettingKind.PatientMode)
+                                    {
+                                        <select class="input" data-field="@row.Key" title="@label" disabled="@(!actions.Save)"
+                                                value="@_values.GetValueOrDefault(row.Key)" @onchange="e => Set(row, e)">
+                                            @foreach (var (value, key) in AccountingSettingsScreenRules.ModeChoices)
+                                            {
+                                                <option value="@value">@Texts[key]</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input class="input mono @(refusal is null ? null : "is-refused")" type="text" dir="ltr" autocomplete="off"
+                                               maxlength="@AccountingSettingsScreenRules.ValueMaxLength" data-field="@row.Key" title="@label"
+                                               placeholder="@(row.AllowBlank ? Texts["Web.AccountingDefaultAccount"] : null)" disabled="@(!actions.Save)"
+                                               value="@_values.GetValueOrDefault(row.Key)" @oninput="e => Set(row, e)" />
+                                    }
+                                    <FieldMessage Refusal="refusal" Field="@row.Key" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_loaded && _rows.Count == 0)
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.AccountingNoSetting"]</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    @{ var changed = AccountingSettingsScreenRules.Changed(_rows, _values); }
+    <ActionBar StatusText="@(_status?.Text ?? (changed > 0 ? Texts.T("Web.AccountingChanged", changed) : null))"
+               StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Action.Refresh" Hidden="@(!actions.Reload)" Disabled="_busy" OnClick="ReloadAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Action.Save" Primary="true" Shortcut="Ctrl+S" Hidden="@(!actions.Save)" Disabled="_busy" OnClick="SaveAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@code {
+    private IReadOnlyList<AccountingSettingRow> _rows = [];
+    private Dictionary<string, string?> _values = new(StringComparer.Ordinal);
+    private IReadOnlyList<FieldRefusal> _refusals = [];
+    private (string Text, string Tone)? _status;
+    private bool _busy, _loaded;
+
+    private AccountingSettingsActions Actions => AccountingSettingsScreenRules.Actions(Context.User.Has);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var rows = await Scopes.RunAsync<AccountingExportService, Result<IReadOnlyList<AccountingSettingRow>>>(s => s.GetSettingsAsync());
+            if (rows.IsFailure)
+            {
+                _status = (Texts.Describe(rows.Errors), "critical");
+                return;
+            }
+
+            _rows = rows.Value;
+            _values = AccountingSettingsScreenRules.Values(_rows);
+            _refusals = [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the accounting settings failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private void Set(AccountingSettingRow row, ChangeEventArgs e)
+    {
+        _values[row.Key] = e.Value as string;
+        _refusals = [.. _refusals.Where(r => r.Field != row.Key)];
+        _status = null;
+    }
+
+    private Task ReloadAsync() =>
+        RunAsync(async () =>
+        {
+            _status = null;
+            await LoadAsync();
+        });
+
+    private Task SaveAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Save) return;
+            _refusals = AccountingSettingsScreenRules.Check(_rows, _values, Texts.T);
+            if (_refusals.Count > 0)
+            {
+                _status = (Texts.T("Web.AccountingRefusedLines", _refusals.Count), "critical");
+                return;
+            }
+
+            var values = new Dictionary<string, string?>(_values, StringComparer.Ordinal);
+            var saved = await Scopes.RunAsync<AccountingExportService, Result>(s => s.SaveSettingsAsync(values));
+            if (saved.IsFailure)
+            {
+                _status = (Texts.Describe(saved.Errors), "critical");
+                return;
+            }
+
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "An accounting settings step failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

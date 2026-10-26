@@ -1174,3 +1174,34 @@ html[dir=rtl] :is([data-screen=equipment], [data-screen=contracts]) .grid td:las
 [data-grid=contracts] > thead > tr > th:first-child { min-inline-size: 160px; }
 [data-grid=contracts] .pill { white-space: normal; max-inline-size: 100%; border-radius: 10px; }
 html[dir=rtl] .equipment-card .facts dd[dir=ltr] { text-align: right; }
+/* « Export comptable »: the period and the layout on a row, the sites and the journals under them; the journals and their anomalies side by side. */
+.export-scope { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; }
+.export-scope fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.export-scope .export-sites { grid-column: span 1; }
+.export-scope .export-journals { grid-column: span 3; }
+.export-scope fieldset.is-refused .check-list, .export-scope fieldset.is-refused .export-journal-grid { outline: 1px solid var(--critical); border-radius: var(--radius); }
+.export-scope .check-list { max-block-size: 96px; }
+.export-journal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px; }
+.export-results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.export-results > .card { min-inline-size: 0; }
+.export-results .table-scroll { border: 0; border-block-start: 1px solid var(--border); border-radius: 0; max-block-size: 360px; }
+/* « Comptes et journaux »: the value typed in place, wide enough for a twenty-character code. */
+[data-grid=settings] td.settings-value { inline-size: 260px; }
+[data-grid=settings] td.settings-value .input { inline-size: 100%; }
+/* « Immobilisations »: the year narrow, the plan said under the amounts, the register and its dialogs clear of the edge. */
+.asset-year { inline-size: 96px; }
+.asset-form .asset-plan { justify-content: end; }
+[data-grid=asset-accounts] td .input { inline-size: 100%; min-inline-size: 0; }
+:is([data-grid=assets], [data-grid=interventions], [data-grid=settings], [data-grid=journals], [data-grid=problems]) :is(.cell-wrap, .list-name) { overflow-wrap: break-word; }
+:is([data-screen=accountingexport], [data-screen=accountingsettings], [data-screen=fixedassets],
+    [data-modal=asset-schedule], [data-modal=asset-candidates], [data-modal=asset-accounts]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] :is([data-screen=accountingexport], [data-screen=accountingsettings], [data-screen=fixedassets],
+    [data-modal=asset-schedule], [data-modal=asset-candidates], [data-modal=asset-accounts]) .grid td:last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
+/* The register first: the instrument linked keeps to a few lines under it. */
+[data-screen=fixedassets] .quality-stack > [data-card=register] { min-block-size: 340px; }
+[data-screen=fixedassets] [data-card=instrument] > .table-scroll { max-block-size: 168px; }
+[data-screen=fixedassets] [data-card=instrument] > .card-heading { padding-block: 8px 0; }
+[data-screen=fixedassets] [data-card=instrument] > p { margin: 0; padding-block: 4px 8px; }
+[data-grid=assets] { font-size: 13px; }
+[data-grid=assets] :is(th, td) { padding-inline: 5px; }
+[data-grid=assets] :is(th, td):first-child { padding-inline-start: 8px; }

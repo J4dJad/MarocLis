@@ -1,0 +1,76 @@
+@using MarocLIS.Application.Assets
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Assets
+@inject WebTexts Texts
+
+@*
+    An asset leaving the register, the workstation's AssetDisposalDialog: when — today at the
+    latest —, for how much — nothing for a scrapping —, and why. Refusals are said next to their box
+    (FixedAssetScreenRules.Check, then the service's).
+*@
+<Modal Name="asset-disposal" Title="@($"{Texts["Assets.Disposal"]} — {Row.Asset.Code}")" Hint="@Texts["Finance.Dialog.Disposal"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field">
+                <span class="field-label">@Texts["Assets.DisposalDate"]</span>
+                <input class="input @Refused(FixedAssetScreenRules.DisposalDateField)" type="date" max="@Today.ToString("yyyy-MM-dd")"
+                       data-field="@FixedAssetScreenRules.DisposalDateField" @bind="_form.Date" @bind:format="yyyy-MM-dd" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.DisposalDateField" />
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Web.AssetDisposalPrice"]</span>
+                <input class="input mono num @Refused(FixedAssetScreenRules.DisposalPriceField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="@TypedNumber.AmountMaxLength" data-field="@FixedAssetScreenRules.DisposalPriceField" @bind="_form.Price" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.DisposalPriceField" />
+            </label>
+            <label class="field field-span-2">
+                <span class="field-label">@Texts["Assets.DisposalReason"]</span>
+                <input class="input @Refused(FixedAssetScreenRules.DisposalReasonField)" type="text" autocomplete="off" maxlength="@FixedAsset.DisposalReasonMaxLength"
+                       data-field="@FixedAssetScreenRules.DisposalReasonField" title="@_form.Reason" @bind="_form.Reason" @bind:event="oninput" />
+                <FieldMessage Refusal="Shown" Field="@FixedAssetScreenRules.DisposalReasonField" />
+            </label>
+            <p class="field-span-2 small muted" data-state="disposal-notice">@Texts["Assets.DisposalNotice"]</p>
+        </div>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="SaveAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public FixedAssetRegisterRow Row { get; set; } = default!;
+    [Parameter] public DateOnly Today { get; set; }
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<AssetDisposalEntry> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private AssetDisposalForm _form = new();
+    private FieldRefusal? _refusal;
+    private bool _checked, _first = true;
+
+    private FieldRefusal? Shown => _checked ? _refusal : FieldRefusal;
+
+    private string? Refused(string field) => Shown?.Field == field ? "is-refused" : null;
+
+    protected override void OnParametersSet()
+    {
+        if (_first) _form = FixedAssetScreenRules.NewDisposal(Today);
+        _first = false;
+        if (FieldRefusal is not null) _checked = false;
+    }
+
+    private Task SaveAsync()
+    {
+        var (refused, entry) = FixedAssetScreenRules.Check(_form, Row, Today);
+        _refusal = refused;
+        _checked = true;
+        return entry is not null ? OnSave.InvokeAsync(entry) : Task.CompletedTask;
+    }
+}

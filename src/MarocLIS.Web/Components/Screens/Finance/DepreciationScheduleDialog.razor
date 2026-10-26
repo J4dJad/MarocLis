@@ -1,0 +1,85 @@
+@using System.Globalization
+@using MarocLIS.Application.Assets
+@using MarocLIS.Domain.Assets
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+
+@*
+    An asset's depreciation plan, the workstation's DepreciationScheduleDialog: by financial year —
+    months, opening, charge, closing, net book value, rate and mode, a declining plan ending
+    straight-line — and by month with the depreciation accumulated. The plan is downloaded as CSV.
+*@
+<Modal Name="asset-schedule" Title="@FixedAssetScreenRules.ScheduleTitle(Row, Texts.T)" Hint="@Texts["Finance.Dialog.Schedule"]" Large="true" OnCancel="OnClose">
+    <ChildContent>
+        <p class="small muted cell-wrap" data-state="schedule-header">@FixedAssetScreenRules.ScheduleHeader(Row, Schedule, Texts.T, Mad)</p>
+        <h3 class="card-title">@Texts["Assets.Yearly"]</h3>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid" data-grid="schedule-years">
+                <thead>
+                    <tr>
+                        <th>@Texts["Assets.Year"]</th>
+                        <th class="num">@Texts["Assets.Months"]</th>
+                        <th class="num">@Texts["Assets.Opening"]</th>
+                        <th class="num">@Texts["Assets.Charge"]</th>
+                        <th class="num">@Texts["Assets.Closing"]</th>
+                        <th class="num">@Texts["Assets.NetBookValue"]</th>
+                        <th class="num">@Texts["Assets.Rate"]</th>
+                        <th>@Texts["Assets.Mode"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var y in Schedule.Years)
+                    {
+                        <tr data-row="@y.Year">
+                            <td class="mono strong">@y.Year.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num mono">@y.Months.ToString(CultureInfo.InvariantCulture)</td>
+                            <td class="num nowrap">@Mad(y.Opening)</td>
+                            <td class="num nowrap strong">@Mad(y.Charge)</td>
+                            <td class="num nowrap">@Mad(y.Closing)</td>
+                            <td class="num nowrap">@Mad(y.NetBookValue)</td>
+                            <td class="num nowrap mono" dir="ltr">@FixedAssetScreenRules.Percent(y.Rate)</td>
+                            <td class="small">@Texts[FixedAssetScreenRules.YearModeKey(y)]</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <h3 class="card-title">@Texts["Assets.Monthly"]</h3>
+        <div class="table-scroll table-scroll-short">
+            <table class="grid" data-grid="schedule-months">
+                <thead>
+                    <tr>
+                        <th>@Texts["Assets.Month"]</th>
+                        <th>@Texts["Field.Date"]</th>
+                        <th class="num">@Texts["Assets.Charge"]</th>
+                        <th class="num">@Texts["Assets.Closing"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in FixedAssetScreenRules.ScheduleMonths(Schedule))
+                    {
+                        <tr data-row="@m.Month">
+                            <td class="mono" dir="ltr">@m.Month</td>
+                            <td class="mono nowrap" dir="ltr">@m.Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</td>
+                            <td class="num nowrap">@Mad(m.Amount)</td>
+                            <td class="num nowrap">@Mad(m.Accumulated)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Assets.Csv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" OnClick="OnCsv" />
+        <ActionButton Key="Action.Close" Primary="true" OnClick="OnClose" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public FixedAssetRegisterRow Row { get; set; } = default!;
+    [Parameter, EditorRequired] public DepreciationSchedule Schedule { get; set; } = default!;
+    [Parameter] public EventCallback OnCsv { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+}

@@ -1,0 +1,59 @@
+@using System.Globalization
+@using MarocLIS.Application.Assets
+@inject WebTexts Texts
+
+@*
+    The instrument a new asset is created from, the workstation's InstrumentCandidateDialog: the
+    instruments bought — a purchase date on their file —, not capitalised yet and not placed by a
+    supplier. The one chosen opens the editor with its code, name, dates and supplier; the cost is
+    still to type.
+*@
+<Modal Name="asset-candidates" Title="@Texts["Assets.FromInstrument"]" Hint="@Texts["Finance.Dialog.FromInstrument"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="table-scroll">
+            <table class="grid grid-select" data-grid="candidates">
+                <thead>
+                    <tr>
+                        <th>@Texts["Field.Code"]</th>
+                        <th>@Texts["Assets.Instrument"]</th>
+                        <th>@Texts["Assets.PurchaseDate"]</th>
+                        <th>@Texts["Assets.InServiceDate"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var candidate in Candidates)
+                    {
+                        var name = candidate.Name.For(Texts.Language);
+                        <tr class="@(candidate.Id == _selected?.Id ? "is-selected" : null)" data-row="@candidate.Code"
+                            @onclick="() => _selected = candidate" @ondblclick="() => ChooseAsync(candidate)">
+                            <td class="mono strong" dir="ltr">@candidate.Code</td>
+                            <td><span class="cell-wrap" title="@name">@name</span></td>
+                            <td class="mono nowrap" dir="ltr">@Date(candidate.PurchaseDate)</td>
+                            <td class="mono nowrap" dir="ltr">@Date(candidate.CommissioningDate)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted" data-state="candidates-notice">@Texts["Assets.FromInstrumentNotice"]</p>
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Select" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" Disabled="@(_selected is null)" OnClick="() => ChooseAsync(_selected)" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<AssetInstrumentOption> Candidates { get; set; } = [];
+    [Parameter] public EventCallback<AssetInstrumentOption> OnSelect { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private AssetInstrumentOption? _selected;
+
+    protected override void OnParametersSet() => _selected ??= Candidates.FirstOrDefault();
+
+    private static string Date(DateOnly? date) => date?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "—";
+
+    private Task ChooseAsync(AssetInstrumentOption? candidate) =>
+        candidate is null ? Task.CompletedTask : OnSelect.InvokeAsync(candidate);
+}

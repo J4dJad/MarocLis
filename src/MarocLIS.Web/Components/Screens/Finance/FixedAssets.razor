@@ -1,0 +1,628 @@
+@using System.Globalization
+@using MarocLIS.Application.Abstractions
+@using MarocLIS.Application.Assets
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Inventory
+@using MarocLIS.Domain.Assets
+@using MarocLIS.Domain.Common
+@using MarocLIS.Reporting
+@using StockTones = MarocLIS.Web.Components.Screens.Stock.StockTones
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IListPdfRenderer Lists
+@inject IJSRuntime JS
+@inject ILogger<FixedAssets> Logger
+
+@*
+    « Immobilisations », the workstation's FixedAssetView: the fixed-assets register of a financial
+    year — gross value, depreciation at the opening, the year's charge, the closing and the net book
+    value — with the equipment placed by suppliers listed apart as « mis à disposition », and below
+    it the instrument behind the selected line, read from the equipment module: its state, its
+    interventions and breakdowns. An asset is entered, from scratch or from an instrument bought; its
+    plan is shown by year and by month; it leaves the register by a disposal, which can be cancelled.
+    The register's table, its CSV and an asset's plan are downloaded. What is shown, offered and
+    refused is FixedAssetScreenRules'; every step goes through FixedAssetService.
+*@
+<div class="screen fixed-assets" data-screen="fixedassets">
+    @{ var actions = Actions; var selected = SelectedAsset; var register = _register; }
+    <div class="list-tools" data-tools="filters">
+        <label class="field-inline">
+            <span class="field-label">@Texts["Assets.Year"]</span>
+            <input class="input mono num asset-year" type="number" dir="ltr" min="@FixedAssetScreenRules.YearMinimum" max="@FixedAssetScreenRules.YearMaximum"
+                   data-field="asset-year" value="@_year" @onchange="YearChangedAsync" />
+        </label>
+        <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="_busy" OnClick="() => LoadAsync()" />
+        @if (register is not null)
+        {
+            var heading = FixedAssetScreenRules.Heading(register, Texts.T, Mad);
+            <span class="list-tools-end muted small list-name" data-state="heading" title="@heading">@heading</span>
+        }
+    </div>
+
+    <div class="screen-body quality-stack">
+        <section class="card card-flush card-fill" data-card="register">
+            <div class="table-scroll">
+                <table class="grid grid-select" data-grid="assets">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Assets.Label"]</th>
+                            <th>@Texts["Assets.Category"]</th>
+                            <th>@Texts["Assets.AcquisitionDate"]</th>
+                            <th class="num">@Texts["Assets.GrossValue"]</th>
+                            <th>@Texts["Assets.Method"]</th>
+                            <th class="num">@Texts["Assets.Opening"]</th>
+                            <th class="num">@Texts["Assets.Charge"]</th>
+                            <th class="num">@Texts["Assets.Closing"]</th>
+                            <th class="num">@Texts["Assets.NetBookValue"]</th>
+                            <th>@Texts["Assets.DisposalDate"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in register?.Assets ?? [])
+                        {
+                            var a = row.Asset;
+                            var category = Texts[FixedAssetScreenRules.CategoryKey(a.Category)];
+                            <tr class="@(row.Asset.Id == _selectedId ? "is-selected" : null) @StockTones.Row(FixedAssetScreenRules.RowInk(row))"
+                                data-row="@a.Code" @onclick="() => SelectAsync(row.Asset.Id, null)" @ondblclick="() => AskScheduleAsync()">
+                                <td>
+                                    <span class="list-name strong" title="@a.Label">@a.Label</span>
+                                    <span class="cell-sub mono" dir="ltr">@a.Code</span>
+                                </td>
+                                <td class="small">
+                                    <span class="cell-wrap">@category</span>
+                                    <span class="cell-sub mono" dir="ltr" title="@Texts["Assets.Account"]">@row.Accounts.Asset</span>
+                                </td>
+                                <td class="mono nowrap small">
+                                    <span dir="ltr">@Date(a.AcquisitionDate)</span>
+                                    <span class="cell-sub" title="@Texts["Assets.InServiceDate"]"><span dir="ltr">@Date(a.InServiceDate)</span></span>
+                                </td>
+                                <td class="num nowrap">
+                                    @Mad(a.GrossValue)
+                                    @if (row.GrossOut != 0m)
+                                    {
+                                        <span class="cell-sub" title="@Texts["Assets.GrossOut"]">− @Mad(row.GrossOut)</span>
+                                    }
+                                </td>
+                                <td class="small">
+                                    <span class="cell-wrap">@Texts[FixedAssetScreenRules.MethodKey(a.Method)]</span>
+                                    <span class="cell-sub nowrap" title="@Texts["Assets.UsefulLife"] · @Texts["Assets.Rate"]">@Texts.T("Web.AssetLifeRate", a.UsefulLifeYears, FixedAssetScreenRules.Percent(row.Rate))</span>
+                                </td>
+                                <td class="num nowrap">@Mad(row.Opening)</td>
+                                <td class="num nowrap strong">@Mad(row.Charge)</td>
+                                <td class="num nowrap">
+                                    @Mad(row.Closing)
+                                    @if (row.DepreciationOut != 0m)
+                                    {
+                                        <span class="cell-sub" title="@Texts["Assets.DepreciationOut"]">− @Mad(row.DepreciationOut)</span>
+                                    }
+                                </td>
+                                <td class="num nowrap strong">@Mad(row.NetBookValue)</td>
+                                <td class="small nowrap">
+                                    @if (a.DisposalDate is { } out_)
+                                    {
+                                        <span class="mono" dir="ltr">@Date(out_)</span>
+                                        <span class="cell-sub" title="@Texts["Assets.DisposalPrice"]">@Mad(a.DisposalPrice ?? 0m)</span>
+                                        @if (row.DisposalResult is { } result)
+                                        {
+                                            <span class="cell-sub @(result < 0m ? "critical" : null)" title="@Texts["Assets.DisposalResult"]">@Mad(result)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var provided in register?.SupplierProvided ?? [])
+                        {
+                            var name = provided.InstrumentName.For(Texts.Language);
+                            <tr class="@(provided.InstrumentId == _selectedProvided ? "is-selected" : null) is-tone-muted small" data-row="@provided.InstrumentCode"
+                                data-provided="true" @onclick="() => SelectAsync(null, provided.InstrumentId)">
+                                <td>
+                                    <span class="list-name" title="@name">@name</span>
+                                    <span class="cell-sub mono" dir="ltr">@provided.InstrumentCode</span>
+                                </td>
+                                <td>
+                                    <Pill Text="@Texts["Assets.SupplierProvided"]" Tone="Waiting" />
+                                    <span class="cell-sub">@Texts[$"InstrumentContractKind.{provided.Kind}"]</span>
+                                </td>
+                                <td class="mono nowrap"><span dir="ltr">@Date(provided.StartDate)</span></td>
+                                <td colspan="7">
+                                    <span class="cell-wrap" title="@provided.SupplierName">@provided.SupplierName</span>
+                                    <span class="cell-sub mono" dir="ltr">@provided.ContractReference</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (register is { Assets.Count: 0, SupplierProvided.Count: 0 })
+                {
+                    <p class="muted small card-pad" data-state="empty">@Texts["Web.AssetNone"]</p>
+                }
+            </div>
+            <p class="card-pad small muted grid-footer" data-state="notice">@Texts["Assets.Notice"]</p>
+        </section>
+
+        <section class="card card-flush quality-sub" data-card="instrument">
+            <div class="card-heading card-pad">
+                <h2 class="card-title cell-wrap" data-state="instrument-heading">@FixedAssetScreenRules.InstrumentHeading(_summary, Texts.Language, Texts.T)</h2>
+            </div>
+            @if (_summary is { } s)
+            {
+                <p class="card-pad small muted cell-wrap" data-state="instrument-summary">@FixedAssetScreenRules.InstrumentSummaryText(s, Texts.T, Mad, Texts.Culture)</p>
+                <div class="table-scroll">
+                    <table class="grid" data-grid="interventions">
+                        <thead>
+                            <tr>
+                                <th>@Texts["Field.Date"]</th>
+                                <th>@Texts["Equipment.MaintenanceKind"]</th>
+                                <th>@Texts["Field.Description"]</th>
+                                <th class="num">@Texts["Assets.Downtime"]</th>
+                                <th class="num">@Texts["Assets.MaintenanceCost"]</th>
+                                <th>@Texts["Equipment.ExternalTechnician"]</th>
+                                <th>@Texts["Assets.CheckPassed"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var i in s.Interventions)
+                            {
+                                var breakdown = FixedAssetScreenRules.IsBreakdown(i);
+                                var description = i.Description.For(Texts.Language);
+                                <tr class="@(breakdown ? "stock-warn" : null)">
+                                    <td class="mono nowrap small" dir="ltr">@Date(i.PerformedOn)</td>
+                                    <td class="small @(breakdown ? "abnormal strong" : null)">@Texts[$"MaintenanceKind.{i.Kind}"]</td>
+                                    <td class="small"><span class="cell-wrap" title="@description">@description</span></td>
+                                    <td class="num mono small">@(i.DowntimeHours?.ToString("0.#", Texts.Culture))</td>
+                                    <td class="num nowrap small">@(i.CostMad is { } cost ? Mad(cost) : null)</td>
+                                    <td class="small"><span class="cell-wrap">@i.Technician</span></td>
+                                    <td class="small">@Texts[i.CheckPassed ? "Action.Yes" : "Action.No"]</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (_selectedId is not null || _selectedProvided is not null)
+            {
+                <p class="card-pad small muted" data-state="no-instrument">@Texts["Assets.NoInstrument"]</p>
+            }
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")" ShowMore="@(actions.Pdf || actions.Csv || actions.ManageRight)">
+        <Secondary>
+            <ActionButton Key="Action.Edit" Hidden="@(!actions.ManageRight)" Disabled="@(!actions.Edit || _busy)" OnClick="() => AskEditAsync(SelectedAsset?.Asset.Id, null)" />
+            <ActionButton Key="Assets.Schedule" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CalendarCheck" Disabled="@(!actions.Schedule || _busy)" OnClick="AskScheduleAsync" />
+        </Secondary>
+        <More>
+            <ActionButton Key="Assets.FromInstrument" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Wrench" Hidden="@(!actions.ManageRight)" Disabled="@(!actions.FromInstrument || _busy)" OnClick="AskFromInstrumentAsync" />
+            <ActionButton Key="Assets.Pdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileText" Disabled="@(!actions.Pdf || _busy)" OnClick="PrintAsync" />
+            <ActionButton Key="Assets.Csv" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSpreadsheet" Disabled="@(!actions.Csv || _busy)" OnClick="CsvAsync" />
+            <ActionButton Key="Assets.Accounts" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Calculator" Hidden="@(!actions.ManageRight)" Disabled="@(!actions.Accounts || _busy)" OnClick="AskAccountsAsync" />
+        </More>
+        <Destructive>
+            <ActionButton Key="@FixedAssetScreenRules.DisposalKey(selected)" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.PackageMinus" Hidden="@(!actions.ManageRight)"
+                          Disabled="@(!(actions.Disposal || actions.CancelDisposal) || _busy)" OnClick="AskDisposal" />
+        </Destructive>
+        <Primary>
+            <ActionButton Key="Assets.New" Primary="true" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Plus" Hidden="@(!actions.ManageRight)" Disabled="@(!actions.New || _busy)"
+                          OnClick="() => AskEditAsync(null, null)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@switch (_prompt)
+{
+    case Prompt.Edit when _options is { } options && _form is { } form:
+        <FixedAssetEditor Form="form" Options="options" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy"
+                          OnLoadInvoices="LoadInvoicesAsync" OnSave="SaveAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Candidates when _candidates is { } candidates:
+        <InstrumentCandidatePicker Candidates="candidates" OnSelect="FromInstrumentAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Schedule when _schedule is { } schedule && SelectedAsset is { } r1:
+        <DepreciationScheduleDialog Row="r1" Schedule="schedule" OnCsv="ScheduleCsvAsync" OnClose="ClosePrompt" />
+        break;
+
+    case Prompt.Disposal when SelectedAsset is { } r2:
+        <AssetDisposalEditor Row="r2" Today="Clock.Today" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="DisposeAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.CancelDisposal when SelectedAsset is { } r3:
+        <ConfirmPrompt Title="@Texts["Assets.CancelDisposal"]" Message="@FixedAssetScreenRules.CancelDisposalQuestion(r3, Texts.T)"
+                       OnYes="CancelDisposalAsync" OnNo="ClosePrompt" />
+        break;
+
+    case Prompt.Accounts when _accounts is { } accounts:
+        <AssetAccountsEditor Form="accounts" Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SaveAccountsAsync" OnCancel="ClosePrompt" />
+        break;
+
+    case Prompt.Message when _message is { } message:
+        <Modal Name="asset-message" Title="@message.Title" OnCancel="ClosePrompt">
+            <ChildContent><p class="info-line prompt-text text-full" data-state="asset-message">@message.Text</p></ChildContent>
+            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="ClosePrompt" /></Footer>
+        </Modal>
+        break;
+}
+
+@code {
+    private enum Prompt { None, Edit, Candidates, Schedule, Disposal, CancelDisposal, Accounts, Message }
+
+    private sealed record Message(string Title, string Text);
+
+    private int _year;
+    private FixedAssetRegister? _register;
+    private Guid? _selectedId, _selectedProvided;
+    private AssetInstrumentSummary? _summary;
+    private int _summaryLoad;
+
+    private Prompt _prompt;
+    private Message? _message;
+    private FixedAssetForm? _form;
+    private FixedAssetOptions? _options;
+    private IReadOnlyList<AssetInstrumentOption>? _candidates;
+    private DepreciationSchedule? _schedule;
+    private FixedAssetSettings? _settings;
+    private Dictionary<FixedAssetCategory, CategoryAccountsForm>? _accounts;
+    private string? _dialogRefusal;
+    private FieldRefusal? _fieldRefusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+
+    private FixedAssetRegisterRow? SelectedAsset => _register?.Assets.FirstOrDefault(r => r.Asset.Id == _selectedId);
+
+    private FixedAssetActions Actions => FixedAssetScreenRules.Actions(Context.User.Has, SelectedAsset, _register is not null);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private static string Date(DateOnly date) => date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    protected override Task OnInitializedAsync()
+    {
+        _year = Clock.Today.Year;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync(Guid? keep = null)
+    {
+        try
+        {
+            var year = _year;
+            var register = await Scopes.RunAsync<FixedAssetService, Result<FixedAssetRegister>>(s => s.GetRegisterAsync(year));
+            if (register.IsFailure)
+            {
+                _status = (Texts.Describe(register.Errors), "critical");
+                return;
+            }
+
+            _register = register.Value;
+            var kept = FixedAssetScreenRules.Keep(_register, keep ?? _selectedId);
+            if (_selectedProvided is { } provided && keep is null && _register.SupplierProvided.Any(p => p.InstrumentId == provided))
+                await SelectAsync(null, provided);
+            else
+                await SelectAsync(kept?.Asset.Id, null);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the fixed-assets register failed.");
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+    }
+
+    private async Task YearChangedAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out var year)) return;
+        _year = Math.Clamp(year, FixedAssetScreenRules.YearMinimum, FixedAssetScreenRules.YearMaximum);
+        await LoadAsync();
+    }
+
+    /// <summary>A line selected: the instrument behind it read from the equipment module, the latest selection winning.</summary>
+    private async Task SelectAsync(Guid? assetId, Guid? providedInstrument)
+    {
+        _selectedId = assetId;
+        _selectedProvided = assetId is null ? providedInstrument : null;
+        var instrument = assetId is not null ? FixedAssetScreenRules.InstrumentOf(SelectedAsset) : providedInstrument;
+        var load = ++_summaryLoad;
+        _summary = null;
+        if (instrument is not { } id) return;
+
+        try
+        {
+            var summary = await Scopes.RunAsync<FixedAssetService, Result<AssetInstrumentSummary>>(s => s.GetInstrumentSummaryAsync(id));
+            if (load == _summaryLoad) _summary = summary.IsSuccess ? summary.Value : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the instrument of an asset failed.");
+        }
+    }
+
+    // ---- An asset ------------------------------------------------------------------------------------
+
+    private Task AskEditAsync(Guid? assetId, SaveFixedAssetRequest? draft) =>
+        RunAsync(async () =>
+        {
+            var actions = Actions;
+            if (assetId is null ? !actions.New && !actions.FromInstrument : !actions.Edit) return;
+
+            var options = await Scopes.RunAsync<FixedAssetService, Result<FixedAssetOptions>>(s => s.GetOptionsAsync(assetId));
+            if (options.IsFailure)
+            {
+                Say(Texts[assetId is null ? "Assets.New" : "Action.Edit"], Texts.Describe(options.Errors));
+                return;
+            }
+
+            SaveFixedAssetRequest? values = draft;
+            if (assetId is { } id)
+            {
+                var detail = await Scopes.RunAsync<FixedAssetService, Result<FixedAssetDetail>>(s => s.GetAssetAsync(id));
+                if (detail.IsFailure)
+                {
+                    Say(Texts["Action.Edit"], Texts.Describe(detail.Errors));
+                    return;
+                }
+                values = detail.Value.Values;
+            }
+
+            _options = options.Value;
+            _form = FixedAssetScreenRules.Form(values, Clock.Today);
+            Open(Prompt.Edit);
+        });
+
+    private Task<IReadOnlyList<AssetInvoiceOption>> LoadInvoicesAsync(Guid supplierId) =>
+        LoadInvoicesCoreAsync(supplierId);
+
+    /// <summary>The supplier's invoices: a convenience, the reference can still be typed when they cannot be read.</summary>
+    private async Task<IReadOnlyList<AssetInvoiceOption>> LoadInvoicesCoreAsync(Guid supplierId)
+    {
+        try
+        {
+            var invoices = await Scopes.RunAsync<FixedAssetService, Result<IReadOnlyList<AssetInvoiceOption>>>(s => s.GetSupplierInvoicesAsync(supplierId));
+            return invoices.IsSuccess ? invoices.Value : [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading a supplier's invoices failed.");
+            return [];
+        }
+    }
+
+    private Task SaveAsync(SaveFixedAssetRequest request) =>
+        RunAsync(async () =>
+        {
+            var saved = await Scopes.RunAsync<FixedAssetService, Result<Guid>>(s => s.SaveAsync(request));
+            if (saved.IsFailure)
+            {
+                Refused(saved);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(saved.Value);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task AskFromInstrumentAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.FromInstrument) return;
+            var options = await Scopes.RunAsync<FixedAssetService, Result<FixedAssetOptions>>(s => s.GetOptionsAsync(null));
+            if (options.IsFailure)
+            {
+                Say(Texts["Assets.FromInstrument"], Texts.Describe(options.Errors));
+                return;
+            }
+
+            var candidates = FixedAssetScreenRules.Candidates(options.Value);
+            if (candidates.Count == 0)
+            {
+                Say(Texts["Assets.FromInstrument"], Texts["Assets.NoCandidates"]);
+                return;
+            }
+
+            _candidates = candidates;
+            Open(Prompt.Candidates);
+        });
+
+    private async Task FromInstrumentAsync(AssetInstrumentOption instrument)
+    {
+        _prompt = Prompt.None;
+        await AskEditAsync(null, FixedAssetService.DraftFromInstrument(instrument));
+    }
+
+    // ---- The plan ------------------------------------------------------------------------------------
+
+    private Task AskScheduleAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Schedule || SelectedAsset is not { } row) return;
+            var id = row.Asset.Id;
+            var schedule = await Scopes.RunAsync<FixedAssetService, Result<DepreciationSchedule>>(s => s.GetScheduleAsync(id));
+            if (schedule.IsFailure)
+            {
+                Say(Texts["Assets.Schedule"], Texts.Describe(schedule.Errors));
+                return;
+            }
+
+            _schedule = schedule.Value;
+            Open(Prompt.Schedule);
+        });
+
+    private async Task ScheduleCsvAsync()
+    {
+        if (SelectedAsset is not { } row || _schedule is not { } schedule) return;
+        var name = FixedAssetScreenRules.ScheduleFileName(row);
+        await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", FixedAssetRegisterReport.ScheduleCsv(row.Asset.Code, schedule));
+        _status = (Texts.T("Web.StockDownloaded", name), "muted");
+    }
+
+    // ---- A disposal ----------------------------------------------------------------------------------
+
+    private void AskDisposal()
+    {
+        var actions = Actions;
+        if (_busy) return;
+        if (actions.CancelDisposal) Open(Prompt.CancelDisposal);
+        else if (actions.Disposal) Open(Prompt.Disposal);
+    }
+
+    private Task DisposeAsync(AssetDisposalEntry entry) =>
+        RunAsync(async () =>
+        {
+            if (SelectedAsset is not { } row) return;
+            var id = row.Asset.Id;
+            var disposed = await Scopes.RunAsync<FixedAssetService, Result>(s => s.RecordDisposalAsync(id, entry.Date, entry.Price, entry.Reason));
+            if (disposed.IsFailure)
+            {
+                Refused(disposed);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task CancelDisposalAsync() =>
+        RunAsync(async () =>
+        {
+            if (SelectedAsset is not { } row) return;
+            var id = row.Asset.Id;
+            var cancelled = await Scopes.RunAsync<FixedAssetService, Result>(s => s.CancelDisposalAsync(id));
+            if (cancelled.IsFailure)
+            {
+                Say(Texts["Assets.CancelDisposal"], Texts.Describe(cancelled.Errors));
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync(id);
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    // ---- The accounts, the register's files ----------------------------------------------------------
+
+    private Task AskAccountsAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Accounts) return;
+            var current = await Scopes.RunAsync<FixedAssetService, Result<FixedAssetSettings>>(s => s.GetSettingsAsync());
+            if (current.IsFailure)
+            {
+                Say(Texts["Assets.Accounts"], Texts.Describe(current.Errors));
+                return;
+            }
+
+            _settings = current.Value;
+            _accounts = FixedAssetScreenRules.AccountsForm(current.Value);
+            Open(Prompt.Accounts);
+        });
+
+    private Task SaveAccountsAsync(Dictionary<FixedAssetCategory, CategoryAccountsForm> form) =>
+        RunAsync(async () =>
+        {
+            if (_settings is null) return;
+            var (refusal, settings) = FixedAssetScreenRules.Check(form, _settings);
+            if (refusal is not null)
+            {
+                _fieldRefusal = refusal;
+                return;
+            }
+
+            var saved = await Scopes.RunAsync<FixedAssetService, Result>(s => s.SaveSettingsAsync(settings!));
+            if (saved.IsFailure)
+            {
+                _dialogRefusal = Texts.Describe(saved.Errors);
+                return;
+            }
+
+            ClosePrompt();
+            await LoadAsync();
+            _status = (Texts["Message.Saved"], "normal");
+        });
+
+    private Task PrintAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Pdf || _register is not { } register) return;
+            var (columns, rows) = FixedAssetScreenRules.PdfTable(register, Texts.Language, Texts.T);
+            var document = new ListDocument(FixedAssetScreenRules.ReportTitle(register, Texts.T),
+                                            FixedAssetScreenRules.ReportCaption(Clock.Now, Texts.T), columns, rows, Texts.IsRightToLeft,
+                                            new ListLayout(FixedAssetRegisterReport.PdfColumnWidths, FixedAssetRegisterReport.PdfFontSize, A3: true));
+            var name = FixedAssetScreenRules.ReportFileName(register, pdf: true);
+            await JS.InvokeVoidAsync("marocLis.download", name, "application/pdf", Lists.Render(document));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    private Task CsvAsync() =>
+        RunAsync(async () =>
+        {
+            if (!Actions.Csv || _register is not { } register) return;
+            var name = FixedAssetScreenRules.ReportFileName(register, pdf: false);
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", FixedAssetRegisterReport.ToCsv(register));
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        });
+
+    // ---- Plumbing ------------------------------------------------------------------------------------
+
+    private void Refused(Result result)
+    {
+        var error = result.FirstError;
+        if (FixedAssetScreenRules.FieldOf(error) is { } field)
+        {
+            _fieldRefusal = FieldRefusal.Of(field, error);
+            _dialogRefusal = null;
+        }
+        else
+        {
+            _fieldRefusal = null;
+            _dialogRefusal = Texts.Describe(result.Errors);
+        }
+    }
+
+    private void Open(Prompt prompt)
+    {
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+        _prompt = prompt;
+    }
+
+    private async Task RunAsync(Func<Task> step)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await step();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "A fixed-assets step failed.");
+            _prompt = Prompt.None;
+            _status = (Texts["Message.UnexpectedError"], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Say(string title, string text)
+    {
+        _message = new Message(title, text);
+        _prompt = Prompt.Message;
+    }
+
+    private void ClosePrompt()
+    {
+        _prompt = Prompt.None;
+        _message = null;
+        _dialogRefusal = null;
+        _fieldRefusal = null;
+    }
+}

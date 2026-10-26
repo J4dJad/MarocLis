@@ -1,0 +1,84 @@
+@using MarocLIS.Application.Assets
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Assets
+@inject WebTexts Texts
+
+@*
+    The CGNC accounts of each category, the workstation's FixedAssetAccountsDialog: the asset (class
+    2), its depreciation (28…) and the charge (6193 by default). Each box refused is said next to it
+    (FixedAssetScreenRules.Check).
+*@
+<Modal Name="asset-accounts" Title="@Texts["Assets.Accounts"]" Hint="@Texts["Finance.Dialog.AssetAccounts"]" Wide="true" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="table-scroll">
+            <table class="grid" data-grid="asset-accounts">
+                <thead>
+                    <tr>
+                        <th>@Texts["Assets.Category"]</th>
+                        <th>@Texts["Assets.AssetAccount"]</th>
+                        <th>@Texts["Assets.DepreciationAccount"]</th>
+                        <th>@Texts["Assets.ChargeAccount"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (category, boxes) in Form)
+                    {
+                        var name = Texts[FixedAssetScreenRules.CategoryKey(category)];
+                        <tr data-row="@category">
+                            <td class="strong"><span class="cell-wrap">@name</span></td>
+                            @foreach (var kind in Kinds)
+                            {
+                                var field = FixedAssetScreenRules.AccountField(category, kind);
+                                <td>
+                                    <input class="input mono @(Shown?.Field == field ? "is-refused" : null)" type="text" dir="ltr" autocomplete="off" maxlength="20"
+                                           data-field="@field" title="@name" value="@Get(boxes, kind)" @oninput="e => Set(boxes, kind, e)" />
+                                    <FieldMessage Refusal="Shown" Field="@field" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="small muted" data-state="accounts-notice">@Texts["Assets.AccountsNotice"]</p>
+        @if (Refusal is { Length: > 0 } refused)
+        {
+            <p class="message is-critical" role="alert" data-state="refusal">@refused</p>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Save" Primary="true" Disabled="Busy" OnClick="() => OnSave.InvokeAsync(Form)" />
+    </Footer>
+</Modal>
+
+@code {
+    private static readonly string[] Kinds = ["Asset", "Depreciation", "Charge"];
+
+    [Parameter, EditorRequired] public Dictionary<FixedAssetCategory, CategoryAccountsForm> Form { get; set; } = [];
+    [Parameter] public string? Refusal { get; set; }
+    [Parameter] public FieldRefusal? FieldRefusal { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<Dictionary<FixedAssetCategory, CategoryAccountsForm>> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private FieldRefusal? Shown => FieldRefusal;
+
+    private static string? Get(CategoryAccountsForm boxes, string kind) => kind switch
+    {
+        "Asset" => boxes.Asset,
+        "Depreciation" => boxes.Depreciation,
+        _ => boxes.Charge
+    };
+
+    private static void Set(CategoryAccountsForm boxes, string kind, ChangeEventArgs e)
+    {
+        var value = e.Value as string;
+        switch (kind)
+        {
+            case "Asset": boxes.Asset = value; break;
+            case "Depreciation": boxes.Depreciation = value; break;
+            default: boxes.Charge = value; break;
+        }
+    }
+}
