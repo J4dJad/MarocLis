@@ -2685,6 +2685,7 @@
   },
 
   "Subcontract": {
+    "EnterResults": "Saisir les résultats du partenaire",
     "Count": "{0} à envoyer · {1} en attente de retour · {2} en retard",
     "SignaturePartner": "Reçu par le laboratoire partenaire (date, signature) :",
     "SignatureCourier": "Remis au coursier (nom, signature) :",
@@ -3339,6 +3340,7 @@
   },
 
   "Sample": {
+    "VolumeValue": "{0} mL",
     "StorageListEmpty": "Aucun lieu de stockage n'est défini pour ce site : créez-les dans Paramètres › Lieux de stockage.",
     "StorageOutOfList": "{0} (hors liste)",
     "StorageChoose": "— Choisir un lieu —",
@@ -6751,6 +6753,13 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "SubcontractTick": "Cocher pour envoyer ou réimprimer",
+    "SampleFlags": "Signalements",
+    "ScanNotFound": "Aucun tube ne correspond à « {0} ».",
+    "SubcontractScanHint": "Le lecteur saisit le code-barres puis appuie sur Entrée : les analyses du tube sont mises en évidence.",
+    "StorageScanHint": "Le lecteur saisit le code-barres puis appuie sur Entrée : le tube est cherché dans la sérothèque et mis en évidence.",
+    "SubcontractNone": "Aucune analyse sous-traitée à afficher.",
+    "SerumBankNone": "Aucun tube à afficher.",
     "EquipmentNone": "Aucun équipement à afficher.",
     "EquipmentNoneDue": "Aucune échéance dépassée et aucun équipement hors service.",
     "ContractNone": "Aucun contrat à afficher.",

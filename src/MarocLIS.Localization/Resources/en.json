@@ -2685,6 +2685,7 @@
   },
 
   "Subcontract": {
+    "EnterResults": "Enter the partner's results",
     "Count": "{0} to send · {1} awaiting return · {2} late",
     "SignaturePartner": "Received by partner lab (date, signature):",
     "SignatureCourier": "Handed to courier (name, signature):",
@@ -3339,6 +3340,7 @@
   },
 
   "Sample": {
+    "VolumeValue": "{0} mL",
     "StorageListEmpty": "No storage location is defined for this site: create them in Settings › Storage locations.",
     "StorageOutOfList": "{0} (not in the list)",
     "StorageChoose": "— Choose a location —",
@@ -6750,6 +6752,13 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "SubcontractTick": "Tick to send or reprint",
+    "SampleFlags": "Flags",
+    "ScanNotFound": "No tube matches “{0}”.",
+    "SubcontractScanHint": "The scanner types the barcode then presses Enter: the tube's analyses are highlighted.",
+    "StorageScanHint": "The scanner types the barcode then presses Enter: the tube is looked up in the serum bank and highlighted.",
+    "SubcontractNone": "No subcontracted analysis to show.",
+    "SerumBankNone": "No tube to show.",
     "EquipmentNone": "No equipment to show.",
     "EquipmentNoneDue": "Nothing overdue and no equipment out of service.",
     "ContractNone": "No contract to show.",
