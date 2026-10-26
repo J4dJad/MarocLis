@@ -20,7 +20,7 @@ public sealed class OrderFileScreenTests
             status == LabOrderItemStatus.Cancelled ? Registered : null, null, false, values, entered);
 
     private static OrderSampleDetail Tube(SampleStatus status, DateTimeOffset? collected, DateTimeOffset? received) =>
-        new(Guid.NewGuid(), Guid.NewGuid().ToString("N")[..10], new MultilingualText("Sérum"), "Tube sec", "#C9A227",
+        new(Guid.NewGuid(), Guid.NewGuid().ToString("N")[..10], new MultilingualText("Sérum"), new MultilingualText("Tube sec"), "#C9A227",
             status, 1, collected, received, null, 1);
 
     private static OrderDetail File(LabOrderStatus status, IReadOnlyList<OrderItemDetail> items,

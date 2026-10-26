@@ -1758,7 +1758,7 @@ public sealed class OrderDetailView : LocalizedView
 
         foreach (var sample in OrderFileRules.LiveSamples(detail))
         {
-            var text = string.Join(" · ", new[] { sample.ContainerName, sample.SpecimenTypeName.For(language), sample.Barcode }
+            var text = string.Join(" · ", new[] { sample.ContainerName?.For(language), sample.SpecimenTypeName.For(language), sample.Barcode }
                                               .Where(s => !string.IsNullOrEmpty(s)));
             var chip = new TubeChip(text, sample.ContainerColourHex ?? string.Empty)
             {
@@ -1790,7 +1790,7 @@ public sealed class OrderDetailView : LocalizedView
                 sample.SequenceInOrder,
                 sample.Barcode,
                 sample.SpecimenTypeName.For(language),
-                sample.ContainerName ?? string.Empty,
+                sample.ContainerName?.For(language) ?? string.Empty,
                 T($"SampleStatus.{sample.Status}"),
                 sample.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? string.Empty,
                 sample.ReceivedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? string.Empty,
@@ -2014,7 +2014,7 @@ public sealed class OrderDetailView : LocalizedView
         {
             TubeSwatch.Dot(e.Graphics, EntryPaint.Mirror(new Rectangle(inner.X, bounds.Y, 10, bounds.Height), bounds, rtl),
                            sample.ContainerColourHex);
-            TextRenderer.DrawText(e.Graphics, sample.ContainerName ?? string.Empty, UiTheme.Small,
+            TextRenderer.DrawText(e.Graphics, sample.ContainerName?.For(Localizer.CurrentLanguage) ?? string.Empty, UiTheme.Small,
                                   EntryPaint.Mirror(new Rectangle(inner.X + 16, bounds.Y, inner.Width - 16, bounds.Height), bounds, rtl),
                                   UiTheme.TextPrimary,
                                   TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix

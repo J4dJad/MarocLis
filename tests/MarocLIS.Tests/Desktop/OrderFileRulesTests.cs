@@ -22,7 +22,7 @@ public sealed class OrderFileRulesTests
             false, 1, entered);
 
     internal static OrderSampleDetail Sample(SampleStatus status) =>
-        new(Guid.NewGuid(), "T-0001", new MultilingualText("Sang"), "EDTA", "#8E44AD", status, 1, null, null, null, 1);
+        new(Guid.NewGuid(), "T-0001", new MultilingualText("Sang"), new MultilingualText("Tube EDTA", "أنبوب EDTA"), "#8E44AD", status, 1, null, null, null, 1);
 
     internal static OrderDetail Detail(LabOrderStatus status = LabOrderStatus.Registered, Guid? invoice = null,
                                        Guid? prescriber = null, IReadOnlyList<OrderItemDetail>? items = null,

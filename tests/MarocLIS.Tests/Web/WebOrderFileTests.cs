@@ -142,5 +142,9 @@ public sealed class WebOrderFileTests : WebScreenContext
         var page = Open();
 
         page.Find("[data-tab=Analyses]").TextContent.Should().MatchRegex("[؀-ۿ]");
+
+        // The tube is named in Arabic too, not « Tube EDTA » as typed in French.
+        page.Find("[data-tab=Tubes]").Click();
+        page.Find("[data-grid=samples] tbody tr").TextContent.Should().Contain("أنبوب EDTA").And.NotContain("Tube EDTA");
     }
 }

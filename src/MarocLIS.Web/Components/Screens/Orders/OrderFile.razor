@@ -218,7 +218,7 @@
                                                 <td class="num">@sample.SequenceInOrder</td>
                                                 <td class="mono">@sample.Barcode</td>
                                                 <td>@sample.SpecimenTypeName.For(Texts.Language)</td>
-                                                <td><span class="tube-swatch" style="background:@(sample.ContainerColourHex ?? "transparent")"></span> @sample.ContainerName</td>
+                                                <td><span class="tube-swatch" style="background:@(sample.ContainerColourHex ?? "transparent")"></span> @sample.ContainerName?.For(Texts.Language)</td>
                                                 <td><Pill Text="@Texts[$"SampleStatus.{sample.Status}"]" Tone="@OrderFileTones.ForSample(sample.Status).ToString()" /></td>
                                                 <td class="small">@sample.CollectedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
                                                 <td class="small">@sample.ReceivedAt?.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.InvariantCulture)</td>
@@ -769,7 +769,7 @@
                     : item.IsSubcontracted ? Texts["Catalog.Subcontracted"] : string.Empty) ?? string.Empty;
 
     private string TubeText(OrderSampleDetail sample) =>
-        string.Join(" · ", new[] { sample.ContainerName, sample.SpecimenTypeName.For(Texts.Language), sample.Barcode }
+        string.Join(" · ", new[] { sample.ContainerName?.For(Texts.Language), sample.SpecimenTypeName.For(Texts.Language), sample.Barcode }
                                .Where(s => !string.IsNullOrEmpty(s)));
 
     private string EventText(OrderFileEvent entry) =>

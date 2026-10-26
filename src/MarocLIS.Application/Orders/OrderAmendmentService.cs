@@ -135,7 +135,7 @@ public sealed record OrderSampleDetail(
     Guid SampleId,
     string Barcode,
     MultilingualText SpecimenTypeName,
-    string? ContainerName,
+    MultilingualText? ContainerName,
     string? ContainerColourHex,
     SampleStatus Status,
     int SequenceInOrder,

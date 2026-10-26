@@ -285,7 +285,7 @@ public sealed class OrderQueries(LisDbContext db, IResultQueries results) : IOrd
                 s.Id,
                 s.Barcode,
                 s.SpecimenTypeName ?? new MultilingualText(string.Empty),
-                s.Container?.Name.Fr,
+                s.Container?.Name,
                 s.Container?.CapColourHex,
                 s.Status,
                 s.SequenceInOrder,
