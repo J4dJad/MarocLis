@@ -75,7 +75,7 @@ public sealed class AccountingSettingsView : LocalizedView
                                                           SortMode = DataGridViewColumnSortMode.NotSortable });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = ColLabel, FillWeight = 50, ReadOnly = true,
                                                           SortMode = DataGridViewColumnSortMode.NotSortable });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = ColValue, FillWeight = 24, MaxInputLength = 20,
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = ColValue, FillWeight = 24, MaxInputLength = AccountingSettingsScreenRules.ValueMaxLength,
                                                           SortMode = DataGridViewColumnSortMode.NotSortable });
         _grid.Columns[2].DefaultCellStyle.Font = UiTheme.Monospace;
 
@@ -128,11 +128,10 @@ public sealed class AccountingSettingsView : LocalizedView
 
             foreach (var row in _rows)
             {
-                var argument = row.Argument is null ? null : row.ArgumentKey ? T(row.Argument) : row.Argument;
-                var label = argument is null ? T(row.LabelKey) : T(row.LabelKey, argument);
+                var label = AccountingSettingsScreenRules.Label(row, T);
                 var value = typed is not null && typed.TryGetValue(row.Key, out var v) ? v : row.Value;
 
-                var index = _grid.Rows.Add(T($"AccountingSection.{row.Section}"), label, value ?? string.Empty);
+                var index = _grid.Rows.Add(T(AccountingSettingsScreenRules.SectionKey(row)), label, value ?? string.Empty);
                 var gridRow = _grid.Rows[index];
                 gridRow.Tag = row;
 
@@ -142,9 +141,9 @@ public sealed class AccountingSettingsView : LocalizedView
                     {
                         DisplayMember = nameof(ModeChoice.Display),
                         ValueMember = nameof(ModeChoice.Value),
-                        DataSource = Enum.GetValues<PatientThirdPartyMode>()
-                                         .Select(m => new ModeChoice(m.ToString(), T($"PatientThirdPartyMode.{m}")))
-                                         .ToList(),
+                        DataSource = AccountingSettingsScreenRules.ModeChoices
+                                                                  .Select(m => new ModeChoice(m.Value, T(m.Key)))
+                                                                  .ToList(),
                         FlatStyle = FlatStyle.Flat
                     };
                     gridRow.Cells[ColValue] = cell;
@@ -168,7 +167,20 @@ public sealed class AccountingSettingsView : LocalizedView
         try
         {
             _grid.EndEdit();
-            var saved = await _accounting.SaveSettingsAsync(Values());
+            var values = Values();
+
+            // Each line refused is checked before anything is sent: the first one is said, and the
+            // cursor put on its value (AccountingSettingsScreenRules.Check).
+            if (AccountingSettingsScreenRules.Check(_rows, values, T) is [var refusal, ..])
+            {
+                _dialogs.Warn(T(refusal.Key, refusal.Typed), _save.Text);
+                foreach (DataGridViewRow gridRow in _grid.Rows)
+                    if (gridRow.Tag is AccountingSettingRow { Key: var key } && key == refusal.Field)
+                        _grid.CurrentCell = gridRow.Cells[ColValue];
+                return;
+            }
+
+            var saved = await _accounting.SaveSettingsAsync(values);
             if (saved.IsFailure) { _dialogs.ShowFailure(saved, _save.Text); return; }
 
             _dialogs.Info(T("Message.Saved"), _save.Text);

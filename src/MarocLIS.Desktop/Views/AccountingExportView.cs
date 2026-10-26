@@ -17,12 +17,6 @@ namespace MarocLIS.Desktop.Views;
 /// </summary>
 public sealed class AccountingExportView : LocalizedView
 {
-    private static readonly AccountingJournals[] JournalChoices =
-    [
-        AccountingJournals.Sales, AccountingJournals.Receipts, AccountingJournals.Adjustments,
-        AccountingJournals.Payroll, AccountingJournals.Depreciation, AccountingJournals.Purchases
-    ];
-
     private readonly AccountingExportService _accounting;
     private readonly IListPdfRenderer _lists;
     private readonly IDocumentOutput _output;
@@ -81,10 +75,10 @@ public sealed class AccountingExportView : LocalizedView
         var header = FinanceUi.PageHeader(_heading, null, _check, _vatCsv, _vatPdf, _export);
 
         // The last calendar month by default: the usual rhythm of the accountant's entries.
-        var firstOfMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var period = AccountingExportScreenRules.NewForm(DateOnly.FromDateTime(DateTime.Today), []);
         _from.Format = _to.Format = DateTimePickerFormat.Short;
-        _from.Value = firstOfMonth.AddMonths(-1);
-        _to.Value = firstOfMonth.AddDays(-1);
+        _from.Value = period.From.ToDateTime(TimeOnly.MinValue);
+        _to.Value = period.To.ToDateTime(TimeOnly.MinValue);
         _from.Width = _to.Width = 150;
         _layout.FlatStyle = FlatStyle.Flat;
         _layout.Width = 330;
@@ -99,7 +93,7 @@ public sealed class AccountingExportView : LocalizedView
             BackColor = UiTheme.SurfaceRaised
         };
 
-        foreach (var journal in JournalChoices)
+        foreach (var journal in AccountingExportScreenRules.JournalChoices)
         {
             var box = new CheckBox
             {
@@ -199,12 +193,12 @@ public sealed class AccountingExportView : LocalizedView
         _summaryTitle.Text = T("Accounting.Journals");
         _problemsTitle.Text = T("Finance.ExportProblems");
 
-        foreach (var (journal, box) in _journals) box.Text = T($"AccountingJournals.{journal}");
+        foreach (var (journal, box) in _journals) box.Text = T(AccountingExportScreenRules.JournalKey(journal));
 
         var selected = _layout.SelectedIndex;
         _layout.Items.Clear();
         foreach (var layout in Enum.GetValues<AccountingExportLayout>())
-            _layout.Items.Add(T($"AccountingExportLayout.{layout}"));
+            _layout.Items.Add(T(AccountingExportScreenRules.LayoutKey(layout)));
         _layout.SelectedIndex = selected >= 0 ? selected : 0;
 
         string[] summary = [T("Accounting.Journal"), T("Accounting.JournalKind"), T("Accounting.Entries"),
@@ -229,7 +223,7 @@ public sealed class AccountingExportView : LocalizedView
 
             _siteOptions = sites.Value;
             _sites.Items.Clear();
-            foreach (var site in _siteOptions) _sites.Items.Add($"{site.Code} — {site.Name}", true);
+            foreach (var site in _siteOptions) _sites.Items.Add(AccountingExportScreenRules.SiteDisplay(site), true);
         }
         catch (OperationCanceledException) { }
         // Left before the load finished: the screen is gone, there is nothing to report on it.
@@ -240,26 +234,49 @@ public sealed class AccountingExportView : LocalizedView
         }
     }
 
-    private AccountingExportRequest Request()
+    private AccountingExportForm Form()
     {
-        var journals = _journals.Where(j => j.Value.Checked)
-                                .Aggregate(AccountingJournals.None, (all, j) => all | j.Key);
         var layouts = Enum.GetValues<AccountingExportLayout>();
-        var layout = _layout.SelectedIndex >= 0 && _layout.SelectedIndex < layouts.Length
-            ? layouts[_layout.SelectedIndex]
-            : AccountingExportLayout.Sage;
+        var form = new AccountingExportForm
+        {
+            From = DateOnly.FromDateTime(_from.Value.Date),
+            To = DateOnly.FromDateTime(_to.Value.Date),
+            Layout = _layout.SelectedIndex >= 0 && _layout.SelectedIndex < layouts.Length
+                ? layouts[_layout.SelectedIndex]
+                : AccountingExportLayout.Sage,
+            Journals = _journals.Where(j => j.Value.Checked)
+                                .Aggregate(AccountingJournals.None, (all, j) => all | j.Key)
+        };
+        foreach (var index in _sites.CheckedIndices.Cast<int>()) form.SiteIds.Add(_siteOptions[index].Id);
+        return form;
+    }
 
-        return new AccountingExportRequest(
-            DateOnly.FromDateTime(_from.Value.Date), DateOnly.FromDateTime(_to.Value.Date),
-            [.. _sites.CheckedIndices.Cast<int>().Select(i => _siteOptions[i].Id)],
-            journals, layout);
+    /// <summary>
+    /// The choice as the service takes it, or null once its refusal is said and the cursor put back
+    /// in the box at fault (AccountingExportScreenRules.Check): a period in reverse, no site, no journal.
+    /// </summary>
+    private AccountingExportRequest? Request(string title)
+    {
+        var (refusal, request) = AccountingExportScreenRules.Check(Form(), _siteOptions);
+        if (refusal is null) return request;
+
+        _dialogs.Warn(T(refusal.Key), title);
+        Control box = refusal.Field switch
+        {
+            AccountingExportScreenRules.PeriodField => _to,
+            AccountingExportScreenRules.SitesField => _sites,
+            _ => _journals.Values.First()
+        };
+        box.Focus();
+        return null;
     }
 
     private async Task CheckAsync()
     {
         try
         {
-            var preview = await _accounting.PrepareAsync(Request());
+            if (Request(_check.Text) is not { } request) return;
+            var preview = await _accounting.PrepareAsync(request);
             if (preview.IsFailure) { _dialogs.ShowFailure(preview, _check.Text); return; }
 
             _preview = preview.Value;
@@ -279,49 +296,39 @@ public sealed class AccountingExportView : LocalizedView
 
         if (_preview is not { } preview)
         {
-            _status.Text = T("Accounting.CheckFirst");
+            _status.Text = AccountingExportScreenRules.Status(null, AccountingJournals.None, T).Text;
             _status.ForeColor = UiTheme.TextSecondary;
             _export.Enabled = false;
             return;
         }
 
         var fr = CultureInfo.CurrentCulture;
-        foreach (var group in preview.Entries.GroupBy(e => (e.Journal, e.Kind)).OrderBy(g => g.Key.Journal, StringComparer.Ordinal))
-            _summary.Rows.Add(group.Key.Journal, T($"AccountingJournals.{group.Key.Kind}"),
-                              group.Count().ToString(fr), group.Sum(e => e.Debit).ToString("N2", fr),
-                              group.Sum(e => e.Credit).ToString("N2", fr));
+        foreach (var line in AccountingExportScreenRules.Summary(preview))
+            _summary.Rows.Add(line.Journal, T(AccountingExportScreenRules.JournalKey(line.Kind)),
+                              line.Entries.ToString(fr), line.Debit.ToString("N2", fr), line.Credit.ToString("N2", fr));
 
         foreach (var problem in preview.Problems)
-            _problems.Rows.Add(T($"AccountingProblemKind.{problem.Kind}"), problem.Date.ToString("d", fr), problem.Journal,
+            _problems.Rows.Add(T(AccountingExportScreenRules.ProblemKey(problem.Kind)), problem.Date.ToString("d", fr), problem.Journal,
                                problem.Piece, problem.Label, problem.Detail);
 
-        if (preview.Problems.Count > 0)
+        var status = AccountingExportScreenRules.Status(preview, Form().Journals, T);
+        _status.Text = status.Text;
+        _status.ForeColor = status.Ink switch
         {
-            _status.Text = T("Accounting_ExportRefused", preview.Problems.Count);
-            _status.ForeColor = UiTheme.Critical;
-        }
-        else if (preview.Entries.Count == 0)
-        {
-            _status.Text = T("Purchasing_NothingToExport");
-            _status.ForeColor = UiTheme.TextSecondary;
-        }
-        else
-        {
-            _status.Text = T("Accounting.Balanced", preview.Entries.Count);
-            _status.ForeColor = UiTheme.Normal;
-        }
+            StockInk.CriticalBold or StockInk.Critical => UiTheme.Critical,
+            StockInk.Muted => UiTheme.TextSecondary,
+            _ => UiTheme.Normal
+        };
 
-        if (!preview.DepreciationAvailable && _journals[AccountingJournals.Depreciation].Checked)
-            _status.Text += "  ·  " + T("Accounting.NoDepreciationSource");
-
-        _export.Enabled = preview.CanExport;
+        _export.Enabled = AccountingExportScreenRules.Actions(_ => true, preview).Export;
     }
 
     private async Task ExportAsync()
     {
         try
         {
-            var file = await _accounting.ExportAsync(Request());
+            if (Request(_export.Text) is not { } request) return;
+            var file = await _accounting.ExportAsync(request);
             if (file.IsFailure)
             {
                 _dialogs.ShowFailure(file, _export.Text);
@@ -344,18 +351,17 @@ public sealed class AccountingExportView : LocalizedView
         var title = pdf ? _vatPdf.Text : _vatCsv.Text;
         try
         {
-            var request = Request();
+            if (Request(title) is not { } request) return;
             var statement = await _accounting.GetVatStatementAsync(request.From, request.To, request.SiteIds);
             if (statement.IsFailure) { _dialogs.ShowFailure(statement, title); return; }
 
             byte[] file;
             if (pdf)
             {
-                var fr = CultureInfo.GetCultureInfo("fr-FR");
                 file = _lists.Render(new ListDocument(
-                    $"État de TVA du {request.From.ToString("dd/MM/yyyy", fr)} au {request.To.ToString("dd/MM/yyyy", fr)}",
+                    AccountingExportScreenRules.VatTitle(request.From, request.To),
                     VatStatement.Warning,
-                    ["Libellé", "Base HT", "TVA"],
+                    AccountingExportScreenRules.VatColumns,
                     statement.Value.Rows()));
             }
             else

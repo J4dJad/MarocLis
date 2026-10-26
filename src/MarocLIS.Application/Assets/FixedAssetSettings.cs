@@ -84,7 +84,18 @@ public sealed record FixedAssetSettings
     /// </summary>
     public bool IsValid() =>
         Enum.GetValues<FixedAssetCategory>().Select(For).All(a =>
-            AccountPattern.IsMatch(a.Asset) && a.Asset.StartsWith('2') && !a.Asset.StartsWith("28", StringComparison.Ordinal)
-            && AccountPattern.IsMatch(a.Depreciation) && a.Depreciation.StartsWith("28", StringComparison.Ordinal)
-            && AccountPattern.IsMatch(a.Charge) && a.Charge.StartsWith('6'));
+            IsAssetAccount(a.Asset) && IsDepreciationAccount(a.Depreciation) && IsChargeAccount(a.Charge));
+
+    /// <summary>An asset account: class 2, outside the 28 depreciation accounts.</summary>
+    public static bool IsAssetAccount(string? account) =>
+        account is not null && AccountPattern.IsMatch(account) && account.StartsWith('2')
+        && !account.StartsWith("28", StringComparison.Ordinal);
+
+    /// <summary>A depreciation account: 28….</summary>
+    public static bool IsDepreciationAccount(string? account) =>
+        account is not null && AccountPattern.IsMatch(account) && account.StartsWith("28", StringComparison.Ordinal);
+
+    /// <summary>A charge account: class 6.</summary>
+    public static bool IsChargeAccount(string? account) =>
+        account is not null && AccountPattern.IsMatch(account) && account.StartsWith('6');
 }

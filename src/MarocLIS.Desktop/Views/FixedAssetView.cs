@@ -1,6 +1,7 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Assets;
+using MarocLIS.Application.Inventory;
 using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Assets;
 using MarocLIS.Domain.Common;
@@ -31,7 +32,10 @@ public sealed class FixedAssetView : LocalizedView
     private readonly Label _title = new();
     private readonly Label _heading = new();
     private readonly Label _yearLabel = new();
-    private readonly NumericUpDown _year = new() { Minimum = 1990, Maximum = 2100 };
+    private readonly NumericUpDown _year = new()
+    {
+        Minimum = FixedAssetScreenRules.YearMinimum, Maximum = FixedAssetScreenRules.YearMaximum
+    };
     private readonly Label _instrumentHeading = new();
     private readonly Label _instrumentSummary = new();
     private readonly Label _notice = new();
@@ -78,12 +82,7 @@ public sealed class FixedAssetView : LocalizedView
 
     private FixedAssetRegisterRow? SelectedAsset => _grid.CurrentRow?.Tag as FixedAssetRegisterRow;
 
-    private Guid? SelectedInstrumentId => _grid.CurrentRow?.Tag switch
-    {
-        FixedAssetRegisterRow row => row.Asset.InstrumentId,
-        SupplierProvidedRow provided => provided.InstrumentId,
-        _ => null
-    };
+    private Guid? SelectedInstrumentId => FixedAssetScreenRules.InstrumentOf(_grid.CurrentRow?.Tag);
 
     // ---- Layout ------------------------------------------------------------------------------------
 
@@ -242,7 +241,7 @@ public sealed class FixedAssetView : LocalizedView
         _accounts.Text = T("Assets.Accounts");
         _notice.Text = T("Assets.Notice");
 
-        var headers = Headers();
+        var headers = FixedAssetScreenRules.Headers(T);
         for (var i = 0; i < RegisterColumns.Length; i++) _grid.Column(RegisterColumns[i]).HeaderText = headers[i];
 
         _interventions.Column("date").HeaderText = T("Field.Date");
@@ -257,16 +256,6 @@ public sealed class FixedAssetView : LocalizedView
         else RenderHeading();
         RenderInstrument();
     }
-
-    private IReadOnlyList<string> Headers() =>
-    [
-        T("Field.Code"), T("Assets.Label"), T("Assets.Category"), T("Assets.Account"), T("Assets.AcquisitionDate"),
-        T("Assets.InServiceDate"), T("Assets.GrossValue"), T("Assets.Method"), T("Assets.UsefulLife"),
-        T("Assets.Rate"), T("Assets.Opening"), T("Assets.Charge"), T("Assets.GrossOut"), T("Assets.DepreciationOut"),
-        T("Assets.ClosingGross"), T("Assets.Closing"), T("Assets.NetBookValue"),
-        T("Assets.DisposalDate"), T("Assets.DisposalPrice"), T("Assets.DisposalResult"), T("Inventory.Supplier"),
-        T("Assets.InvoiceReference"), T("Assets.Instrument")
-    ];
 
     // ---- Loading -------------------------------------------------------------------------------------
 
@@ -294,9 +283,11 @@ public sealed class FixedAssetView : LocalizedView
         }
     }
 
-    private string Category(FixedAssetCategory category) => T($"FixedAssetCategory.{category}");
+    private string Category(FixedAssetCategory category) => T(FixedAssetScreenRules.CategoryKey(category));
 
-    private string Method(DepreciationMethod method) => T($"DepreciationMethod.{method}");
+    private string Method(DepreciationMethod method) => T(FixedAssetScreenRules.MethodKey(method));
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Localizer.CurrentLanguage);
 
     private string ProvidedName(SupplierProvidedRow row) => row.InstrumentName.For(Localizer.CurrentLanguage);
 
@@ -345,9 +336,7 @@ public sealed class FixedAssetView : LocalizedView
             return;
         }
 
-        _heading.Text = T("Assets.Heading", r.Year, r.Assets.Count, FixedAssetRegisterReport.Amount(r.GrossValue),
-                          FixedAssetRegisterReport.Amount(r.Charge), FixedAssetRegisterReport.Amount(r.NetBookValue));
-        if (r.SupplierProvided.Count > 0) _heading.Text += $" · {T("Assets.SupplierProvidedCount", r.SupplierProvided.Count)}";
+        _heading.Text = FixedAssetScreenRules.Heading(r, T, FixedAssetRegisterReport.Amount);
     }
 
     private void OnRegisterFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
@@ -360,7 +349,7 @@ public sealed class FixedAssetView : LocalizedView
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
                 e.CellStyle.Font = UiTheme.Small;
                 break;
-            case FixedAssetRegisterRow { Asset.DisposalDate: not null }:
+            case FixedAssetRegisterRow row when FixedAssetScreenRules.RowInk(row) == StockInk.Muted:
                 e.CellStyle!.ForeColor = UiTheme.TextMuted;
                 break;
         }
@@ -369,7 +358,7 @@ public sealed class FixedAssetView : LocalizedView
     private void OnInterventionFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || _interventions.Rows[e.RowIndex].Tag is not AssetMaintenanceRow row) return;
-        if (row.Kind == Domain.Equipment.MaintenanceKind.Corrective)
+        if (FixedAssetScreenRules.IsBreakdown(row))
         {
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             if (_interventions.Columns[e.ColumnIndex].Name == "kind") e.CellStyle.ForeColor = UiTheme.Abnormal;
@@ -406,7 +395,7 @@ public sealed class FixedAssetView : LocalizedView
 
         if (_summary is not { } s)
         {
-            _instrumentHeading.Text = T("Assets.InstrumentSection");
+            _instrumentHeading.Text = FixedAssetScreenRules.InstrumentHeading(null, Localizer.CurrentLanguage, T);
             _instrumentSummary.Text = SelectedAsset is null && _grid.CurrentRow?.Tag is null
                 ? string.Empty
                 : T("Assets.NoInstrument");
@@ -432,31 +421,25 @@ public sealed class FixedAssetView : LocalizedView
 
         _interventions.ResumeLayout(performLayout: true);
 
-        _instrumentHeading.Text = $"{T("Assets.InstrumentSection")} — {s.Code} · {s.Name.For(language)} · {T($"EquipmentStatus.{s.Status}")}";
-
-        string Date(DateOnly? date) => date?.ToString("dd/MM/yyyy", culture) ?? "—";
-        _instrumentSummary.Text = T("Assets.InstrumentSummary",
-                                    string.Join(" ", new[] { s.Manufacturer, s.Model }.Where(v => !string.IsNullOrWhiteSpace(v))),
-                                    s.SerialNumber ?? "—", s.Interventions.Count, s.Breakdowns,
-                                    s.DowntimeHours.ToString("0.#", culture), s.MaintenanceCost.ToString("N2", culture),
-                                    Date(s.NextPreventiveMaintenanceDue), Date(s.NextCalibrationDue),
-                                    Date(s.MaintenanceContractValidUntil));
+        _instrumentHeading.Text = FixedAssetScreenRules.InstrumentHeading(s, language, T);
+        _instrumentSummary.Text = FixedAssetScreenRules.InstrumentSummaryText(s, T, Mad, culture);
     }
 
     private void RefreshButtons()
     {
         var idle = !IsBusy;
         var asset = SelectedAsset;
+        var actions = FixedAssetScreenRules.Actions(p => PermissionGate.Allows(p), asset, _register is not null);
 
-        _new.Enabled = idle;
-        _fromInstrument.Enabled = idle;
-        _edit.Enabled = idle && asset is not null;
-        _schedule.Enabled = idle && asset is not null;
-        _disposal.Enabled = idle && asset is not null;
-        _disposal.Text = asset?.Asset.DisposalDate is not null ? T("Assets.CancelDisposal") : T("Assets.Disposal");
-        _pdf.Enabled = idle && _register is not null;
-        _csv.Enabled = idle && _register is not null;
-        _accounts.Enabled = idle;
+        _new.Enabled = idle && actions.New;
+        _fromInstrument.Enabled = idle && actions.FromInstrument;
+        _edit.Enabled = idle && actions.Edit;
+        _schedule.Enabled = idle && actions.Schedule;
+        _disposal.Enabled = idle && (actions.Disposal || actions.CancelDisposal);
+        _disposal.Text = T(FixedAssetScreenRules.DisposalKey(asset));
+        _pdf.Enabled = idle && actions.Pdf;
+        _csv.Enabled = idle && actions.Csv;
+        _accounts.Enabled = idle && actions.Accounts;
     }
 
     private async Task RunActionAsync(Func<Task> action)
@@ -508,7 +491,7 @@ public sealed class FixedAssetView : LocalizedView
         var options = await _assets.GetOptionsAsync();
         if (options.IsFailure) { _dialogs.ShowFailure(options, _fromInstrument.Text); return; }
 
-        var candidates = FixedAssetService.Candidates(options.Value);
+        var candidates = FixedAssetScreenRules.Candidates(options.Value);
         if (candidates.Count == 0)
         {
             _dialogs.Info(T("Assets.NoCandidates"), _fromInstrument.Text);
@@ -543,7 +526,7 @@ public sealed class FixedAssetView : LocalizedView
 
         if (row.Asset.DisposalDate is not null)
         {
-            if (!_dialogs.Confirm(T("Assets.CancelDisposalQuestion", row.Asset.Code), _disposal.Text)) return;
+            if (!_dialogs.Confirm(FixedAssetScreenRules.CancelDisposalQuestion(row, T), _disposal.Text)) return;
 
             var cancelled = await _assets.CancelDisposalAsync(row.Asset.Id);
             if (cancelled.IsFailure) { _dialogs.ShowFailure(cancelled, _disposal.Text); return; }
@@ -555,27 +538,24 @@ public sealed class FixedAssetView : LocalizedView
         using var dialog = new AssetDisposalDialog(Localizer, _dialogs, row);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        var disposed = await _assets.RecordDisposalAsync(row.Asset.Id, dialog.Date, dialog.Price, dialog.Reason);
+        var entry = dialog.Entry!;
+        var disposed = await _assets.RecordDisposalAsync(row.Asset.Id, entry.Date, entry.Price, entry.Reason);
         if (disposed.IsFailure) { _dialogs.ShowFailure(disposed, dialog.Text); return; }
 
         await LoadAsync(row.Asset.Id);
     }
-
-    private IReadOnlyList<IReadOnlyList<string>> ReportLines(FixedAssetRegister register) =>
-        FixedAssetRegisterReport.Lines(register, Category, Method, ProvidedName, T("Assets.Subtotal"),
-                                       T("Assets.Total"), T("Assets.SupplierProvided"));
 
     private async Task PrintAsync()
     {
         if (_register is not { } register) return;
 
         // The PDF keeps the accounting columns; supplier, invoice and instrument are in the CSV.
-        const int columns = 20;
+        var (columns, rows) = FixedAssetScreenRules.PdfTable(register, Localizer.CurrentLanguage, T);
         var document = new ListDocument(
-            T("Assets.ReportTitle", register.Year),
-            $"{T("Assets.ReportCaption")} — {DateTime.Now:dd/MM/yyyy HH:mm}",
-            [.. Headers().Take(columns)],
-            [.. ReportLines(register).Select(l => (IReadOnlyList<string>)[.. l.Take(columns)])],
+            FixedAssetScreenRules.ReportTitle(register, T),
+            FixedAssetScreenRules.ReportCaption(DateTimeOffset.Now, T),
+            columns,
+            rows,
             Localizer.CurrentLanguage == AppLanguage.Arabic,
             // Twenty columns do not fit A4 at equal widths: dates and amounts were cut in two (S9).
             new ListLayout(FixedAssetRegisterReport.PdfColumnWidths, FixedAssetRegisterReport.PdfFontSize, A3: true));
@@ -669,8 +649,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         Controls.Add(_plan);
 
         _supplier = Lookup("Inventory.Supplier", 20, 176, 300,
-                           options.Suppliers.Select(s => (s.Id, s.IsActive ? $"{s.Code} — {s.Name}"
-                                                                           : $"{s.Code} — {s.Name} {localizer["Contracts.InactiveSuffix"]}")),
+                           options.Suppliers.Select(s => (s.Id, FixedAssetScreenRules.SupplierDisplay(s, localizer.Format))),
                            values?.SupplierId);
         Label("Assets.SupplierInvoice", 340, 176);
         _invoice = new ComboBox
@@ -682,16 +661,9 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         _invoiceReference = TextField("Assets.InvoiceReference", 660, 176, 220, values?.InvoiceReference, latin: true);
         _invoiceReference.MaxLength = FixedAsset.InvoiceReferenceMaxLength;
 
-        string InstrumentDisplay(AssetInstrumentOption i)
-        {
-            var text = $"{i.Code} — {i.Name.For(language)}";
-            if (i.ProvidedBy is not null) text += $" ({localizer["Assets.SupplierProvided"]})";
-            else if (i.AssetCode is not null) text += $" ({localizer.Format("Assets.AlreadyCapitalised", i.AssetCode)})";
-            return text;
-        }
-
         _instrument = Lookup("Assets.Instrument", 20, 230, 420,
-                             options.Instruments.Select(i => (i.Id, InstrumentDisplay(i))), values?.InstrumentId);
+                             options.Instruments.Select(i => (i.Id, FixedAssetScreenRules.InstrumentDisplay(i, language, localizer.Format))),
+                             values?.InstrumentId);
         _instrumentState = new Label
         {
             Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary, AutoSize = false,
@@ -742,39 +714,39 @@ internal sealed class FixedAssetDialog : MasterDataEditor
         return picker;
     }
 
-    private void RenderPlan()
-    {
-        var life = (int)_life.Value;
-        var gross = FixedAsset.GrossValue(DecimalOrNull(_cost) ?? 0m, DecimalOrNull(_vat) ?? 0m, _vatRecoverable.Checked);
-        var grossText = gross.ToString("N2", CultureInfo.CurrentCulture);
+    private void RenderPlan() =>
+        _plan.Text = FixedAssetScreenRules.Plan(Typed(), Localizer.Format, a => Money.Of(a).Format(Localizer.CurrentLanguage));
 
-        _plan.Text = Selected<DepreciationMethod>(_method) == DepreciationMethod.Declining
-            ? Depreciation.DecliningCoefficient(life) is { } coefficient
-                ? Localizer.Format("Assets.PlanDeclining", grossText, coefficient.ToString("0.#", CultureInfo.CurrentCulture),
-                                   FixedAssetRegisterReport.Percent(Depreciation.DecliningRate(life) ?? 0m))
-                : Localizer["Asset_DecliningNeedsThreeYears"]
-            : Localizer.Format("Assets.PlanStraightLine", grossText,
-                               FixedAssetRegisterReport.Percent(Depreciation.StraightLineRate(life)));
-    }
+    /// <summary>The boxes as the shared rules read them (FixedAssetScreenRules).</summary>
+    private FixedAssetForm Typed() => new()
+    {
+        Id = _id,
+        Code = _code.Text,
+        Label = _label.Text,
+        Category = Selected<FixedAssetCategory>(_category),
+        AcquisitionDate = DateOnly.FromDateTime(_acquired.Value.Date),
+        InServiceDate = DateOnly.FromDateTime(_inService.Value.Date),
+        Method = Selected<DepreciationMethod>(_method),
+        UsefulLifeYears = (int)_life.Value,
+        Residual = _residual.Text,
+        Cost = _cost.Text,
+        Vat = _vat.Text,
+        VatRecoverable = _vatRecoverable.Checked,
+        SupplierId = SelectedId(_supplier),
+        SupplierInvoiceId = SelectedId(_invoice),
+        InvoiceReference = _invoiceReference.Text,
+        InstrumentId = SelectedId(_instrument),
+        Notes = _notes.Text
+    };
 
     private AssetInstrumentOption? SelectedInstrument =>
         SelectedId(_instrument) is { } id ? _options.Instruments.FirstOrDefault(i => i.Id == id) : null;
 
     private void RenderInstrumentState()
     {
-        var instrument = SelectedInstrument;
-        _instrumentState.ForeColor = UiTheme.TextSecondary;
-        _instrumentState.Text = instrument switch
-        {
-            null => string.Empty,
-            { ProvidedBy: { } contract } => Localizer.Format("Asset_SupplierProvided", contract),
-            { AssetCode: { } code } => Localizer.Format("Asset_InstrumentAlreadyCapitalised", code),
-            { PurchaseDate: { } bought } => Localizer.Format("Assets.InstrumentBought", bought.ToString("dd/MM/yyyy", CultureInfo.CurrentCulture)),
-            _ => Localizer["Assets.InstrumentNoPurchaseDate"]
-        };
-
-        if (instrument is { ProvidedBy: not null } or { AssetCode: not null })
-            _instrumentState.ForeColor = UiTheme.Critical;
+        var state = FixedAssetScreenRules.InstrumentState(SelectedInstrument, Localizer.Format);
+        _instrumentState.Text = state?.Text ?? string.Empty;
+        _instrumentState.ForeColor = state is { Critical: true } ? UiTheme.Critical : UiTheme.TextSecondary;
     }
 
     private async Task LoadInvoicesAsync(Guid? select)
@@ -795,7 +767,7 @@ internal sealed class FixedAssetDialog : MasterDataEditor
             foreach (var invoice in _invoices)
             {
                 var index = _invoice.Items.Add(new LookupChoice(invoice.Id,
-                    $"{invoice.InvoiceNumber} · {invoice.InvoiceDate:dd/MM/yyyy} · {invoice.TotalExcludingVat.ToString("N2", CultureInfo.CurrentCulture)}"));
+                    FixedAssetScreenRules.InvoiceDisplay(invoice, a => Money.Of(a).Format(Localizer.CurrentLanguage))));
                 if (invoice.Id == select) _invoice.SelectedIndex = index;
             }
         }
@@ -813,54 +785,23 @@ internal sealed class FixedAssetDialog : MasterDataEditor
     {
         if (SelectedId(_invoice) is not { } id || _invoices.FirstOrDefault(i => i.Id == id) is not { } invoice) return;
 
-        _invoiceReference.Text = invoice.InvoiceNumber;
-        if (string.IsNullOrWhiteSpace(_cost.Text))
-        {
-            _cost.Text = invoice.TotalExcludingVat.ToString("0.00", CultureInfo.InvariantCulture);
-            _vat.Text = invoice.TotalVat.ToString("0.00", CultureInfo.InvariantCulture);
-        }
-        if (_id is null) _acquired.Value = invoice.InvoiceDate.ToDateTime(TimeOnly.MinValue);
+        var form = Typed();
+        FixedAssetScreenRules.ApplyInvoice(form, invoice);
+        _invoiceReference.Text = form.InvoiceReference;
+        _cost.Text = form.Cost;
+        _vat.Text = form.Vat;
+        _acquired.Value = form.AcquisitionDate.ToDateTime(TimeOnly.MinValue);
     }
 
     protected override void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_code.Text)) { Dialogs.Warn(Localizer["Asset_CodeRequired"], Text); _code.Focus(); return; }
-        if (string.IsNullOrWhiteSpace(_label.Text)) { Dialogs.Warn(Localizer["Asset_LabelRequired"], Text); _label.Focus(); return; }
-
-        var cost = DecimalOrNull(_cost);
-        if (cost is not > 0m) { Dialogs.Warn(Localizer["Asset_CostRequired"], Text); _cost.Focus(); return; }
-
-        var vat = string.IsNullOrWhiteSpace(_vat.Text) ? 0m : DecimalOrNull(_vat);
-        var residual = string.IsNullOrWhiteSpace(_residual.Text) ? 0m : DecimalOrNull(_residual);
-        if (vat is not >= 0m || residual is not >= 0m) { Dialogs.Warn(Localizer["Asset_AmountNegative"], Text); return; }
-
-        if (SelectedInstrument is { ProvidedBy: { } contract })
-        {
-            Dialogs.Warn(Localizer.Format("Asset_SupplierProvided", contract), Text);
+        var (refusal, request) = FixedAssetScreenRules.Check(Typed(), _options);
+        if (Refused(refusal, (FixedAssetScreenRules.CodeField, _code), (FixedAssetScreenRules.LabelField, _label),
+                    (FixedAssetScreenRules.CostField, _cost), (FixedAssetScreenRules.VatField, _vat),
+                    (FixedAssetScreenRules.ResidualField, _residual), (FixedAssetScreenRules.InstrumentField, _instrument)))
             return;
-        }
 
-        Request = new SaveFixedAssetRequest
-        {
-            Id = _id,
-            Code = _code.Text.Trim(),
-            Label = _label.Text.Trim(),
-            Category = Selected<FixedAssetCategory>(_category),
-            AcquisitionDate = DateOnly.FromDateTime(_acquired.Value.Date),
-            InServiceDate = DateOnly.FromDateTime(_inService.Value.Date),
-            CostExcludingVatMad = cost.Value,
-            VatAmountMad = vat.Value,
-            VatRecoverable = _vatRecoverable.Checked,
-            SupplierId = SelectedId(_supplier),
-            InvoiceReference = Blank(_invoiceReference),
-            SupplierInvoiceId = SelectedId(_invoice),
-            InstrumentId = SelectedId(_instrument),
-            Method = Selected<DepreciationMethod>(_method),
-            UsefulLifeYears = (int)_life.Value,
-            ResidualValueMad = residual.Value,
-            Notes = Blank(_notes)
-        };
-
+        Request = request;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -940,7 +881,7 @@ internal sealed class DepreciationScheduleDialog : Form
     internal DepreciationScheduleDialog(ILocalizer localizer, FixedAssetRegisterRow row, DepreciationSchedule schedule,
                                         string method, Func<byte[], Task> openCsv)
     {
-        Text = localizer.Format("Assets.ScheduleTitle", row.Asset.Code, row.Asset.Label);
+        Text = FixedAssetScreenRules.ScheduleTitle(row, localizer.Format);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         ShowInTaskbar = false;
@@ -953,10 +894,8 @@ internal sealed class DepreciationScheduleDialog : Form
 
         var header = new Label
         {
-            Text = localizer.Format("Assets.ScheduleHeader", N(schedule.GrossValue), method, row.Asset.UsefulLifeYears,
-                                    row.Asset.AcquisitionDate.ToString("dd/MM/yyyy", culture),
-                                    row.Asset.InServiceDate.ToString("dd/MM/yyyy", culture),
-                                    row.Accounts.Charge, row.Accounts.Depreciation),
+            Text = FixedAssetScreenRules.ScheduleHeader(row, schedule, localizer.Format,
+                                                        a => Money.Of(a).Format(localizer.CurrentLanguage)),
             Dock = DockStyle.Top, Height = 44, Font = UiTheme.Small, ForeColor = UiTheme.TextSecondary,
             Padding = new Padding(8, 4, 8, 4)
         };
@@ -971,19 +910,15 @@ internal sealed class DepreciationScheduleDialog : Form
         foreach (var y in schedule.Years)
             years.Rows.Add(y.Year, y.Months, N(y.Opening), N(y.Charge), N(y.Closing), N(y.NetBookValue),
                            FixedAssetRegisterReport.Percent(y.Rate),
-                           y.StraightLine ? localizer["DepreciationMethod.StraightLine"] : localizer["DepreciationMethod.Declining"]);
+                           localizer[FixedAssetScreenRules.YearModeKey(y)]);
 
         var months = UiTheme.Grid();
         months.Dock = DockStyle.Fill;
         foreach (var key in new[] { "Assets.Month", "Field.Date", "Assets.Charge", "Assets.Closing" })
             months.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = localizer[key], ReadOnly = true });
 
-        var accumulated = 0m;
-        foreach (var m in schedule.Months)
-        {
-            accumulated += m.Amount;
-            months.Rows.Add($"{m.Month:00}/{m.Year}", m.Date.ToString("dd/MM/yyyy", culture), N(m.Amount), N(accumulated));
-        }
+        foreach (var m in FixedAssetScreenRules.ScheduleMonths(schedule))
+            months.Rows.Add(m.Month, m.Date.ToString("dd/MM/yyyy", culture), N(m.Amount), N(m.Accumulated));
 
         Label Heading(string key) => new()
         {
@@ -1023,13 +958,14 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
     private readonly DateTimePicker _date;
     private readonly TextBox _price, _reason;
 
-    internal DateOnly Date { get; private set; }
-    internal decimal Price { get; private set; }
-    internal string Reason { get; private set; } = string.Empty;
+    private readonly FixedAssetRegisterRow _row;
+
+    internal AssetDisposalEntry? Entry { get; private set; }
 
     internal AssetDisposalDialog(ILocalizer localizer, IUserDialogs dialogs, FixedAssetRegisterRow row)
         : base(localizer, dialogs, "Assets.Disposal", row.Asset.Code, 520, 250)
     {
+        _row = row;
         Label("Assets.DisposalDate", 20, 14);
         _date = new DateTimePicker
         {
@@ -1054,13 +990,13 @@ internal sealed class AssetDisposalDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var price = string.IsNullOrWhiteSpace(_price.Text) ? 0m : DecimalOrNull(_price);
-        if (price is not >= 0m) { Dialogs.Warn(Localizer["Asset_AmountNegative"], Text); return; }
-        if (string.IsNullOrWhiteSpace(_reason.Text)) { Dialogs.Warn(Localizer["Asset_DisposalReasonRequired"], Text); return; }
+        var form = new AssetDisposalForm { Date = DateOnly.FromDateTime(_date.Value.Date), Price = _price.Text, Reason = _reason.Text };
+        var (refusal, entry) = FixedAssetScreenRules.Check(form, _row, DateOnly.FromDateTime(DateTime.Today));
+        if (Refused(refusal, (FixedAssetScreenRules.DisposalDateField, _date), (FixedAssetScreenRules.DisposalPriceField, _price),
+                    (FixedAssetScreenRules.DisposalReasonField, _reason)))
+            return;
 
-        Date = DateOnly.FromDateTime(_date.Value.Date);
-        Price = price.Value;
-        Reason = _reason.Text.Trim();
+        Entry = entry;
         DialogResult = DialogResult.OK;
         Close();
     }
@@ -1111,18 +1047,18 @@ internal sealed class FixedAssetAccountsDialog : MasterDataEditor
 
     protected override void Accept()
     {
-        var settings = _current with
+        var form = _boxes.ToDictionary(b => b.Key, b => new CategoryAccountsForm
         {
-            Accounts = _boxes.ToDictionary(b => b.Key,
-                                           b => new CategoryAccounts(b.Value.Asset.Text.Trim(), b.Value.Depreciation.Text.Trim(),
-                                                                     b.Value.Charge.Text.Trim()))
-        };
-
-        if (!settings.IsValid())
-        {
-            Dialogs.Warn(Localizer["Asset_AccountInvalid"], Text);
+            Asset = b.Value.Asset.Text, Depreciation = b.Value.Depreciation.Text, Charge = b.Value.Charge.Text
+        });
+        var (refusal, settings) = FixedAssetScreenRules.Check(form, _current);
+        if (Refused(refusal, [.. _boxes.SelectMany(b => new (string, Control?)[]
+            {
+                (FixedAssetScreenRules.AccountField(b.Key, "Asset"), b.Value.Asset),
+                (FixedAssetScreenRules.AccountField(b.Key, "Depreciation"), b.Value.Depreciation),
+                (FixedAssetScreenRules.AccountField(b.Key, "Charge"), b.Value.Charge)
+            })]))
             return;
-        }
 
         Settings = settings;
         DialogResult = DialogResult.OK;
