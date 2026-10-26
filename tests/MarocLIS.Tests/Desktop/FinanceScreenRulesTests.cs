@@ -190,6 +190,13 @@ public sealed class FinanceScreenRulesTests
         furniture.UsefulLifeYears.Should().Be(10);
         furniture.Cost.Should().Be("12500.00");
         furniture.InServiceDate.Should().Be(Today);
+
+        var french = FixedAssetScreenRules.Form(new SaveFixedAssetRequest
+        {
+            Code = "MOB-1", Label = "Paillasse", AcquisitionDate = Today, InServiceDate = Today, CostExcludingVatMad = 12_500.5m
+        }, Today, new System.Globalization.CultureInfo("fr-MA"));
+        french.Cost.Should().Be("12500,50", "the browser's box shows the amount as the session writes it, and reads it back");
+        MarocLIS.Application.Input.TypedNumber.Parse(french.Cost).Should().Be(12_500.5m);
     }
 
     [Fact]

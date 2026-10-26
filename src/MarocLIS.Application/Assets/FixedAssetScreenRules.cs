@@ -148,15 +148,16 @@ public static class FixedAssetScreenRules
 
     // ---- An asset ------------------------------------------------------------------------------------
 
-    private static string Editable(decimal value) =>
-        value == 0m ? string.Empty : value.ToString("0.00", CultureInfo.InvariantCulture);
+    /// <summary>An amount for its box, written in the session's culture (no thousands separator) so it reads back as typed.</summary>
+    private static string Editable(decimal value, IFormatProvider? culture) =>
+        value == 0m ? string.Empty : TypedNumber.ForEditing(value, 2, culture ?? CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The editor's boxes: an asset's values, a draft from an instrument, or a new laboratory
     /// equipment bought and put into service today, depreciated straight-line over its category's
     /// usual life.
     /// </summary>
-    public static FixedAssetForm Form(SaveFixedAssetRequest? values, DateOnly today)
+    public static FixedAssetForm Form(SaveFixedAssetRequest? values, DateOnly today, IFormatProvider? culture = null)
     {
         var category = values?.Category ?? FixedAssetCategory.LaboratoryEquipment;
         static DateOnly Or(DateOnly? date, DateOnly today) => date is { } d && d != default ? d : today;
@@ -170,9 +171,9 @@ public static class FixedAssetScreenRules
             InServiceDate = Or(values?.InServiceDate, today),
             Method = values?.Method ?? DepreciationMethod.StraightLine,
             UsefulLifeYears = values?.UsefulLifeYears is > 0 and var life ? life : FixedAssetCategories.DefaultUsefulLifeYears(category),
-            Residual = Editable(values?.ResidualValueMad ?? 0m),
-            Cost = Editable(values?.CostExcludingVatMad ?? 0m),
-            Vat = Editable(values?.VatAmountMad ?? 0m),
+            Residual = Editable(values?.ResidualValueMad ?? 0m, culture),
+            Cost = Editable(values?.CostExcludingVatMad ?? 0m, culture),
+            Vat = Editable(values?.VatAmountMad ?? 0m, culture),
             VatRecoverable = values?.VatRecoverable ?? false,
             SupplierId = values?.SupplierId,
             SupplierInvoiceId = values?.SupplierInvoiceId,
@@ -255,7 +256,7 @@ public static class FixedAssetScreenRules
     /// acquisition date of a new asset: one invoice may bill more than this asset, so nothing typed
     /// is overwritten.
     /// </summary>
-    public static void ApplyInvoice(FixedAssetForm form, AssetInvoiceOption invoice)
+    public static void ApplyInvoice(FixedAssetForm form, AssetInvoiceOption invoice, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(form);
         ArgumentNullException.ThrowIfNull(invoice);
@@ -263,8 +264,8 @@ public static class FixedAssetScreenRules
         form.InvoiceReference = invoice.InvoiceNumber;
         if (string.IsNullOrWhiteSpace(form.Cost))
         {
-            form.Cost = invoice.TotalExcludingVat.ToString("0.00", CultureInfo.InvariantCulture);
-            form.Vat = invoice.TotalVat.ToString("0.00", CultureInfo.InvariantCulture);
+            form.Cost = Editable(invoice.TotalExcludingVat, culture);
+            form.Vat = Editable(invoice.TotalVat, culture);
         }
         if (form.Id is null) form.AcquisitionDate = invoice.InvoiceDate;
     }
