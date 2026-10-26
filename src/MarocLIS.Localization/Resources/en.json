@@ -340,6 +340,8 @@
   "Employee_WeeklyHoursInvalid": "Weekly hours must be between 0 and 60.",
   "Employee_SalaryInvalid": "The salary entered is not a valid amount.",
   "Employee_RibInvalid": "The RIB must have 24 digits with a correct key.",
+  "Employee_CnssInvalid": "CNSS number « {0} » is invalid: at most 9 digits, separated if need be by spaces or dashes.",
+  "Employee_CinInvalid": "National ID « {0} » is invalid (one or two letters followed by five or six digits).",
   "Employee_ChildrenInvalid": "The number of dependent children is not valid.",
   "Employee_AlreadyExited": "This employee already left on {0}.",
   "Employee_AlreadyActive": "This employee is already active.",
@@ -2545,6 +2547,7 @@
   },
 
   "Deadline": {
+    "InDaysFull": "In {0} {0:plural:day|days}",
     "InDays": "In {0} d",
     "Overdue": "Overdue",
     "Missing": "Missing",
@@ -6752,6 +6755,20 @@
     "Done": "Restore finished."
   },
   "Web": {
+    "PersonnelSelect": "Select a file to see its card.",
+    "PersonnelNone": "No file matches.",
+    "PersonnelRehired": "Re-hire of {0} recorded from {1}.",
+    "PersonnelExitCancelled": "Departure of {0} withdrawn.",
+    "PersonnelExitSaved": "Departure of {0} recorded.",
+    "HrNoCredential": "No document in this file.",
+    "HrDocumentsAfterSave": "Documents can be added once the file is saved.",
+    "HabilitationPickCell": "Click a cell of the grid to see the authorisation it holds, or to grant one.",
+    "HabilitationNoStaff": "No employee on the staff: first create the files in « Personnel files ».",
+    "HabilitationWithdrawn": "Authorisation « {0} » withdrawn from {1}.",
+    "HabilitationGranted": "Authorisation « {0} » granted to {1}.",
+    "HabilitationCellEmpty": "{0} holds no authorisation in « {1} ».",
+    "DeadlinesNone": "No deadline within {0} days.",
+    "DeadlineHorizon": "Horizon",
     "SubcontractTick": "Tick to send or reprint",
     "SampleFlags": "Flags",
     "ScanNotFound": "No tube matches “{0}”.",

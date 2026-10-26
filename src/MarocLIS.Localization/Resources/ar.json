@@ -340,6 +340,8 @@
   "Employee_WeeklyHoursInvalid": "يجب أن تكون الساعات الأسبوعية بين 0 و60.",
   "Employee_SalaryInvalid": "الأجر المدخل ليس مبلغًا صالحًا.",
   "Employee_RibInvalid": "يجب أن يتكون رقم الحساب من 24 رقمًا بمفتاح صحيح.",
+  "Employee_CnssInvalid": "رقم الضمان الاجتماعي « {0} » غير صحيح: 9 أرقام على الأكثر، مفصولة عند الحاجة بمسافات أو شرطات.",
+  "Employee_CinInvalid": "رقم البطاقة الوطنية « {0} » غير صحيح (حرف أو حرفان يتبعهما 5 أو 6 أرقام).",
   "Employee_ChildrenInvalid": "عدد الأطفال المتكفل بهم غير صالح.",
   "Employee_AlreadyExited": "غادر هذا المستخدم بالفعل في {0}.",
   "Employee_AlreadyActive": "هذا المستخدم نشط بالفعل.",
@@ -2545,6 +2547,7 @@
   },
 
   "Deadline": {
+    "InDaysFull": "بعد {0} يوم",
     "InDays": "بعد {0} ي",
     "Overdue": "متأخر",
     "Missing": "ناقص",
@@ -6752,6 +6755,20 @@
     "Done": "اكتملت الاستعادة."
   },
   "Web": {
+    "PersonnelSelect": "اختر ملفًا لعرض بطاقته.",
+    "PersonnelNone": "لا يوجد أي ملف مطابق.",
+    "PersonnelRehired": "تم تسجيل إعادة إدماج {0} ابتداءً من {1}.",
+    "PersonnelExitCancelled": "تم إلغاء مغادرة {0}.",
+    "PersonnelExitSaved": "تم تسجيل مغادرة {0}.",
+    "HrNoCredential": "لا توجد أي وثيقة في هذا الملف.",
+    "HrDocumentsAfterSave": "تُرفق الوثائق بعد حفظ الملف.",
+    "HabilitationPickCell": "انقر على خانة في الجدول لعرض التأهيل الذي تحمله أو لمنح تأهيل.",
+    "HabilitationNoStaff": "لا يوجد أي مستخدم في الخدمة: أنشئ الملفات أولًا في « ملفات المستخدمين ».",
+    "HabilitationWithdrawn": "تم سحب التأهيل « {0} » من {1}.",
+    "HabilitationGranted": "تم منح التأهيل « {0} » إلى {1}.",
+    "HabilitationCellEmpty": "لا يملك {0} أي تأهيل في « {1} ».",
+    "DeadlinesNone": "لا آجال خلال {0} يومًا.",
+    "DeadlineHorizon": "المدى",
     "SubcontractTick": "حدد للإرسال أو لإعادة الطباعة",
     "SampleFlags": "التنبيهات",
     "ScanNotFound": "لا يوجد أنبوب يطابق «{0}».",

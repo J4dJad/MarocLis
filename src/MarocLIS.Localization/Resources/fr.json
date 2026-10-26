@@ -340,6 +340,8 @@
   "Employee_WeeklyHoursInvalid": "Les heures hebdomadaires doivent être comprises entre 0 et 60.",
   "Employee_SalaryInvalid": "Le salaire saisi n'est pas un montant valide.",
   "Employee_RibInvalid": "Le RIB doit compter 24 chiffres et sa clé doit être juste.",
+  "Employee_CnssInvalid": "Le numéro CNSS « {0} » n'est pas valide : 9 chiffres au plus, séparés au besoin par des espaces ou des tirets.",
+  "Employee_CinInvalid": "La CIN « {0} » n'est pas valide (1 ou 2 lettres suivies de 5 ou 6 chiffres).",
   "Employee_ChildrenInvalid": "Le nombre d'enfants à charge n'est pas valide.",
   "Employee_AlreadyExited": "Ce salarié est déjà sorti le {0}.",
   "Employee_AlreadyActive": "Ce salarié est déjà actif.",
@@ -2545,6 +2547,7 @@
   },
 
   "Deadline": {
+    "InDaysFull": "Dans {0} {0:plural:jour|jours}",
     "InDays": "Dans {0} j",
     "Overdue": "En retard",
     "Missing": "Manquant",
@@ -6753,6 +6756,20 @@
     "Done": "Restauration terminée."
   },
   "Web": {
+    "PersonnelSelect": "Sélectionnez un dossier pour en voir la fiche.",
+    "PersonnelNone": "Aucun dossier ne correspond.",
+    "PersonnelRehired": "Réintégration de {0} enregistrée à compter du {1}.",
+    "PersonnelExitCancelled": "Sortie de {0} annulée.",
+    "PersonnelExitSaved": "Sortie de {0} enregistrée.",
+    "HrNoCredential": "Aucune pièce dans ce dossier.",
+    "HrDocumentsAfterSave": "Les pièces se joignent une fois le dossier enregistré.",
+    "HabilitationPickCell": "Cliquez une case de la grille pour voir l'habilitation qu'elle porte, ou en accorder une.",
+    "HabilitationNoStaff": "Aucun salarié en poste : créez d'abord les dossiers dans « Dossiers du personnel ».",
+    "HabilitationWithdrawn": "Habilitation « {0} » retirée à {1}.",
+    "HabilitationGranted": "Habilitation « {0} » accordée à {1}.",
+    "HabilitationCellEmpty": "{0} n'a aucune habilitation en « {1} ».",
+    "DeadlinesNone": "Aucune échéance dans les {0} jours.",
+    "DeadlineHorizon": "Horizon",
     "SubcontractTick": "Cocher pour envoyer ou réimprimer",
     "SampleFlags": "Signalements",
     "ScanNotFound": "Aucun tube ne correspond à « {0} ».",
