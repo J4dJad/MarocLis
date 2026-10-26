@@ -119,7 +119,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Field.Notes"]</span>
-                <input class="input" data-field="notes" maxlength="@MasterDataEditorRules.NotesMaxLength" @bind="_form.Notes" />
+                <input class="input" data-field="notes" title="@_form.Notes" maxlength="@MasterDataEditorRules.NotesMaxLength" @bind="_form.Notes" />
             </label>
             <label class="field-check strong field-align-end"><input type="checkbox" data-field="active" @bind="_form.Active" /><span>@Texts["Field.Active"]</span></label>
         </div>

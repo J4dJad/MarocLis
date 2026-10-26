@@ -78,8 +78,8 @@
                                         <td class="small">@Texts[$"QcLevel.{row.Level}"]</td>
                                         <td><span class="mono strong">@row.ParameterCode</span> — @row.ParameterName.For(Texts.Language)</td>
                                         <td class="mono">@row.InstrumentCode</td>
-                                        <td class="num mono" dir="ltr">@MasterDataScreenRules.Limits(row.AssignedMean, row.AssignedSd, Texts.Culture)</td>
-                                        <td class="num mono" dir="ltr">@MasterDataScreenRules.Limits(row.LaboratoryMean, row.LaboratorySd, Texts.Culture)</td>
+                                        <td class="num mono qc-limits" dir="ltr">@MasterDataScreenRules.Limits(row.AssignedMean, row.AssignedSd, Texts.Culture)</td>
+                                        <td class="num mono qc-limits" dir="ltr">@MasterDataScreenRules.Limits(row.LaboratoryMean, row.LaboratorySd, Texts.Culture)</td>
                                         <td class="num mono">@row.LaboratoryPointCount</td>
                                         <td class="num mono">@MasterDataScreenRules.CountRules(row.ActiveRules)</td>
                                         <td class="small strong">@Texts[MasterDataScreenRules.StateKey(row)]</td>

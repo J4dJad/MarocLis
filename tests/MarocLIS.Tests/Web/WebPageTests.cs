@@ -136,6 +136,42 @@ public sealed class WebPageTests : BunitContext
         }
     }
 
+    /// <summary>
+    /// The final sweep at 1366 px: the last column's text flush against the list's edge on the first
+    /// screens (patients, validation, reports, billing, users, catalogue…), the internal control's
+    /// entry and the control targets scrolling sideways, long names cut in the editors with nothing
+    /// saying there was more.
+    /// </summary>
+    [Fact]
+    public void TheListsKeepTheirLastColumnClearOfTheEdge_AndTheControlListsFitTheirCard()
+    {
+        var root = WebMenuTests.RepositoryRoot();
+        var css = File.ReadAllText(Path.Combine(root, "src", "MarocLIS.Web", "wwwroot", "css", "app.css"));
+        string Rule(string selector)
+        {
+            var start = css.IndexOf("\n" + selector + " {", StringComparison.Ordinal);
+            start.Should().BeGreaterThan(0, selector);
+            return css[start..css.IndexOf('}', start)];
+        }
+
+        Rule(".grid :is(th, td):last-child").Should().Contain("padding-inline-end: 22px");
+        Rule("html[dir=rtl] .grid :is(th, td):last-child[dir=ltr]").Should().Contain("padding-left: 22px");
+        Rule(".qc-entry td:first-child .cell-sub").Should().Contain("white-space: normal", "the lot and the instrument break between them");
+        Rule(".qc-entry td:first-child .cell-sub > .mono").Should().Contain("nowrap", "never inside a code");
+        Rule(".grid td.qc-limits").Should().Contain("white-space: normal");
+
+        var screens = Path.Combine(root, "src", "MarocLIS.Web", "Components", "Screens", "MasterData");
+        Regex.Matches(File.ReadAllText(Path.Combine(screens, "MasterDataScreen.razor")), "qc-limits").Should().HaveCount(2);
+        foreach (var (dialog, field) in new[]
+                 {
+                     ("StockItemEditorDialog", "namefr"), ("StockItemEditorDialog", "location"), ("PrescriberEditorDialog", "notes"),
+                     ("SupplierEditorDialog", "notes"), ("InstrumentEditorDialog", "namefr"), ("InstrumentEditorDialog", "location"),
+                     ("PayerEditorDialog", "namefr"), ("QcMaterialEditorDialog", "namefr")
+                 })
+            Regex.IsMatch(File.ReadAllText(Path.Combine(screens, dialog + ".razor")), $@"<input[^>]*data-field=""{field}""[^>]*title=""@_form\.")
+                .Should().BeTrue($"{dialog} {field} says its whole value in its tooltip");
+    }
+
     [Fact]
     public void AScreenWithoutTheRight_IsRefused_WhenItsAddressIsTyped()
     {

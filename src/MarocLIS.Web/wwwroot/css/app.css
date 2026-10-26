@@ -206,6 +206,10 @@ h1:focus, h1:focus-visible { outline: none; }
 .grid { inline-size: 100%; border-collapse: collapse; font-size: 13px; }
 .grid th { background: var(--surface-sunken); color: var(--text-secondary); font-weight: 600; text-align: start; }
 .grid th, .grid td { padding: 6px 8px; border-block-end: 1px solid var(--border); }
+/* The last column's text kept clear of the list's edge (and of its scroll bar), on every list: each screen
+   had to say so on its own, and the first ones never did. A left-to-right cell of an Arabic page ends on the right. */
+.grid :is(th, td):last-child { padding-inline-end: 22px; }
+html[dir=rtl] .grid :is(th, td):last-child[dir=ltr] { padding-left: 22px; padding-right: 8px; }
 
 /* ---------- Language switch ---------- */
 
@@ -1006,7 +1010,11 @@ fieldset.subcard:disabled { opacity: .7; }
 .qc-notice { flex: 1 1 260px; display: flex; align-items: flex-start; gap: 6px; margin: 0; margin-inline-start: auto; }
 .qc-notice > .icon { flex: none; margin-block-start: 2px; }
 .qc-entry td .message { display: block; margin-block-start: 4px; white-space: normal; text-align: start; inline-size: 140px; max-inline-size: 140px; margin-inline-start: auto; }
-.qc-entry td:first-child .cell-sub { white-space: nowrap; }
+/* The lot and the instrument break between them, never inside a code: the « Antériorité » and « Règles » columns stay in the card at 1366 px. */
+.qc-entry td:first-child .cell-sub { white-space: normal; }
+.qc-entry td:first-child .cell-sub > .mono { white-space: nowrap; }
+/* « Données de référence », the targets: a mean and its standard deviation on two lines, the status column in the card. */
+.grid td.qc-limits { white-space: normal; }
 .qc-no-target { white-space: normal; text-align: start; font-family: inherit; font-size: 12px; }
 .qc-lot .field-inline > .input { min-inline-size: 260px; }
 .input.is-refused { border-color: var(--critical); box-shadow: 0 0 0 1px var(--critical); }

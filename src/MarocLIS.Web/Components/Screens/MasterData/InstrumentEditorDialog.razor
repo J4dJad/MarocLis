@@ -22,7 +22,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Field.NameFr"]</span>
-                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <input class="input" data-field="namefr" title="@_form.NameFr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
                 <FieldMessage Refusal="_refusal" Field="namefr" />
             </label>
             <label class="field">
@@ -41,7 +41,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Equipment.Location"]</span>
-                <input class="input" data-field="location" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Location" />
+                <input class="input" data-field="location" title="@_form.Location" maxlength="@MasterDataEditorRules.ManufacturerMaxLength" @bind="_form.Location" />
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Equipment.SerialNumber"]</span>

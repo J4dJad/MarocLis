@@ -23,7 +23,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Field.NameFr"]</span>
-                <input class="input" data-field="namefr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
+                <input class="input" data-field="namefr" title="@_form.NameFr" maxlength="@MasterDataEditorRules.NameMaxLength" @bind="_form.NameFr" @bind:event="oninput" />
                 <FieldMessage Refusal="_refusal" Field="namefr" />
             </label>
             <label class="field field-span-2">
@@ -84,7 +84,7 @@
             </label>
             <label class="field">
                 <span class="field-label">@Texts["Inventory.DefaultLocation"]</span>
-                <input class="input" data-field="location" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.Location" />
+                <input class="input" data-field="location" title="@_form.Location" maxlength="@MasterDataEditorRules.ReferenceMaxLength" @bind="_form.Location" />
             </label>
         </div>
 
