@@ -960,6 +960,7 @@
   },
 
   "OrderEntry": {
+    "LabelsAtWorkstation": "الملصقات تُطبع من حاسوب ويندوز",
     "SampleCount": "عدد العينات: {0}",
     "RegisteredTitle": "تم تسجيل الملف",
     "LabelsFromWorkstation": "تُطبع الملصقات من حاسوب ويندوز بالمختبر (المتصفح لا يصل إلى طابعة الملصقات)",

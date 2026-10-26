@@ -2472,10 +2472,8 @@ public sealed class OrderRegistrationView : LocalizedView
 
             ResetForm();
 
-            var message = $"{T("Order.AccessionNumber")} {registered.AccessionNumber} — " +
-                          T("OrderEntry.SampleCount", registered.Labels.Count);
-            if (!printLabels && registered.Labels.Count > 0) message += " — " + T("OrderEntry.LabelsNotPrinted");
-            Notice(message, UiTheme.Normal);
+            Notice(OrderRegistrationRules.RegisteredStatus(T, registered.AccessionNumber, registered.Labels.Count,
+                                                           printLabels, labelsFromWorkstation: false), UiTheme.Normal);
         }
         catch (Exception ex)
         {

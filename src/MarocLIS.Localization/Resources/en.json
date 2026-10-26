@@ -960,6 +960,7 @@
   },
 
   "OrderEntry": {
+    "LabelsAtWorkstation": "Labels to print at the Windows workstation",
     "SampleCount": "{0} {0:plural:sample|samples}",
     "RegisteredTitle": "Order registered",
     "LabelsFromWorkstation": "Labels to be printed from the laboratory's Windows workstation (the browser cannot reach the label printer)",

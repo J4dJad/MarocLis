@@ -1,4 +1,5 @@
 using MarocLIS.Application.Catalog;
+using MarocLIS.Application.Input;
 
 namespace MarocLIS.Application.Orders;
 
@@ -20,6 +21,23 @@ public static class OrderRegistrationRules
     /// « Enregistrer sans étiquettes » (F8) does not.
     /// </summary>
     public static bool PrintsLabels(bool withoutLabels) => !withoutLabels;
+
+    /// <summary>
+    /// The message of a registered order in the action bar: its number, its samples and, when its
+    /// labels are not printed by this save, where they will be. Short enough for the two lines the bar
+    /// gives it at 1366 px: the reason the browser cannot print them is in the summary that opens
+    /// with it, not repeated here.
+    /// </summary>
+    /// <param name="labelsFromWorkstation">The save asked for the labels, which this client cannot
+    /// print (the browser): they are printed from the Windows workstation.</param>
+    public static string RegisteredStatus(ScreenText text, string accessionNumber, int samples,
+                                          bool printLabels, bool labelsFromWorkstation)
+    {
+        var message = $"{text("Order.AccessionNumber")} {accessionNumber} — " + text("OrderEntry.SampleCount", samples);
+        if (samples == 0) return message;
+        if (!printLabels) return message + " — " + text("OrderEntry.LabelsNotPrinted");
+        return labelsFromWorkstation ? message + " — " + text("OrderEntry.LabelsAtWorkstation") : message;
+    }
 
     /// <summary>
     /// What Enter adds: an exact code wins ("NFS" is the blood count, not every analysis whose name

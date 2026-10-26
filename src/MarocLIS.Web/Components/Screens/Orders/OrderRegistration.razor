@@ -1080,14 +1080,10 @@
             var registered = result.Value;
             ResetForm();
 
-            var message = $"{Texts["Order.AccessionNumber"]} {registered.AccessionNumber} — " +
-                          Texts.T("OrderEntry.SampleCount", registered.Labels.Count);
-
             // The browser cannot reach the counter's label printer: the labels are printed from the
             // Windows workstation (the file's « Imprimer étiquettes »), whichever button was used.
-            if (registered.Labels.Count > 0)
-                message += " — " + (printLabels ? Texts["OrderEntry.LabelsFromWorkstation"] : Texts["OrderEntry.LabelsNotPrinted"]);
-            Notice(message, "normal");
+            Notice(OrderRegistrationRules.RegisteredStatus(Texts.T, registered.AccessionNumber, registered.Labels.Count,
+                                                           printLabels, labelsFromWorkstation: true), "normal");
 
             _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId);
         }

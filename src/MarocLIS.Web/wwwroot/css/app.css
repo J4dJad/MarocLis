@@ -612,6 +612,11 @@ fieldset:disabled .input { background: var(--surface-sunken); }
 /* The middle: the last action's message over what is left to do, shortened rather than wrapped. */
 .action-bar-middle { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
 .action-bar-status { margin: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Alone in the middle, the message takes a second line before it is shortened: « Dossier 2610-000014 —
+   2 échantillons — Étiquettes à imprimer depuis le poste Windows… » is read whole at 1366 px. */
+.action-bar-middle:not(:has(.action-bar-info)) > .action-bar-status {
+    white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.3;
+}
 .action-bar-info { color: var(--text-secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .action-bar-status.is-muted { color: var(--text-secondary); }
 .action-bar-status.is-normal { color: var(--normal); }

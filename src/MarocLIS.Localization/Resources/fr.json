@@ -960,6 +960,7 @@
   },
 
   "OrderEntry": {
+    "LabelsAtWorkstation": "Étiquettes à imprimer au poste Windows",
     "SampleCount": "{0} {0:plural:échantillon|échantillons}",
     "RegisteredTitle": "Dossier enregistré",
     "LabelsFromWorkstation": "Étiquettes à imprimer depuis le poste Windows du laboratoire (le navigateur n'accède pas à l'imprimante d'étiquettes)",

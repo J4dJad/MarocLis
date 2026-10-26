@@ -3,6 +3,7 @@ using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Orders;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
+using MarocLIS.Localization;
 using Xunit;
 
 namespace MarocLIS.Tests.Desktop;
@@ -90,5 +91,33 @@ public sealed class OrderRegistrationScreenTests
     {
         OrderRegistrationRules.PrintsLabels(withoutLabels: false).Should().BeTrue();
         OrderRegistrationRules.PrintsLabels(withoutLabels: true).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The registered order's message fits the two lines the action bar gives it at 1366 px: on the
+    /// web it ran « … Étiquettes à imprimer depuis le poste Windows du laboratoire (le navigateur
+    /// n'accède pas… » and was cut; the reason stays in the summary that opens with it.
+    /// </summary>
+    [Fact]
+    public void The_registered_order_s_message_says_where_the_labels_are_printed_in_two_lines_at_most()
+    {
+        var localizer = new JsonLocalizer(new LocalizationOptions { MarkMissingKeys = true });
+
+        foreach (var language in new[] { AppLanguage.French, AppLanguage.English, AppLanguage.Arabic })
+        {
+            string Text(string key, params object?[] args) => localizer.Format(language, key, args);
+
+            var web = OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsFromWorkstation: true);
+            web.Should().Contain("2610-000015").And.Contain(localizer.Format(language, "OrderEntry.LabelsAtWorkstation"));
+            web.Length.Should().BeLessThanOrEqualTo(90, $"two lines of the bar in {language}: « {web} »");
+            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: false, labelsFromWorkstation: true)
+                .Should().EndWith(localizer.Format(language, "OrderEntry.LabelsNotPrinted"));
+            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsFromWorkstation: false)
+                .Should().Be($"{Text("Order.AccessionNumber")} 2610-000015 — {Text("OrderEntry.SampleCount", 3)}", "the workstation prints them: nothing more to say");
+        }
+
+        OrderRegistrationRules.RegisteredStatus((key, args) => localizer.Format(AppLanguage.French, key, args), "2610-000015", 1,
+                                                printLabels: true, labelsFromWorkstation: true)
+            .Should().Be("N° de dossier 2610-000015 — 1 échantillon — Étiquettes à imprimer au poste Windows");
     }
 }
