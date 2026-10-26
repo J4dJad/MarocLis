@@ -318,7 +318,7 @@ public sealed class ReviewFixesCycle3ClinicalTests
     /// An <see cref="InstrumentMessageSink"/> routing the controls of one analyser: GLY with one
     /// target per (control lot, level) given, each 1.00 ± 0.05 g/L.
     /// </summary>
-    private sealed class ControlBench
+    internal sealed class ControlBench
     {
         public List<QcTarget> Targets { get; } = [];
         public Guid LotInUse { get; } = Guid.NewGuid();
