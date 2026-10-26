@@ -133,6 +133,19 @@ public sealed class WebMenuTests
     }
 
     [Fact]
+    public void TheStaffFilesTheHabilitationsAndTheHrDeadlines_AreInTheMenu_ForWhoeverReadsTheFiles()
+    {
+        var hr = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.View), FullStatus())).ToList();
+        hr.Should().Contain(["personnel", "habilitations", "hrdeadlines"]);
+
+        var employee = Keys(WebMenu.Build(new User(permissions: Permissions.HumanResources.RequestLeave), FullStatus())).ToList();
+        employee.Should().NotContain(["personnel", "habilitations", "hrdeadlines"], "asking for one's leave opens no one's file");
+
+        var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
+        collector.Should().NotContain(["personnel", "habilitations", "hrdeadlines"]);
+    }
+
+    [Fact]
     public void TheDashboard_IsEveryonesAndTheStatisticsAndSteering_AreInTheMenu_ByTheirRights()
     {
         var collector = Keys(WebMenu.Build(new User(permissions: Permissions.Samples.Collect), FullStatus())).ToList();
