@@ -1056,6 +1056,7 @@
     "Column.value": "القيمة",
     "Column.indicator": "المؤشر",
     "Column.amount": "المبلغ المستحق (درهم)",
+    "Column.owed": "المبلغ المستحق",
     "Column.invoices": "الفواتير",
     "Column.band": "الأقدمية",
     "Column.share": "الحصة",
@@ -6509,6 +6510,7 @@
     "Invoiced": "المُفوتر",
     "Credited": "الإشعارات الدائنة",
     "Collected": "المُحصّل",
+    "HoursValue": "{0} ساعة",
     "Payer": "الجهة الدافعة",
     "PayerShare": "حصة الجهة",
     "PatientShare": "حصة المريض",
@@ -6859,7 +6861,8 @@
       "Title": "الصفحة الرئيسية",
       "Welcome": "مرحبًا، {0}",
       "Intro": "اختر شاشة من القائمة. تُعرض الشاشات حسب صلاحياتك ووحدات الترخيص.",
-      "Today": "اليوم"
+      "Today": "اليوم",
+      "DashboardHint": "تدفق اليوم وما يحتاج إلى انتباهك، كما عند فتح نسخة ويندوز."
     },
     "ParameterCount": "{0} معلمة",
     "StockItemKind": "نوع المادة",

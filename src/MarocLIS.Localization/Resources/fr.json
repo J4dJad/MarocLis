@@ -1056,6 +1056,7 @@
     "Column.value": "Valeur",
     "Column.indicator": "Indicateur",
     "Column.amount": "Montant dû (MAD)",
+    "Column.owed": "Montant dû",
     "Column.invoices": "Factures",
     "Column.band": "Ancienneté",
     "Column.share": "Part",
@@ -6510,6 +6511,7 @@
     "Invoiced": "Facturé",
     "Credited": "Avoirs",
     "Collected": "Encaissé",
+    "HoursValue": "{0} h",
     "Payer": "Payeur",
     "PayerShare": "Part organisme",
     "PatientShare": "Part patient",
@@ -6860,7 +6862,8 @@
       "Title": "Accueil",
       "Welcome": "Bienvenue, {0}",
       "Intro": "Choisissez un écran dans le menu. Les écrans sont proposés selon vos droits et les modules de la licence.",
-      "Today": "Aujourd'hui"
+      "Today": "Aujourd'hui",
+      "DashboardHint": "Le flux du jour et ce qui demande votre attention, comme à l'ouverture de la version Windows."
     },
     "ParameterCount": "{0} paramètre(s)",
     "StockItemKind": "Type d'article",

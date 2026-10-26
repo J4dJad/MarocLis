@@ -1056,6 +1056,7 @@
     "Column.value": "Value",
     "Column.indicator": "Indicator",
     "Column.amount": "Amount due (MAD)",
+    "Column.owed": "Amount due",
     "Column.invoices": "Invoices",
     "Column.band": "Age band",
     "Column.share": "Share",
@@ -6509,6 +6510,7 @@
     "Invoiced": "Invoiced",
     "Credited": "Credit notes",
     "Collected": "Collected",
+    "HoursValue": "{0} h",
     "Payer": "Payer",
     "PayerShare": "Payer share",
     "PatientShare": "Patient share",
@@ -6859,7 +6861,8 @@
       "Title": "Home",
       "Welcome": "Welcome, {0}",
       "Intro": "Choose a screen from the menu. Screens are offered according to your rights and the licence modules.",
-      "Today": "Today"
+      "Today": "Today",
+      "DashboardHint": "Today's flow and what needs your attention, as when the Windows version opens."
     },
     "ParameterCount": "{0} parameter(s)",
     "StockItemKind": "Item type",
