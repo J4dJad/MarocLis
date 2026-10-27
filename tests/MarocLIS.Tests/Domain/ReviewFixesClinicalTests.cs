@@ -339,6 +339,28 @@ public sealed class ReviewFixesClinicalTests
         titreItem.Status.Should().Be(LabOrderItemStatus.TechnicallyValidated);
     }
 
+    [Fact]
+    public async Task WithdrawingAValidation_NeedsTheQualificationAndTheDepartment_ThatValidatingNeeds()
+    {
+        var harness = new Harness();
+        var (item, result) = harness.AddAnalysis(technicallyValidated: true);
+
+        (await harness.Service.ValidateAsync(harness.Order.Id, [new ValidationDecision(result.Id, true)]))
+            .Value.Validated.Should().Be(1);
+
+        // An administrator without a biologist's qualification, or a biologist of another
+        // department, may not withdraw the release either.
+        harness.BiologicalValidation = Result.Failure(Error.Forbidden("Validation_DepartmentNotAuthorized", "BIO"));
+
+        var withdrawn = await harness.Service.UnvalidateAsync(harness.Order.Id, [result.Id], "Contrôle demandé");
+
+        withdrawn.IsFailure.Should().BeTrue();
+        withdrawn.FirstError.ResourceKey.Should().Be("Validation_DepartmentNotAuthorized");
+        result.Status.Should().Be(TestResultStatus.Validated);
+        result.Revisions.Should().BeEmpty();
+        item.Status.Should().Be(LabOrderItemStatus.Validated);
+    }
+
     // ---- Service harness ------------------------------------------------------------------------
 
     /// <summary>
@@ -352,8 +374,12 @@ public sealed class ReviewFixesClinicalTests
 
         public ValidationService Service { get; }
 
+        /// <summary>What the qualification and department check answers; granted unless a test says otherwise.</summary>
+        public Result BiologicalValidation { get; set; } = Result.Success();
+
         public Harness()
         {
+            var self = this;
             var order = Order;
             var results = _results;
 
@@ -375,7 +401,10 @@ public sealed class ReviewFixesClinicalTests
                     ["IsCriticalCommunicatedAsync"] = _ => Task.FromResult(true)
                 }),
                 Stub.Of<IUnitOfWork>(),
-                Stub.Of<IPermissionGuard>(),
+                Stub.Of<IPermissionGuard>(new()
+                {
+                    ["RequireBiologicalValidationAsync"] = _ => Task.FromResult(self.BiologicalValidation)
+                }),
                 Stub.Of<ICurrentUser>(new() { ["get_UserId"] = _ => Guid.NewGuid() }),
                 Stub.Of<IDataAccessAuditor>(),
                 Stub.Of<IClock>(new()

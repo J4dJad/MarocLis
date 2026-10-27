@@ -349,11 +349,31 @@ public sealed class ValidationService(
 
         if (selected.Count == 0) return Result.Failure(Error.NotFound("Result_NotFound", orderId));
 
+        // Withdrawing a release is a biologist's act on the discipline, as releasing it is: the
+        // same qualification and department scope, so neither an administrator holding every
+        // permission nor a biologist of another discipline can take a released value back.
+        var catalogue = await LoadDepartmentCodesAsync(order, ct);
+        var departmentChecks = new Dictionary<string, Result>(StringComparer.OrdinalIgnoreCase);
+
         var errors = new List<Error>();
 
         foreach (var result in selected)
         {
             var item = order.Items.FirstOrDefault(i => i.Id == result.LabOrderItemId);
+
+            var departmentCode = catalogue.GetValueOrDefault(result.LabOrderItemId) ?? string.Empty;
+
+            if (!departmentChecks.TryGetValue(departmentCode, out var authorised))
+            {
+                authorised = await guard.RequireBiologicalValidationAsync(departmentCode, ct);
+                departmentChecks[departmentCode] = authorised;
+            }
+
+            if (authorised.IsFailure)
+            {
+                errors.Add(authorised.FirstError);
+                continue;
+            }
 
             // The result itself, not its analysis: an analysis partly printed still lets a
             // validated figure that never left the laboratory be withdrawn.
