@@ -108,15 +108,7 @@ public sealed class AuthenticationService(
 
         if (!passwordCorrect)
         {
-            user.RegisterFailedLogin(clock.Now, policy.MaxFailedAttempts, policy.LockoutDuration);
-            await db.SaveChangesAsync(ct);
-
-            var lockedOutNow = user.IsLockedOut(clock.Now);
-
-            await securityAuditor.LogAsync(
-                lockedOutNow ? SecurityEventKind.AccountLockedOut : SecurityEventKind.LoginFailed,
-                false, normalised, "Auth_InvalidCredentials",
-                details: $"Attempt {user.FailedLoginAttempts} of {policy.MaxFailedAttempts}", ct: ct);
+            await CountFailedAttemptAsync(user, normalised, "Auth_InvalidCredentials", "Attempt", ct);
 
             // The same answer as an unknown name, even on the attempt that locks the account; the
             // holder learns of the lockout on their next attempt with the right password.
@@ -319,15 +311,7 @@ public sealed class AuthenticationService(
         {
             // Counted like a failed sign-in, and persisted at once: the caller refuses the
             // operation and saves nothing else, and the counter is what stops guessing.
-            user.RegisterFailedLogin(clock.Now, policy.MaxFailedAttempts, policy.LockoutDuration);
-            await db.SaveChangesAsync(ct);
-
-            var lockedOutNow = user.IsLockedOut(clock.Now);
-
-            await securityAuditor.LogAsync(
-                lockedOutNow ? SecurityEventKind.AccountLockedOut : SecurityEventKind.LoginFailed,
-                false, normalised, "Approval_InvalidCredentials",
-                details: $"Approval; attempt {user.FailedLoginAttempts} of {policy.MaxFailedAttempts}", ct: ct);
+            await CountFailedAttemptAsync(user, normalised, "Approval_InvalidCredentials", "Approval; attempt", ct);
 
             return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_InvalidCredentials"));
         }
@@ -351,6 +335,62 @@ public sealed class AuthenticationService(
         }
 
         return Result.Success(new ApproverIdentity(user.Id, user.UserName, user.FullName));
+    }
+
+    /// <summary>
+    /// Counts a wrong password against the account and logs the attempt.
+    /// <para>
+    /// The count is raised in the database itself, in one statement, and read back. Loaded, raised
+    /// in memory and saved, it went through the account's row version: of fifty guesses sent at the
+    /// same moment only the first save matched, the other forty-nine failed on a concurrency error
+    /// nothing caught — an error page, no count and no line in the security log, although each
+    /// password had been tried. The lockout after five failures became five rounds of any size.
+    /// </para>
+    /// <para>
+    /// The attempt is logged whatever happens to the count, and the answer stays the ordinary
+    /// refusal: the password was wrong either way.
+    /// </para>
+    /// </summary>
+    private async Task CountFailedAttemptAsync(AppUser user, string userName, string answerKey,
+                                               string attemptLabel, CancellationToken ct)
+    {
+        var now = clock.Now;
+        var maxAttempts = policy.MaxFailedAttempts;
+        DateTimeOffset? lockUntil = now.Add(policy.LockoutDuration);
+
+        int? counted = null;
+        var lockedOutNow = false;
+        string? notCounted = null;
+
+        try
+        {
+            await db.Users
+                .IgnoreQueryFilters()
+                .Where(u => u.Id == user.Id)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(u => u.LockedOutUntil,
+                                 u => u.FailedLoginAttempts + 1 >= maxAttempts ? lockUntil : u.LockedOutUntil)
+                    .SetProperty(u => u.FailedLoginAttempts, u => u.FailedLoginAttempts + 1), ct);
+
+            // Read back, row version included: the count the other attempts reached as well, and
+            // an entry this context can still save (a later successful sign-in) without a conflict.
+            await db.Entry(user).ReloadAsync(ct);
+
+            counted = user.FailedLoginAttempts;
+            lockedOutNow = user.IsLockedOut(now);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            notCounted = ex.GetType().Name;
+            logger?.LogError(ex, "A failed attempt for {UserName} could not be counted.", userName);
+        }
+
+        await securityAuditor.LogAsync(
+            lockedOutNow ? SecurityEventKind.AccountLockedOut : SecurityEventKind.LoginFailed,
+            false, userName, answerKey,
+            details: counted is { } attempts
+                ? $"{attemptLabel} {attempts} of {maxAttempts}"
+                : $"{attemptLabel} not counted ({notCounted})", ct: ct);
     }
 
     private async Task<Result<ApproverIdentity>> FailApprovalAsync(string userName, string answerKey,
