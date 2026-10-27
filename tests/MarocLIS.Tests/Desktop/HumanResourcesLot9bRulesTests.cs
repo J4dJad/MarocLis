@@ -221,8 +221,9 @@ public sealed class HumanResourcesLot9bRulesTests
 
         PayrollScreenRules.Check(new PayslipVariablesForm { TaxableBonus = "-500" }, original).Refusal
             .Should().Be(new FieldRefusal(PayrollScreenRules.BonusField, "Payroll_NegativeVariable"));
-        PayrollScreenRules.Check(new PayslipVariablesForm { Overtime50 = "quatre" }, original).Refusal!.Field
-            .Should().Be(PayrollScreenRules.Overtime50Field);
+        PayrollScreenRules.Check(new PayslipVariablesForm { Overtime50 = "quatre" }, original).Refusal
+            .Should().Be(new FieldRefusal(PayrollScreenRules.Overtime50Field, "Payroll_VariableUnreadable"),
+                         "text that is no number is not said to be negative");
 
         var (refusal, read) = PayrollScreenRules.Check(new PayslipVariablesForm
         {

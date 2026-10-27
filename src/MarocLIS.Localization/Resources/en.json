@@ -260,6 +260,7 @@
   "Payroll_NotFound": "Pay month not found.",
   "Payroll_PayslipNotFound": "Payslip not found.",
   "Payroll_NegativeVariable": "Enter positive numbers.",
+  "Payroll_VariableUnreadable": "Enter a number, without a unit or letters.",
   "Payroll_TooManyAbsenceDays": "At most {0} unpaid days.",
   "Payroll_TooManyOvertimeHours": "More than 100 overtime hours in the month: check the entry.",
   "Payroll_NegativeNetPay": "A payslip has a negative net: reduce its deductions before closing.",

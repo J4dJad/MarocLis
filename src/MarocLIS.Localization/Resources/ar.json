@@ -260,6 +260,7 @@
   "Payroll_NotFound": "شهر الأداء غير موجود.",
   "Payroll_PayslipNotFound": "الورقة غير موجودة.",
   "Payroll_NegativeVariable": "أدخل أرقاماً موجبة.",
+  "Payroll_VariableUnreadable": "أدخل رقماً، دون وحدة أو حروف.",
   "Payroll_TooManyAbsenceDays": "{0} أيام غير مؤداة كحد أقصى.",
   "Payroll_TooManyOvertimeHours": "أكثر من 100 ساعة إضافية: تحقق من الإدخال.",
   "Payroll_NegativeNetPay": "ورقة بصافي سلبي: خفض الاقتطاعات قبل الإغلاق.",

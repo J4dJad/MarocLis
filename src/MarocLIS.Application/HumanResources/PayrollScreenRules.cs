@@ -284,9 +284,15 @@ public static class PayrollScreenRules
             (ExemptField, form.OtherExempt), (AdvanceField, form.Advance), (OtherDeductionField, form.OtherDeduction)
         ];
         var values = new decimal[boxes.Length];
+        // Text that is no number is said so: it read « Saisissez des nombres positifs », which a
+        // figure typed with a unit or a slip is not.
         for (var i = 0; i < boxes.Length; i++)
-            if (!TryReadOrZero(boxes[i].Text, out values[i]) || values[i] < 0)
+        {
+            if (!TryReadOrZero(boxes[i].Text, out values[i]))
+                return (new FieldRefusal(boxes[i].Field, "Payroll_VariableUnreadable"), null);
+            if (values[i] < 0)
                 return (new FieldRefusal(boxes[i].Field, "Payroll_NegativeVariable"), null);
+        }
 
         return (null, original with
         {

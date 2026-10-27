@@ -260,6 +260,7 @@
   "Payroll_NotFound": "Mois de paie introuvable.",
   "Payroll_PayslipNotFound": "Bulletin introuvable.",
   "Payroll_NegativeVariable": "Saisissez des nombres positifs.",
+  "Payroll_VariableUnreadable": "Saisissez un nombre, sans unité ni lettre.",
   "Payroll_TooManyAbsenceDays": "Au plus {0} jours non payés.",
   "Payroll_TooManyOvertimeHours": "Plus de 100 heures supplémentaires dans le mois : vérifiez la saisie.",
   "Payroll_NegativeNetPay": "Un bulletin a un net négatif : réduisez ses retenues avant de clôturer.",
