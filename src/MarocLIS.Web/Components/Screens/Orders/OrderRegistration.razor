@@ -1104,33 +1104,9 @@
     /// </summary>
     private List<string> PricingLines(RegisteredOrder registered, bool printLabels)
     {
-        var pricing = registered.Pricing;
         var language = Texts.Language;
-
-        var lines = new List<string>
-        {
-            $"{Texts.T("App.LabelValue", Texts["Order.AccessionNumber"], registered.AccessionNumber)}",
-            string.Empty,
-            $"{Texts.T("App.LabelValue", Texts["Billing.Gross"], pricing.Gross.Format(language, Texts.Culture))}"
-        };
-
-        if (!pricing.Discount.IsZero) lines.Add($"{Texts.T("App.LabelValue", Texts["Billing.Discount"], pricing.Discount.Format(language, Texts.Culture))}");
-        lines.Add($"{Texts.T("App.LabelValue", Texts["Billing.TotalDue"], pricing.Total.Format(language, Texts.Culture))}");
-
-        if (!pricing.PayerShare.IsZero)
-        {
-            lines.Add($"{Texts.T("App.LabelValue", Texts["Billing.PayerShare"], pricing.PayerShare.Format(language, Texts.Culture))}");
-            lines.Add($"{Texts.T("App.LabelValue", Texts["Billing.PatientShare"], pricing.PatientShare.Format(language, Texts.Culture))}");
-        }
-
-        if (!pricing.ExcessOverReferenceTariff.IsZero)
-        {
-            lines.Add(string.Empty);
-            lines.Add($"{Texts.T("App.LabelValue", Texts["Billing.ExcessOverTariff"], pricing.ExcessOverReferenceTariff.Format(language, Texts.Culture))}");
-        }
-
-        lines.Add(string.Empty);
-        lines.Add($"{Texts.T("App.LabelValue", Texts["Payment.Title"], pricing.DueAtCounter.Format(language, Texts.Culture))}");
+        var lines = OrderRegistrationRules.PricingLines(Texts.T, registered.AccessionNumber, registered.Pricing,
+                                                        amount => amount.Format(language, Texts.Culture));
 
         // Warnings are advisory (a non-fasting sample a clinician knowingly accepts): reported, the
         // registration stands.

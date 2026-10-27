@@ -40,6 +40,56 @@ public static class OrderRegistrationRules
     }
 
     /// <summary>
+    /// The breakdown shown once an order is registered, on every client: the gross amount, the
+    /// discount, the total, the payer's and the patient's shares, the excess over the national
+    /// tariff, and what is to be collected at the counter.
+    /// <para>
+    /// The last line said « Règlement : 27,00 DH » although nothing had been collected: no payment
+    /// is taken by the registration, and the secretary could believe one was recorded. It says
+    /// what is to be collected, and that nothing is recorded yet.
+    /// </para>
+    /// </summary>
+    public static List<string> PricingLines(ScreenText text, string accessionNumber, Pricing.OrderPricing pricing,
+                                            Func<Domain.Common.Money, string> format)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(pricing);
+        ArgumentNullException.ThrowIfNull(format);
+
+        string Line(string labelKey, Domain.Common.Money amount) =>
+            text("App.LabelValue", text(labelKey), format(amount));
+
+        var lines = new List<string>
+        {
+            text("App.LabelValue", text("Order.AccessionNumber"), accessionNumber),
+            string.Empty,
+            Line("Billing.Gross", pricing.Gross)
+        };
+
+        if (!pricing.Discount.IsZero) lines.Add(Line("Billing.Discount", pricing.Discount));
+        lines.Add(Line("Billing.TotalDue", pricing.Total));
+
+        if (!pricing.PayerShare.IsZero)
+        {
+            lines.Add(Line("Billing.PayerShare", pricing.PayerShare));
+            lines.Add(Line("Billing.PatientShare", pricing.PatientShare));
+        }
+
+        if (!pricing.ExcessOverReferenceTariff.IsZero)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Line("Billing.ExcessOverTariff", pricing.ExcessOverReferenceTariff));
+        }
+
+        lines.Add(string.Empty);
+        lines.Add(pricing.DueAtCounter.IsZero
+            ? text("OrderEntry.NothingToCollect")
+            : text("OrderEntry.ToCollect", format(pricing.DueAtCounter)));
+
+        return lines;
+    }
+
+    /// <summary>
     /// What Enter adds: an exact code wins ("NFS" is the blood count, not every analysis whose name
     /// holds "nfs"), then a code that starts with what was typed, then the first match by name.
     /// </summary>

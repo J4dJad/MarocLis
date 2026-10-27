@@ -961,6 +961,8 @@
   },
 
   "OrderEntry": {
+    "NothingToCollect": "لا شيء للتحصيل في الشباك",
+    "ToCollect": "المبلغ الواجب تحصيله في الشباك: {0} — لم يُسجَّل أي أداء بعد",
     "LabelsAtWorkstation": "الملصقات تُطبع من حاسوب ويندوز",
     "SampleCount": "عدد العينات: {0}",
     "RegisteredTitle": "تم تسجيل الملف",

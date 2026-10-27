@@ -961,6 +961,8 @@
   },
 
   "OrderEntry": {
+    "NothingToCollect": "Rien à encaisser au guichet",
+    "ToCollect": "À encaisser au guichet : {0} — aucun règlement n'est encore enregistré",
     "LabelsAtWorkstation": "Étiquettes à imprimer au poste Windows",
     "SampleCount": "{0} {0:plural:échantillon|échantillons}",
     "RegisteredTitle": "Dossier enregistré",

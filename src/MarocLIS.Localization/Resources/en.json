@@ -961,6 +961,8 @@
   },
 
   "OrderEntry": {
+    "NothingToCollect": "Nothing to collect at the counter",
+    "ToCollect": "To collect at the counter: {0} — no payment recorded yet",
     "LabelsAtWorkstation": "Labels to print at the Windows workstation",
     "SampleCount": "{0} {0:plural:sample|samples}",
     "RegisteredTitle": "Order registered",

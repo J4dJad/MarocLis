@@ -120,4 +120,44 @@ public sealed class OrderRegistrationScreenTests
                                                 printLabels: true, labelsFromWorkstation: true)
             .Should().Be("N° de dossier 2610-000015 — 1 échantillon — Étiquettes à imprimer au poste Windows");
     }
+
+    /// <summary>
+    /// « Dossier enregistré … Règlement : 27,00 DH » made the secretary believe a payment was
+    /// recorded; the registration takes none. The line says what is to be collected.
+    /// </summary>
+    [Fact]
+    public void The_registered_order_s_breakdown_says_what_is_to_collect_not_a_payment()
+    {
+        var localizer = new JsonLocalizer(new LocalizationOptions { MarkMissingKeys = true });
+        var pricing = new Application.Pricing.OrderPricing
+        {
+            Acts = [],
+            Gross = Money.Of(40m),
+            Total = Money.Of(40m),
+            PayerShare = Money.Of(13m),
+            PatientShare = Money.Of(27m),
+            DueAtCounter = Money.Of(27m)
+        };
+
+        foreach (var language in new[] { AppLanguage.French, AppLanguage.English, AppLanguage.Arabic })
+        {
+            string Text(string key, params object?[] args) => localizer.Format(language, key, args);
+
+            var lines = OrderRegistrationRules.PricingLines(Text, "2610-000014", pricing, m => $"{m.Amount:0.00} DH");
+
+            lines.Should().NotContain(l => l.Contains("[[", StringComparison.Ordinal), $"every key exists in {language}");
+            lines[^1].Should().Be(Text("OrderEntry.ToCollect", "27.00 DH"));
+            var payment = Text("Payment.Title");
+            lines.Should().NotContain(l => l.StartsWith(payment, StringComparison.Ordinal));
+        }
+
+        var french = OrderRegistrationRules.PricingLines((k, a) => localizer.Format(AppLanguage.French, k, a), "2610-000014",
+                                                         pricing, m => $"{m.Amount:0.00} DH");
+        french[^1].Should().Be("À encaisser au guichet : 27.00 DH — aucun règlement n'est encore enregistré");
+
+        var free = pricing with { DueAtCounter = Money.Zero };
+        OrderRegistrationRules.PricingLines((k, a) => localizer.Format(AppLanguage.French, k, a), "2610-000014", free,
+                                            m => $"{m.Amount:0.00} DH")[^1]
+            .Should().Be("Rien à encaisser au guichet");
+    }
 }

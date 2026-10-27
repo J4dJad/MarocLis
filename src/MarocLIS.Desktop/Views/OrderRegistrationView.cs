@@ -2493,36 +2493,9 @@ public sealed class OrderRegistrationView : LocalizedView
     /// </summary>
     private void ShowPricing(RegisteredOrder registered)
     {
-        var pricing = registered.Pricing;
         var language = Localizer.CurrentLanguage;
-
-        var lines = new List<string>
-        {
-            $"{T("App.LabelValue", T("Order.AccessionNumber"), registered.AccessionNumber)}",
-            string.Empty,
-            $"{T("App.LabelValue", T("Billing.Gross"), pricing.Gross.Format(language))}"
-        };
-
-        if (!pricing.Discount.IsZero)
-            lines.Add($"{T("App.LabelValue", T("Billing.Discount"), pricing.Discount.Format(language))}");
-
-        lines.Add($"{T("App.LabelValue", T("Billing.TotalDue"), pricing.Total.Format(language))}");
-
-        if (!pricing.PayerShare.IsZero)
-        {
-            lines.Add($"{T("App.LabelValue", T("Billing.PayerShare"), pricing.PayerShare.Format(language))}");
-            lines.Add($"{T("App.LabelValue", T("Billing.PatientShare"), pricing.PatientShare.Format(language))}");
-        }
-
-        if (!pricing.ExcessOverReferenceTariff.IsZero)
-        {
-            lines.Add(string.Empty);
-            lines.Add($"{T("Billing.ExcessOverTariff")} : " +
-                      pricing.ExcessOverReferenceTariff.Format(language));
-        }
-
-        lines.Add(string.Empty);
-        lines.Add($"{T("App.LabelValue", T("Payment.Title"), pricing.DueAtCounter.Format(language))}");
+        var lines = OrderRegistrationRules.PricingLines(T, registered.AccessionNumber, registered.Pricing,
+                                                        amount => amount.Format(language));
 
         _dialogs.Info(string.Join(Environment.NewLine, lines), T("OrderEntry.RegisteredTitle"));
     }
