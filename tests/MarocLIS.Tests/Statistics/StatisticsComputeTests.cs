@@ -146,4 +146,27 @@ public sealed class StatisticsComputeTests
         stats.Summary.OnTimePercent.Should().BeNull();
         stats.Days.Should().ContainSingle();
     }
+
+    [Fact]
+    public void Compute_PlacesEachOrderOnItsLocalDay_OnBothSidesOfTheRamadanChangeOfHour()
+    {
+        var casablanca = TimeZoneInfo.FindSystemTimeZoneById("Africa/Casablanca");
+        var duringRamadan = new DateOnly(2026, 3, 1);                     // UTC+0
+        var after = new DateOnly(2026, 4, 1);                            // UTC+1
+
+        var items = new[]
+        {
+            Item(Guid.NewGuid(), Guid.NewGuid(), new DateTimeOffset(2026, 3, 1, 23, 30, 0, TimeSpan.Zero), Glucose, Biochemistry),
+            Item(Guid.NewGuid(), Guid.NewGuid(), new DateTimeOffset(2026, 4, 1, 23, 30, 0, Morocco), Glucose, Biochemistry)
+        };
+
+        var stats = StatisticsService.Compute(duringRamadan, after.AddDays(1), items, Labels, Finance, casablanca);
+
+        stats.Days.Single(d => d.Date == duringRamadan).OrderCount.Should().Be(1, "23:30 in Ramadan is still the 1st of March");
+        stats.Days.Single(d => d.Date == after).OrderCount.Should().Be(1);
+        stats.Days.Sum(d => d.OrderCount).Should().Be(2);
+
+        StatisticsService.LocalMidnight(duringRamadan, casablanca).Offset.Should().Be(TimeSpan.Zero);
+        StatisticsService.LocalMidnight(after, casablanca).Offset.Should().Be(Morocco);
+    }
 }

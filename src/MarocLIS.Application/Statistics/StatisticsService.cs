@@ -110,23 +110,49 @@ public sealed class StatisticsService(
                 Error.Validation("Stats_PeriodTooLong", MaximumPeriodDays));
 
         // The period is in the laboratory's local calendar; registration times are compared in
-        // the same offset so that an order registered at 23:30 lands on the right day.
-        var offset = clock.Now.Offset;
-        var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), offset);
-        var end = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), offset);
+        // the same time zone so that an order registered at 23:30 lands on the right day. Each day
+        // takes its own offset: Morocco moves to UTC+0 for Ramadan, and a period crossing the
+        // change, read with today's offset, slid an hour of orders a day across midnight.
+        var zone = LaboratoryZone(clock.Now);
+        var start = LocalMidnight(from, zone);
+        var end = LocalMidnight(to.AddDays(1), zone);
 
         var items = await queries.GetActivityAsync(currentUser.SiteId, start, end, ct);
         var labels = await queries.GetLabelsAsync(ct);
         var finance = await queries.GetFinanceAsync(currentUser.SiteId, from, to, ct);
 
-        return Result.Success(Compute(from, to, items, labels, finance, offset));
+        return Result.Success(Compute(from, to, items, labels, finance, zone));
+    }
+
+    /// <summary>
+    /// The machine's time zone, which carries the change of hour, when it agrees with the clock;
+    /// otherwise (a clock set apart from the machine) the clock's own offset, as before.
+    /// </summary>
+    private static TimeZoneInfo LaboratoryZone(DateTimeOffset now) =>
+        TimeZoneInfo.Local.GetUtcOffset(now) == now.Offset ? TimeZoneInfo.Local : Fixed(now.Offset);
+
+    private static TimeZoneInfo Fixed(TimeSpan offset) =>
+        TimeZoneInfo.CreateCustomTimeZone("UTC" + offset, offset, "UTC" + offset, "UTC" + offset);
+
+    /// <summary>Midnight of <paramref name="day"/> in <paramref name="zone"/>, with that day's offset.</summary>
+    public static DateTimeOffset LocalMidnight(DateOnly day, TimeZoneInfo zone)
+    {
+        var midnight = day.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(midnight, zone.GetUtcOffset(midnight));
     }
 
     /// <summary>The aggregation itself, separate so it can be tested without a database.</summary>
     public static ActivityStatistics Compute(DateOnly from, DateOnly to,
                                              IReadOnlyList<ActivityItem> items,
                                              StatisticsLabels labels, FinanceTotals finance,
-                                             TimeSpan offset)
+                                             TimeSpan offset) =>
+        Compute(from, to, items, labels, finance, Fixed(offset));
+
+    /// <summary>As above, each registration placed on its day in the laboratory's time zone.</summary>
+    public static ActivityStatistics Compute(DateOnly from, DateOnly to,
+                                             IReadOnlyList<ActivityItem> items,
+                                             StatisticsLabels labels, FinanceTotals finance,
+                                             TimeZoneInfo zone)
     {
         // A cancelled test was not performed and was not charged; it is counted once, in the
         // summary, and nowhere else.
@@ -192,7 +218,7 @@ public sealed class StatisticsService(
         // Every day of the period appears, including the empty ones: a gap in a volume curve is
         // information (a closure, an outage) and should not be smoothed away.
         var byDay = items
-            .GroupBy(i => DateOnly.FromDateTime(i.RegisteredAt.ToOffset(offset).DateTime))
+            .GroupBy(i => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(i.RegisteredAt, zone).DateTime))
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var days = new List<DailyVolume>();
