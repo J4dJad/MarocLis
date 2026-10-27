@@ -274,6 +274,18 @@ public sealed class Fix87mTests
             .Should().Contain("2610-000015").And.NotContain("Veuillez");
     }
 
+    [Fact]
+    public void Arabic_NamesTheEscapeKeyAsOnTheKeyboard_AndTheFormulaErrorHasItsText()
+    {
+        Ar("OrderEntry.EscapeKey").Should().Be("Esc");
+        Fr("Formula_NotFinite").Should().NotContain("Formula_");
+        En("Formula_NotFinite").Should().NotContain("Formula_");
+        Ar("Formula_NotFinite").Should().NotContain("Formula_");
+        var web = File.ReadAllText(Path.Combine(MarocLIS.Tests.Web.WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web",
+                                                "Components", "Screens", "Quality", "QualityControl.razor"));
+        web.Should().NotContain("<th class=\"num\">Z</th>").And.Contain("Texts[\"Quality.ZScore\"]");
+    }
+
     private class Stub : DispatchProxy
     {
         private Dictionary<string, Func<object?[]?, object?>> _handlers = [];

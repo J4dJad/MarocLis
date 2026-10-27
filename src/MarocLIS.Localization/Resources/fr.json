@@ -7020,5 +7020,6 @@
   "Reason_TooShort": "Le motif doit compter au moins {0} {0:plural:caractère|caractères}.",
   "Reason_TooLong": "Le motif ne doit pas dépasser {0} {0:plural:caractère|caractères}.",
   "Order_ItemHasReleasedValues": "Des résultats de cette analyse sont déjà validés par un biologiste : retirez d'abord leur validation, ou émettez un compte rendu rectifié.",
-  "Sample_RejectHasReleasedValues": "Le tube {0} porte des résultats déjà validés par un biologiste : il ne peut pas être refusé. Retirez d'abord leur validation."
+  "Sample_RejectHasReleasedValues": "Le tube {0} porte des résultats déjà validés par un biologiste : il ne peut pas être refusé. Retirez d'abord leur validation.",
+  "Formula_NotFinite": "Le calcul ne donne pas un nombre fini (puissance d'un nombre négatif ou trop grande)."
 }

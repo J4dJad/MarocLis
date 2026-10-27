@@ -7019,5 +7019,6 @@
   "Reason_TooShort": "The reason must be at least {0} {0:plural:character|characters} long.",
   "Reason_TooLong": "The reason must not exceed {0} {0:plural:character|characters}.",
   "Order_ItemHasReleasedValues": "Some results of this analysis are already validated by a biologist: withdraw their validation first, or issue an amended report.",
-  "Sample_RejectHasReleasedValues": "Tube {0} carries results already validated by a biologist: it cannot be rejected. Withdraw their validation first."
+  "Sample_RejectHasReleasedValues": "Tube {0} carries results already validated by a biologist: it cannot be rejected. Withdraw their validation first.",
+  "Formula_NotFinite": "The calculation does not give a finite number (power of a negative number, or too large)."
 }
