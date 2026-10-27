@@ -71,6 +71,12 @@
       silently move is not something a label printer should rest on.
     -->
     <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <!--
+      SkiaSharp's native library for Linux, for the web server: the tube labels it downloads
+      (« Étiquettes (PDF) ») draw their barcode with SkiaSharp, whose package brings the Windows and
+      macOS libraries only. Without it a web server on Linux renders every report but no label.
+    -->
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
     <PackageVersion Include="ClosedXML" Version="0.105.0" />
     <!--
       « Reprise de données »: reading the previous application's database. MySqlConnector for
