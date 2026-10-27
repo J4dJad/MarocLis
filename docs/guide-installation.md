@@ -6,28 +6,32 @@ Conventions : `{app}` désigne le dossier d'installation choisi dans l'assistant
 
 ## 1. Vue d'ensemble
 
-Un laboratoire compte **un seul serveur**, des **postes clients** et, s'il utilise la validation à distance, les **téléphones** des biologistes. Un seul programme d'installation, `MarocLIS-Setup-<version>.exe`, sert pour le serveur et pour les postes : le type d'installation se choisit dans l'assistant.
+Un laboratoire compte **un seul serveur**, des **postes de travail** et, s'il utilise la validation à distance, les **téléphones** des biologistes. Un poste de travail est soit un **Poste Windows** (l'application MarocLIS, Windows 10 ou 11), soit un **Poste Web** (MarocLIS dans le navigateur, servi par le serveur, de Windows 7 à Windows 11). Un seul programme d'installation, `MarocLIS-Setup-<version>.exe`, sert pour le serveur et pour les postes : le type d'installation se choisit dans l'assistant.
 
 | Ordinateur | Ce qui y est installé | Rôle |
 |---|---|---|
-| **Serveur** (type « Serveur ») | SQL Server Express 2025, instance `SQLEXPRESS` (seulement si aucun SQL Server n'est déjà installé) ; la base `MarocLIS` ; l'application MarocLIS ; le service Windows `MarocLIS.Api` ; la tâche planifiée « MarocLIS - Sauvegarde » | Garde la base de données, la sauvegarde, sert l'application du téléphone. On peut aussi y travailler avec MarocLIS. |
-| **Poste client** (type « Poste client ») | L'application MarocLIS seule | Se connecte à la base du serveur par le réseau local, avec le compte Windows de l'utilisateur. |
+| **Serveur** (type « Serveur », Windows 10, 11 ou Windows Server, 64 bits) | SQL Server Express 2025, instance `SQLEXPRESS` (seulement si aucun SQL Server n'est déjà installé) ; la base `MarocLIS` ; l'application MarocLIS ; le service Windows `MarocLIS.Api` ; le service Windows `MarocLIS.Web` (version Web, `https://<serveur>:5443`) et son certificat HTTPS ; la tâche planifiée « MarocLIS - Sauvegarde » | Garde la base de données, la sauvegarde, sert la version Web aux postes du réseau local et l'application du téléphone. On peut aussi y travailler avec MarocLIS. |
+| **Poste Windows** (type « Poste Windows », Windows 10 ou 11, 64 bits) | L'application MarocLIS seule | Se connecte à la base du serveur par le réseau local, avec le compte Windows de l'utilisateur. |
+| **Poste Web** (type « Poste Web », Windows 7 SP1, 8, 8.1, 10 ou 11, 32 ou 64 bits) | Rien de MarocLIS ne s'y exécute : le certificat du serveur, un navigateur récent si le poste n'en a pas (Firefox ESR 115), le raccourci « MarocLIS » | Ouvre la version Web du serveur dans le navigateur, avec les mêmes écrans et le compte MarocLIS de l'utilisateur. Section 5.5. |
 | **Téléphone** du biologiste | Rien depuis le programme d'installation : l'application Tailscale, puis l'application web « MarocLIS Validation » servie par le serveur | Validation biologique à distance, par le réseau privé Tailscale. |
 
 Points communs :
 
-- L'application et le service sont publiés « autonomes » (self-contained) pour Windows 64 bits : **aucun runtime .NET n'est à installer**, ni sur le serveur ni sur les postes.
-- Les postes et le service se connectent à SQL Server en **authentification Windows** (`Integrated Security=true`) : il n'y a pas de mot de passe SQL dans les fichiers de configuration. Les comptes Windows des utilisateurs doivent appartenir au groupe local **`MarocLIS-Utilisateurs`** du serveur, créé par l'installation.
+- L'application et les services sont publiés « autonomes » (self-contained) pour Windows 64 bits : **aucun runtime .NET n'est à installer**, ni sur le serveur ni sur les postes. Le Poste Web n'en a pas besoin non plus : il n'exécute que le navigateur.
+- Les Postes Windows et les services se connectent à SQL Server en **authentification Windows** (`Integrated Security=true`) : il n'y a pas de mot de passe SQL dans les fichiers de configuration. Les comptes Windows des utilisateurs doivent appartenir au groupe local **`MarocLIS-Utilisateurs`** du serveur, créé par l'installation.
 - Le service `MarocLIS.Api` n'écoute que sur la machine elle-même (`http://127.0.0.1:5080`). Les téléphones l'atteignent uniquement par `tailscale serve`, qui ajoute le HTTPS ; aucun port n'est ouvert pour lui, ni sur Internet ni sur le réseau du laboratoire.
+- Le service `MarocLIS.Web` écoute en HTTPS sur le port **5443** de toutes les adresses du serveur ; le pare-feu ne l'ouvre qu'au **sous-réseau local**, et le service lui-même répond « 403 » à toute adresse hors des plages privées. Son certificat est créé par l'installation, propre à ce serveur (section 4.8).
 - Les téléphones ne comptent pas dans le nombre de postes de la licence.
 
-Ordre d'installation : **d'abord le serveur**, puis chaque poste client.
+Ordre d'installation : **d'abord le serveur**, puis chaque Poste Windows ou Poste Web.
 
 ## 2. Configuration requise
 
 ### Système d'exploitation
 
-- **Windows 64 bits** (x64), version **10.0 ou ultérieure** : le programme d'installation refuse toute autre architecture et toute version antérieure (`ArchitecturesAllowed=x64compatible`, `MinVersion=10.0`). Cela couvre Windows 10, Windows 11 et les Windows Server du même noyau.
+- Le programme d'installation **démarre** sur Windows **7 SP1** et toute version ultérieure, 32 ou 64 bits (`MinVersion=6.1sp1`, `ArchitecturesAllowed=x86compatible x64compatible`). Sur Windows 7 sans le Service Pack 1, Windows refuse de le lancer.
+- Les types **Serveur** et **Poste Windows** demandent **Windows 10 ou ultérieur, 64 bits** (x64) : l'application et les services sont construits sur .NET 10, que Microsoft ne fournit pas pour Windows 7, 8 ni 8.1. Cela couvre Windows 10, Windows 11 et les Windows Server du même noyau (2016 et ultérieurs).
+- Le type **Poste Web** fonctionne de Windows 7 SP1 à Windows 11, 32 ou 64 bits. Sur un Windows antérieur à Windows 10 ou en 32 bits, l'assistant le présélectionne et refuse les deux autres types avec un message qui en donne la raison. Le tableau de la section 5.5 dit ce qui est installé selon la version de Windows.
 - Les versions de Windows prises en charge par **SQL Server 2025 Express** sur le serveur sont fixées par Microsoft ; le code de MarocLIS ne les vérifie pas. Consultez la documentation de Microsoft avant de choisir le serveur.
 
 ### Droits
@@ -62,9 +66,11 @@ Le code ne fixe aucun minimum d'espace disque. À prévoir :
 |---|---|---|
 | Moteur SQL Server (programme `sqlservr.exe` de l'instance, quel que soit son port TCP) | Postes → serveur | Oui : règle de pare-feu entrante « MarocLIS - SQL Server (`<instance>`) », sous-réseau local seulement |
 | SQL Server Browser, UDP 1434 (instance nommée, par exemple `SQLEXPRESS`) | Postes → serveur | Oui : règle « MarocLIS - SQL Server Browser », sous-réseau local seulement |
+| Service `MarocLIS.Web`, `https://<serveur>:5443` (TCP 5443) | Postes Web et navigateurs du réseau local → serveur | Oui : règle « MarocLIS - Web (HTTPS 5443) », sous-réseau local seulement |
 | Service `MarocLIS.Api`, `http://127.0.0.1:5080` | Machine elle-même | Aucun port à ouvrir : il n'écoute que sur la boucle locale |
-| Tailscale (`tailscale serve --bg 5080`, publié en HTTPS sur le réseau Tailscale) | Téléphones → serveur | Non : Tailscale s'installe et se configure à part (section 4.9) |
+| Tailscale (`tailscale serve --bg 5080`, publié en HTTPS sur le réseau Tailscale) | Téléphones → serveur | Non : Tailscale s'installe et se configure à part (section 4.10) |
 | Téléchargement de SQL Server Express depuis Microsoft | Serveur → Internet | Seulement si aucun support hors ligne n'est posé à côté du programme d'installation |
+| Mises à jour de Firefox ESR (Poste Web où l'installation l'a installé) | Poste → Internet | Non : Firefox les télécharge lui-même quand le poste a Internet ; sans Internet, il reste dans sa version |
 
 Les règles de pare-feu créées s'appliquent à **tous les profils réseau** (domaine, privé, public), parce que le réseau d'un petit laboratoire est souvent classé « public », et n'admettent que le **sous-réseau local** (`LocalSubnet`). Elles sont rangées dans le groupe de règles « MarocLIS ».
 
@@ -72,7 +78,7 @@ TCP/IP doit être activé sur l'instance SQL Server. Il l'est quand l'installati
 
 ### Domaine ou groupe de travail
 
-Les postes s'authentifient auprès de SQL Server avec leur compte Windows :
+Les Postes Windows s'authentifient auprès de SQL Server avec leur compte Windows (un Poste Web n'est concerné par rien de ceci : il se connecte avec un compte MarocLIS, et c'est le service `MarocLIS.Web` qui accède à la base) :
 
 - **en domaine**, ajoutez au groupe local `MarocLIS-Utilisateurs` du serveur les comptes ou groupes du domaine ;
 - **en groupe de travail**, créez sur le serveur, pour chaque utilisateur, un compte local **de même nom et de même mot de passe** que sur son poste, et ajoutez-le au groupe.
@@ -85,8 +91,9 @@ Cette section concerne l'éditeur, pas le laboratoire, qui reçoit le fichier `M
 
 - **Windows PowerShell 5.1** ou PowerShell 7. Les scripts sont écrits en ASCII, encodés en UTF-8 avec BOM, pour que Windows PowerShell 5.1 les lise correctement.
 - **SDK .NET 10** : le fichier `global.json` du dépôt demande la version `10.0.100` (ou une version plus récente de la même bande, `rollForward: latestFeature`).
-- **Inno Setup 6** (https://jrsoftware.org/isdl.php). Le compilateur `ISCC.exe` est cherché dans cet ordre : le paramètre `-Iscc`, la variable d'environnement `INNO_SETUP_ISCC`, le `PATH`, puis `%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe`, `%ProgramFiles%\Inno Setup 6\ISCC.exe` et `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`.
+- **Inno Setup 6.3 ou ultérieur, de la série 6** (https://jrsoftware.org/isdl.php ; 6.7.3 essayé). Son programme d'installation produit démarre sur Windows 7 SP1, ce que demande le type Poste Web ; le script refuse une version antérieure à 6.3 ou une version 7 et suivantes, dont le Windows minimal n'a pas été vérifié. Le compilateur `ISCC.exe` est cherché dans cet ordre : le paramètre `-Iscc`, la variable d'environnement `INNO_SETUP_ISCC`, le `PATH`, puis `%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe`, `%ProgramFiles%\Inno Setup 6\ISCC.exe` et `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`.
 - La **clé publique de licence de production** à la place de la clé de développement (voir 3.4 et la section 8, partie 2).
+- **Internet** à la première construction, pour télécharger depuis Mozilla le programme d'installation de **Firefox ESR 115** inclus dans le programme MarocLIS (3.3, étape 5) ; ou ce fichier posé à la main dans `installer\prereqs`.
 
 ### 3.2 Commande
 
@@ -104,16 +111,20 @@ powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1
 | `-SkipPublish` | Ne publie pas : compile le dossier de préparation tel qu'il est. |
 | `-Iscc <chemin>` | Chemin de `ISCC.exe`, par exemple `-Iscc 'D:\Tools\Inno Setup 6\ISCC.exe'`. |
 | `-AllowDevelopmentKey` | Construit malgré la clé de licence de développement (essais internes seulement, voir 3.4). |
+| `-FirefoxVersion <115.x.y>` | Version de Firefox ESR 115 à télécharger, par exemple `115.30.0` ; par défaut la plus récente des versions 115.x ESR publiées par Mozilla. Sans effet si le fichier est déjà dans `installer\prereqs`. |
+| `-FirefoxSha256 <empreinte>` | Empreinte SHA-256 attendue du programme d'installation de Firefox, comparée à chaque construction. Obligatoire là où la signature Authenticode ne peut pas être vérifiée (hors Windows). |
 
 ### 3.3 Ce que fait le script
 
 1. Lit la version du produit dans `Directory.Build.props` (élément `<Version>`, actuellement `1.0.0`) ; s'arrête si elle manque (« No <Version> in Directory.Build.props. »).
 2. Calcule et affiche l'**empreinte de la clé de licence** compilée (`src/MarocLIS.Application/Licensing/licence-public-key.pem`) : « Licence key fingerprint: … ».
-3. Publie, sauf avec `-SkipPublish`, l'application (`src/MarocLIS.Desktop`) et le service (`src/MarocLIS.Api`) en mode autonome pour `win-x64` dans `installer\build\staging\Desktop` et `installer\build\staging\Api`. Le fichier `appsettings.Development.json` est retiré : il ne doit jamais être livré. La publication du service y place aussi l'application du téléphone (`MarocLIS.Mobile`, Blazor WebAssembly) dans `wwwroot`.
+3. Publie, sauf avec `-SkipPublish`, l'application (`src/MarocLIS.Desktop`), le service (`src/MarocLIS.Api`) et la version Web (`src/MarocLIS.Web`) en mode autonome pour `win-x64` dans `installer\build\staging\Desktop`, `installer\build\staging\Api` et `installer\build\staging\Web`. Le fichier `appsettings.Development.json` est retiré : il ne doit jamais être livré. La publication du service y place aussi l'application du téléphone (`MarocLIS.Mobile`, Blazor WebAssembly) dans `wwwroot`.
 4. Vérifie la présence des fichiers indispensables, et s'arrête sur « Missing from the published files: … » s'il en manque un :
     - `Desktop` : `MarocLIS.exe`, `hostfxr.dll`, `appsettings.json`, `Resources/fr.json`, `Help`, `Assets/Fonts/Amiri-Regular.ttf`, `Assets/Fonts/Carlito-Regular.ttf`, `libSkiaSharp.dll`, `QuestPdfSkia.dll`, `Microsoft.Data.SqlClient.SNI.dll` ;
-    - `Api` : les mêmes (sauf `MarocLIS.exe` et `Help`), `MarocLIS.Api.exe`, et `wwwroot/index.html`, `wwwroot/_framework/dotnet.js`, `wwwroot/_framework/dotnet.native.wasm`, `wwwroot/_framework/MarocLIS.Mobile.wasm`, `wwwroot/service-worker-assets.js`.
-5. Compile `installer/MarocLIS.iss` avec Inno Setup et affiche le chemin et la taille du résultat.
+    - `Api` : les mêmes (sauf `MarocLIS.exe` et `Help`), `MarocLIS.Api.exe`, et `wwwroot/index.html`, `wwwroot/_framework/dotnet.js`, `wwwroot/_framework/dotnet.native.wasm`, `wwwroot/_framework/MarocLIS.Mobile.wasm`, `wwwroot/service-worker-assets.js` ;
+    - `Web` : `MarocLIS.Web.exe`, `hostfxr.dll`, `appsettings.json`, `Resources/fr.json`, les polices et bibliothèques des comptes rendus, `MarocLIS.Web.staticwebassets.endpoints.json`, `wwwroot/css/app.css`, `wwwroot/js/compat.js`, `wwwroot/js/maroclis.js`, `wwwroot/_framework/blazor.web.js`, `wwwroot/icons/FlaskConical.png`.
+5. **Firefox ESR 115** pour le type Poste Web. Si `installer\prereqs\Firefox-Setup-esr115-fr-win32.exe` n'existe pas, le script le télécharge une fois depuis le site de Mozilla (`https://ftp.mozilla.org/pub/firefox/releases/<version>esr/win32/fr/`) : le programme d'installation complet, en français, 32 bits (il s'installe sur un Windows 32 ou 64 bits), de la version la plus récente 115.x ou de `-FirefoxVersion`. La version est notée dans `Firefox-Setup-esr115-fr-win32.version.txt`. À chaque construction, il vérifie le fichier : empreinte SHA-256 égale à `-FirefoxSha256` quand ce paramètre est donné, et signature Authenticode **valide et de Mozilla Corporation**. Il s'arrête si le fichier manque, si le téléchargement échoue ou si une vérification échoue. Le dossier `installer\prereqs` est ignoré par Git.
+6. Vérifie la version d'Inno Setup (6.3 ou ultérieure, série 6), puis compile `installer/MarocLIS.iss` et affiche le chemin et la taille du résultat.
 
 Résultat : **`installer\output\MarocLIS-Setup-<version>.exe`**. Les dossiers `installer\build\` et `installer\output\` sont ignorés par Git (`installer/.gitignore`).
 
@@ -149,7 +160,7 @@ Lancez `MarocLIS-Setup-<version>.exe`. Les pages se suivent ainsi ; une page san
 
 1. **Langue de l'assistant.** Le français est proposé en premier quelle que soit la langue de Windows ; l'anglais reste disponible.
 2. **Dossier de destination.** Par défaut `C:\MarocLIS` (`{sd}\MarocLIS`). Lors d'une mise à jour, le dossier de l'installation précédente est repris.
-3. **Type d'installation.** Choisissez **« Serveur : base de données, application et service de validation mobile »**. Le texte sous la liste résume ce qui sera installé : SQL Server Express (instance `SQLEXPRESS`) sauf si SQL Server est déjà installé, l'application MarocLIS reliée à la base de ce serveur, le service Windows `MarocLIS.Api`, et le pare-feu Windows ouvert à SQL Server pour le réseau local. Lors d'une mise à jour, le type précédent est repris.
+3. **Type d'installation.** Choisissez **« Serveur : base de données, application, version Web, validation mobile »**. Le texte sous la liste résume ce qui sera installé : SQL Server Express (instance `SQLEXPRESS`) sauf si SQL Server est déjà installé, l'application MarocLIS reliée à la base de ce serveur, le service Windows `MarocLIS.Api`, le service Windows `MarocLIS.Web` avec son certificat HTTPS, et le pare-feu Windows ouvert à SQL Server et à la version Web pour le réseau local. Lors d'une mise à jour, le type précédent est repris. Sur un Windows antérieur à Windows 10 ou en 32 bits, ce type est refusé (section 2).
 4. **SQL Server.** Deux cas :
     - **SQL Server déjà installé** : la page affiche « SQL Server est déjà installé sur cet ordinateur. Instance utilisée par MarocLIS : » et une liste des instances trouvées. `SQLEXPRESS` est présélectionnée si elle existe, sinon la première instance. La note rappelle que l'installation crée la base « MarocLIS » si elle n'existe pas, donne l'accès au groupe `MarocLIS-Utilisateurs` et au service, active SQL Server Browser et ouvre le pare-feu au réseau local, et que votre compte doit être sysadmin de l'instance.
     - **Aucun SQL Server** : la page annonce l'installation de Microsoft SQL Server 2025 Express (moteur seul, instance `SQLEXPRESS`, TCP/IP activé, pare-feu ouvert au réseau local, administrateurs de l'ordinateur administrateurs de SQL Server), puis indique la source : le support hors ligne trouvé à côté du programme, ou le téléchargement depuis Microsoft (environ 300 Mo, Internet nécessaire).
@@ -164,14 +175,15 @@ Lancez `MarocLIS-Setup-<version>.exe`. Les pages se suivent ainsi ; une page san
 
 7. **Licence MarocLIS** (facultative). Indiquez le fichier `.lic` reçu de l'éditeur, ou laissez vide. Le fichier doit exister et porter l'extension `.lic` ; il est copié sous le nom `{app}\Desktop\licence.lic` et importé au premier démarrage (section 6).
 8. **Tâches supplémentaires** : **Créer une icône sur le Bureau** (facultatif). Un raccourci « MarocLIS » est toujours créé dans le menu Démarrer.
-9. **Prêt à installer.** Le récapitulatif indique : le dossier, le type, SQL Server (installation et source, ou instance existante), la chaîne de connexion qui sera écrite (`Server=localhost\SQLEXPRESS;Database=MarocLIS;Integrated Security=true` pour l'instance `SQLEXPRESS` ; `Server=localhost;…` pour l'instance par défaut `MSSQLSERVER`), le service (« compte LocalSystem, http://127.0.0.1:5080, démarrage automatique différé »), la sauvegarde (« tous les jours à 22:00, conservation 14 jours, dans … », tâche planifiée « MarocLIS - Sauvegarde », compte SYSTEM), et la licence. Lors d'une mise à jour, il ajoute que le service est arrêté pendant la copie puis redémarré, et que les fichiers `appsettings.json` existants sont conservés.
+9. **Prêt à installer.** Le récapitulatif indique : le dossier, le type, SQL Server (installation et source, ou instance existante), la chaîne de connexion qui sera écrite (`Server=localhost\SQLEXPRESS;Database=MarocLIS;Integrated Security=true` pour l'instance `SQLEXPRESS` ; `Server=localhost;…` pour l'instance par défaut `MSSQLSERVER`), le service (« compte LocalSystem, http://127.0.0.1:5080, démarrage automatique différé »), le service MarocLIS.Web (« compte LocalSystem, https://<serveur>:5443/, certificat HTTPS propre à ce serveur, pare-feu ouvert au réseau local »), la sauvegarde (« tous les jours à 22:00, conservation 14 jours, dans … », tâche planifiée « MarocLIS - Sauvegarde », compte SYSTEM), et la licence. Lors d'une mise à jour, il ajoute que le service est arrêté pendant la copie puis redémarré, et que les fichiers `appsettings.json` existants sont conservés.
 
     Si SQL Server doit être téléchargé, un clic sur **Installer** télécharge d'abord le petit programme de Microsoft `SQL2025-SSEI-Expr.exe` ; en cas d'échec : « Le téléchargement de SQL Server Express a échoué : … ».
 
-10. **Installation de SQL Server Express** (si nécessaire), puis copie des fichiers et configuration (4.3 à 4.8). L'étape SQL Server peut durer **de 10 à 30 minutes** : ne fermez pas la fenêtre.
+10. **Installation de SQL Server Express** (si nécessaire), puis copie des fichiers et configuration (4.3 à 4.9). L'étape SQL Server peut durer **de 10 à 30 minutes** : ne fermez pas la fenêtre.
 11. **Fin.** Le message rappelle les étapes suivantes :
     - au premier démarrage, MarocLIS crée les tables de la base (identifiant `admin`, mot de passe initial `Maroc-LIS-2026!`, à changer aussitôt) ;
-    - postes clients : ajouter les comptes Windows des utilisateurs au groupe local `MarocLIS-Utilisateurs` du serveur (en groupe de travail, créer sur le serveur un compte de même nom et même mot de passe que sur le poste), puis installer « Poste client » sur chaque poste ;
+    - Postes Windows : ajouter les comptes Windows des utilisateurs au groupe local `MarocLIS-Utilisateurs` du serveur (en groupe de travail, créer sur le serveur un compte de même nom et même mot de passe que sur le poste), puis installer « Poste Windows » sur chaque poste ;
+    - version Web : l'adresse `https://<serveur>:5443/` pour les Postes Web (Windows 7 à 11) et tout navigateur du réseau local, et l'**empreinte SHA-256** du certificat du serveur (32 octets écrits en hexadécimal, `AB:CD:…`), à comparer à celle qu'affiche l'installation de chaque Poste Web ; elle est aussi dans `{app}\Web\certificat-serveur.txt`. **Notez-la** ;
     - validation depuis le téléphone : installer Tailscale sur le serveur puis exécuter `tailscale serve --bg 5080`.
 
     Si une étape a échoué ou s'est terminée avec un avertissement, la liste **« À vérifier : »** la nomme et renvoie au journal `{app}\Installer\install.log` (section 11.3). La case **Lancer MarocLIS** démarre l'application avec le compte de la session (sans les droits élevés de l'installation). Si l'installation de SQL Server a demandé un redémarrage (code 3010), l'assistant propose de redémarrer l'ordinateur.
@@ -198,7 +210,7 @@ Seulement quand aucune instance SQL Server n'est enregistrée sur l'ordinateur (
 
 ### 4.4 Chaîne de connexion
 
-Pour une **première installation** seulement, l'installation écrit dans `{app}\Desktop\appsettings.json` et `{app}\Api\appsettings.json` la clé `Database:ConnectionString` :
+Pour une **première installation** seulement, l'installation écrit dans `{app}\Desktop\appsettings.json`, `{app}\Api\appsettings.json` et `{app}\Web\appsettings.json` la clé `Database:ConnectionString` :
 
 ```
 Server=localhost\<instance>;Database=MarocLIS;Integrated Security=true
@@ -218,7 +230,7 @@ Server=localhost\<instance>;Database=MarocLIS;Integrated Security=true
 6. **Connexions SQL Server**, chacune membre du rôle `db_owner` de la base (les postes appliquent les mises à jour du schéma au démarrage, d'où ce rôle) :
     - le groupe `<SERVEUR>\MarocLIS-Utilisateurs` ;
     - le compte Windows qui exécute l'installation (un groupe ajouté maintenant ne figurerait dans son jeton qu'à sa prochaine ouverture de session) ;
-    - `NT AUTHORITY\SYSTEM`, compte du service `MarocLIS.Api` et de la tâche de sauvegarde.
+    - `NT AUTHORITY\SYSTEM`, compte des services `MarocLIS.Api` et `MarocLIS.Web` et de la tâche de sauvegarde.
 7. `GRANT CREATE ANY DATABASE TO [NT AUTHORITY\SYSTEM]` : nécessaire à `RESTORE VERIFYONLY`, qui vérifie chaque sauvegarde.
 
 ### 4.6 Tâche planifiée de sauvegarde
@@ -257,50 +269,89 @@ Le script peut aussi servir à la main, dans un PowerShell lancé en administrat
 
 Avec `-Account`, le compte reçoit le droit « Ouvrir une session en tant que service » et le droit Modifier sur `logs` ; il doit alors avoir lui-même accès à la base (même rôle que les postes). Le manuel recommande un compte dédié plutôt que LocalSystem ; l'installation, elle, utilise LocalSystem. Si le service existe déjà, le script refuse (« Service MarocLIS.Api already exists… ») : utilisez d'abord `-Uninstall`.
 
-### 4.8 Ordre exact des opérations
+### 4.8 Service MarocLIS.Web (version Web)
+
+La version Web est la seconde interface de MarocLIS : les mêmes écrans, servis par le serveur aux navigateurs du réseau local, à l'adresse **`https://<serveur>:5443/`**. C'est elle qu'utilisent les Postes Web (section 5.5), et notamment les postes sous Windows 7, 8 et 8.1, qui ne peuvent pas faire fonctionner l'application Windows.
+
+Étape « Service MarocLIS.Web (certificat, pare-feu)… », par `{app}\Web\install-web-service.ps1` :
+
+1. **Certificat HTTPS propre au serveur.** Certificat auto-signé, RSA 2048 bits, SHA-256, valable **10 ans**, clé privée non exportable, sujet `CN=MarocLIS Web <NOM-DU-SERVEUR>`, nom convivial « MarocLIS Web ». Ses noms (`subjectAltName`) sont le **nom** du serveur, son **nom DNS complet**, `localhost`, chacune de ses **adresses IPv4** et `127.0.0.1` : `https://SERVEUR:5443`, `https://serveur.domaine.local:5443` et `https://192.168.1.10:5443` sont tous reconnus. Il est rangé dans le magasin de l'ordinateur **`LocalMachine\My`** (Personnel), et ajouté à **`LocalMachine\Root`** (Autorités de certification racines de confiance) pour que le navigateur du serveur lui-même lui fasse confiance. Un certificat existant est **réutilisé** tant qu'il lui reste plus de 30 jours ; si une adresse IP actuelle du serveur n'y figure pas, le journal le signale (voir plus bas « Changement de nom ou d'adresse »).
+2. **Kestrel** (le serveur HTTPS de la version Web) est réglé pour l'utiliser : dans `{app}\Web\appsettings.json`, sous `Kestrel:Endpoints:Https`, le script ajoute `"Certificate": { "Subject": "CN=MarocLIS Web <NOM>", "Store": "My", "Location": "LocalMachine", "AllowInvalid": true }` (ou met à jour le sujet d'un bloc qu'il a déjà écrit). Le reste du fichier est conservé tel quel. `AllowInvalid` est nécessaire parce que le certificat est auto-signé.
+3. **Partie publique du certificat** exportée dans `{app}\Web\certificat-serveur.cer`, et son **empreinte SHA-256** écrite dans `{app}\Web\certificat-serveur.txt` (ligne « Empreinte SHA-256  : AB:CD:… ») et affichée sur la dernière page de l'assistant. Si le serveur a un partage nommé `MarocLIS`, les deux fichiers y sont aussi copiés. Le service sert ce certificat aux postes du réseau local à `https://<serveur>:5443/certificat-serveur.cer` (et `.pem`) : c'est là que l'installation d'un Poste Web le demande.
+4. **Pare-feu Windows** : règle entrante « MarocLIS - Web (HTTPS 5443) », TCP 5443, **sous-réseau local** seulement, tous profils, groupe « MarocLIS » (remplacée si elle existe).
+5. **Service Windows** :
+    - nom `MarocLIS.Web`, nom affiché « MarocLIS - version Web » ;
+    - compte **LocalSystem** (`NT AUTHORITY\SYSTEM`, qui a accès à la base, voir 4.5), programme `{app}\Web\MarocLIS.Web.exe` ;
+    - démarrage **automatique différé** ; redémarrage après un arrêt anormal : 1 minute, 1 minute, puis 5 minutes ; compteur remis à zéro après un jour ;
+    - journaux `{app}\Web\logs\maroclis-web-AAAAMMJJ.log` ;
+    - démarré (ou redémarré s'il existait), puis contrôle que `https://localhost:5443/connexion` répond ; sinon avertissement (voir 11.10).
+
+À son démarrage, le service crée les tables de la base si elles n'existent pas ou applique les mises à jour du schéma, comme le fait l'application Windows (réglage `Web:InitializeDatabase`, `true` par défaut) : la base est donc prête dès la fin de l'installation du serveur.
+
+Le service ne répond qu'aux adresses des réseaux privés (`Web:AllowedNetworks` : boucle locale, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, adresses link-local, `100.64.0.0/10` et leurs équivalents IPv6) ; toute autre adresse reçoit « 403 ». On peut restreindre cette liste aux sous-réseaux du laboratoire dans `{app}\Web\appsettings.json`.
+
+**Changement de nom ou d'adresse du serveur.** Le certificat ne couvre que les noms et adresses du jour de sa création. Après un changement de nom ou une nouvelle adresse IP fixe, dans un PowerShell lancé en administrateur, dans `{app}\Web` :
+
+```
+.\install-web-service.ps1 -RenewCertificate      # nouveau certificat, l'ancien est retiré, service redémarré
+.\install-web-service.ps1                        # sans rien changer : vérifie et redémarre (sans effet si tout est en place)
+.\install-web-service.ps1 -Uninstall             # arrêter et supprimer le service et sa règle de pare-feu
+```
+
+Un nouveau certificat a une nouvelle empreinte : **relancez l'installation « Poste Web » sur chaque Poste Web** pour qu'il lui fasse confiance (section 5.5).
+
+### 4.9 Ordre exact des opérations
 
 | Moment | Opération |
 |---|---|
-| Avant la copie des fichiers | Installation de SQL Server Express (si nécessaire) ; arrêt du service `MarocLIS.Api` s'il existe (mise à jour) |
-| Copie | `{app}\Desktop` (application), `{app}\Api` (service et application du téléphone, `install-api-service.ps1`), `{app}\Sauvegarde\maroclis-backup.ps1` ; `appsettings.json` seulement s'il n'existe pas encore |
-| Après la copie | Copie de la licence en `{app}\Desktop\licence.lic` ; chaîne de connexion ; base, accès et pare-feu ; tâche de sauvegarde ; création du service (première installation) ou redémarrage (mise à jour) |
+| Avant la copie des fichiers | Installation de SQL Server Express (si nécessaire) ; arrêt des services `MarocLIS.Api` et `MarocLIS.Web` s'ils existent (mise à jour) |
+| Copie | `{app}\Desktop` (application), `{app}\Api` (service et application du téléphone, `install-api-service.ps1`), `{app}\Web` (version Web, `install-web-service.ps1`), `{app}\Sauvegarde\maroclis-backup.ps1` ; `appsettings.json` seulement s'il n'existe pas encore |
+| Après la copie | Copie de la licence en `{app}\Desktop\licence.lic` ; chaînes de connexion ; base, accès et pare-feu ; tâche de sauvegarde ; création du service `MarocLIS.Api` (première installation) ou redémarrage (mise à jour) ; service `MarocLIS.Web` : certificat, pare-feu, création ou redémarrage |
 
 Une étape qui échoue n'interrompt pas l'installation : elle est signalée sur la dernière page (« Étape non terminée : … » ou « Étape terminée avec un avertissement : … ») et détaillée dans `{app}\Installer\install.log`.
 
-### 4.9 Après l'installation du serveur
+### 4.10 Après l'installation du serveur
 
 1. **Démarrer MarocLIS sur le serveur** (section 6) : création des tables, compte `admin`, licence.
 2. **Ajouter les utilisateurs** au groupe local `MarocLIS-Utilisateurs` du serveur (Gestion de l'ordinateur › Utilisateurs et groupes locaux). Un utilisateur ajouté doit fermer puis rouvrir sa session Windows pour que l'appartenance soit prise en compte.
 3. **Vérifier la sauvegarde** : **Paramètres › Sauvegardes**, **Tester le dossier**, puis **Sauvegarder maintenant** (section 7).
-4. **Validation sur téléphone** (si le module est utilisé ; détail dans le manuel, Administration › « Service de validation à distance ») :
+4. **Vérifier la version Web** : sur le serveur, ouvrir `https://localhost:5443/` dans Edge ou Chrome ; la page de connexion de MarocLIS s'affiche sans alerte de sécurité. Garder à portée l'**empreinte SHA-256** affichée en fin d'installation (`{app}\Web\certificat-serveur.txt`) pour l'installation des Postes Web ; copier `{app}\Web\certificat-serveur.cer` sur une clé USB peut servir pour un poste sous Windows 7 qui ne joint pas le serveur en HTTPS (section 5.5).
+5. **Validation sur téléphone** (si le module est utilisé ; détail dans le manuel, Administration › « Service de validation à distance ») :
     1. installer **Tailscale** sur le serveur, le relier au réseau Tailscale (tailnet) du laboratoire ; dans la console d'administration Tailscale (DNS), activer **MagicDNS** et **HTTPS Certificates** ;
     2. sur le serveur : `tailscale serve --bg 5080` ; l'adresse publiée est `https://<machine>.<tailnet>.ts.net`, conservée aux redémarrages (`tailscale serve status` l'affiche, `tailscale serve --https=443 off` la retire) ;
     3. **ne jamais** utiliser `tailscale funnel`, qui publierait le service sur Internet ;
     4. sur chaque téléphone : application Tailscale, connexion au tailnet, ouverture de l'adresse publiée, ajout de « MarocLIS Validation » à l'écran d'accueil ;
     5. dans MarocLIS, **Rôles et droits** : droit `results.validate_remote` pour les biologistes concernés (avec `results.validate_biological` et une qualification de biologiste valide).
-5. **Une copie hors du serveur** des sauvegardes : un partage sur une autre machine, ou une copie régulière sur un disque externe rangé ailleurs (section 7).
+6. **Une copie hors du serveur** des sauvegardes : un partage sur une autre machine, ou une copie régulière sur un disque externe rangé ailleurs (section 7).
 
-## 5. Installer un poste client
+## 5. Installer les postes de travail
 
-### 5.1 Avant de commencer
+### 5.1 Quel type pour quel poste
+
+- **Poste Windows** (Windows 10 ou 11, 64 bits) : l'application MarocLIS, reliée directement à la base du serveur. Toutes les fonctions, y compris la conduite des automates (`Instruments:EnableInstrumentHost`) et l'impression directe des étiquettes. Sections 5.2 à 5.4.
+- **Poste Web** (Windows 7 SP1 à 11, 32 ou 64 bits) : MarocLIS dans le navigateur, servi par le service `MarocLIS.Web` du serveur. Rien de MarocLIS ne s'exécute sur le poste. C'est le seul type possible sous Windows 7, 8 et 8.1 ; il convient aussi à un poste sous Windows 10 ou 11 où l'on ne veut rien installer de plus qu'un raccourci. Section 5.5.
+
+Les deux types peuvent coexister dans un laboratoire : ils travaillent sur la même base, avec les mêmes comptes MarocLIS et la même licence.
+
+### 5.2 Poste Windows : avant de commencer
 
 - Le serveur est installé et MarocLIS y a été démarré une fois (la base existe et contient ses tables).
 - Le compte Windows de chaque utilisateur du poste est membre du groupe `MarocLIS-Utilisateurs` du serveur (ou, en groupe de travail, a son jumeau de même nom et même mot de passe sur le serveur).
 - Notez le **nom de l'ordinateur serveur** et l'**instance** (`SQLEXPRESS` si l'installation l'a installée).
 
-### 5.2 Les pages de l'assistant
+### 5.3 Poste Windows : les pages de l'assistant
 
 1. **Langue**, puis **Dossier de destination** (`C:\MarocLIS` par défaut).
-2. **Type d'installation** : **« Poste client : application seule, reliée au serveur »**. Rien d'autre n'est à installer : l'application contient tout ce qu'il lui faut, .NET compris.
+2. **Type d'installation** : **« Poste Windows : application MarocLIS (Windows 10 ou 11) »**. Rien d'autre n'est à installer : l'application contient tout ce qu'il lui faut, .NET compris. Sur un Windows antérieur à Windows 10 ou en 32 bits, ce type est refusé : choisissez « Poste Web » (5.5).
 3. **Serveur du laboratoire** :
     - **Nom du serveur** : le nom de l'ordinateur serveur, obligatoire, sans espace, `\`, `;` ni guillemet (l'instance se saisit à part) ;
     - **Instance SQL Server** : `SQLEXPRESS` par défaut ; laissez vide ou saisissez `MSSQLSERVER` pour l'instance par défaut ;
     - **Tester la connexion** : ouvre la base `MarocLIS` du serveur indiqué (délai 10 secondes) avec **le compte Windows qui exécute l'installation**, pas forcément celui de l'utilisateur final. En cas d'échec, le message donne la raison ; vous pouvez continuer, la chaîne sera écrite telle quelle.
     - Si le poste a déjà un `{app}\Desktop\appsettings.json` (réinstallation, mise à jour), les champs sont grisés et la page indique « Ce poste a déjà un fichier appsettings.json : sa chaîne de connexion est conservée. »
-4. **Licence MarocLIS** (facultative) : la page est aussi proposée sur un poste client. Un fichier indiqué ici est copié en `{app}\Desktop\licence.lic` et importé au premier démarrage de ce poste si la base n'a pas encore de licence. La licence étant enregistrée dans la base, une seule pour le serveur et tous les postes, laissez la page vide si elle a déjà été installée depuis le serveur (section 8).
+4. **Licence MarocLIS** (facultative) : la page est aussi proposée sur un Poste Windows. Un fichier indiqué ici est copié en `{app}\Desktop\licence.lic` et importé au premier démarrage de ce poste si la base n'a pas encore de licence. La licence étant enregistrée dans la base, une seule pour le serveur et tous les postes, laissez la page vide si elle a déjà été installée depuis le serveur (section 8).
 5. **Tâches supplémentaires** (icône sur le Bureau), **Prêt à installer** (chaîne de connexion qui sera écrite), **Installation**, **Fin** : « MarocLIS est installé sur ce poste. Il utilise la base du serveur indiqué ; l'utilisateur Windows doit faire partie du groupe « MarocLIS-Utilisateurs » du serveur. »
 
-### 5.3 Comment le poste trouve le serveur
+### 5.4 Comment le Poste Windows trouve le serveur
 
 L'installation écrit dans `{app}\Desktop\appsettings.json` :
 
@@ -312,7 +363,61 @@ Server=<nom du serveur>\<instance>;Database=MarocLIS;Integrated Security=true
 
 Pour changer de serveur plus tard, modifiez la clé `Database:ConnectionString` de ce fichier (l'installation ne la réécrit jamais une fois le fichier présent). Une variable d'environnement de la machine peut aussi la remplacer : MarocLIS lit les variables préfixées `MAROCLIS_`, par exemple `MAROCLIS_Database__ConnectionString`.
 
-Un poste client n'a ni service, ni tâche planifiée, ni règle de pare-feu MarocLIS.
+Un Poste Windows n'a ni service, ni tâche planifiée, ni règle de pare-feu MarocLIS.
+
+### 5.5 Postes sous Windows 7, 8 et 8.1 (type « Poste Web »)
+
+L'application Windows de MarocLIS et ses services sont construits sur .NET 10, que Microsoft ne fournit que pour Windows 10 et ultérieurs. Un poste sous Windows 7, 8 ou 8.1 travaille donc avec la **version Web** : les mêmes écrans, dans le navigateur, servis par le serveur du laboratoire (section 4.8). Le type **« Poste Web »** du programme d'installation prépare le poste pour cela : il ne copie aucun programme MarocLIS, seulement ce qu'il faut pour que le navigateur ouvre MarocLIS correctement et en confiance.
+
+#### Ce qui est installé selon la version de Windows
+
+| Windows du poste | Types proposés par l'assistant | Ce que le type « Poste Web » installe |
+|---|---|---|
+| Windows 7 sans Service Pack 1 | Aucun : Windows refuse de lancer le programme (`MinVersion=6.1sp1`) | — Installez d'abord le Service Pack 1 par Windows Update. |
+| Windows 7 SP1, 32 ou 64 bits | **Poste Web** seul, présélectionné ; « Serveur » et « Poste Windows » refusés avec la raison | Le certificat du serveur ; **Firefox ESR 115** si aucun navigateur assez récent n'est présent ; la configuration de Firefox ; le raccourci « MarocLIS » |
+| Windows 8 et 8.1, 32 ou 64 bits | **Poste Web** seul, présélectionné ; les deux autres types refusés | Comme sous Windows 7 SP1 |
+| Windows 10 ou 11, 32 bits | **Poste Web** seul (l'application Windows est construite pour x64) | Le certificat ; le navigateur présent (Edge, toujours assez récent sous Windows 10 et 11) ; le raccourci |
+| Windows 10 ou 11, 64 bits | Serveur, Poste Windows et Poste Web | Pour un Poste Web : le certificat ; le navigateur présent (Edge le plus souvent) ; la configuration de Firefox s'il est présent ; le raccourci |
+| Windows Server 2016 et ultérieurs, 64 bits | Serveur, Poste Windows et Poste Web | Comme sous Windows 10, 64 bits |
+| Windows Server 2008 R2, 2012, 2012 R2 | **Poste Web** seul | Comme sous Windows 7 SP1 |
+
+**Navigateurs qui conviennent** : Google Chrome ou Microsoft Edge (Chromium) **109** ou plus récent, Mozilla Firefox **115** ou plus récent. Ce sont les dernières versions publiées pour Windows 7, 8 et 8.1 ; Internet Explorer et l'ancien Edge (avant 2020) ne conviennent pas. L'assistant cherche Edge, puis Chrome, puis Firefox, et retient le premier assez récent ; s'il n'en trouve aucun, il installe **Firefox ESR 115**, inclus dans le programme d'installation (version vérifiée à la construction, section 3.3). Chrome 109 et Edge 109 ne reçoivent plus de correctifs de sécurité sous ces systèmes ; Firefox ESR 115 en a reçu plus longtemps (consultez le site de Mozilla pour sa fin de prise en charge) et se met à jour seul quand le poste a Internet.
+
+#### Avant de commencer
+
+- Le serveur est installé, avec la version Web (section 4.8), et allumé.
+- Vous avez l'**empreinte SHA-256** du certificat du serveur, affichée à la fin de l'installation du serveur et écrite dans `C:\MarocLIS\Web\certificat-serveur.txt` sur le serveur.
+- Chaque utilisateur a un **compte MarocLIS** (créé dans MarocLIS, **Utilisateurs**). Le compte Windows du poste ne joue aucun rôle : il n'a pas à faire partie du groupe `MarocLIS-Utilisateurs`.
+- Sous Windows 7 : le poste doit pouvoir joindre le serveur en HTTPS (TLS 1.2) pour y demander le certificat. Un Windows 7 qui n'a pas reçu ses mises à jour (notamment KB3140245) peut échouer à cette étape ; copiez alors `C:\MarocLIS\Web\certificat-serveur.cer` du serveur sur une clé USB (ou depuis le partage `\\<serveur>\MarocLIS` s'il existe). Le navigateur, lui, a son propre TLS et n'est pas concerné.
+
+#### Les pages de l'assistant
+
+1. **Langue**, puis **Dossier de destination** (`C:\MarocLIS` par défaut ; seule l'icône du raccourci y est copiée, avec le journal de l'installation).
+2. **Type d'installation** : **« Poste Web : MarocLIS dans le navigateur (Windows 7 à 11) »**, présélectionné sous Windows 7, 8 et 8.1.
+3. **Serveur MarocLIS Web** :
+    - **Nom ou adresse du serveur** : le nom de l'ordinateur serveur (`SERVEUR-LABO`), son nom DNS complet ou son adresse IP (`192.168.1.10`) ; lettres, chiffres, points et tirets seulement, sans `https://` ni numéro de port. C'est l'adresse qu'ouvrira le raccourci : `https://<nom>:5443/`.
+    - **Vérifier le serveur** : demande au serveur son certificat (`https://<nom>:5443/certificat-serveur.pem`) et affiche son empreinte SHA-256.
+    - **Ou le fichier certificat-serveur.cer copié du serveur** (facultatif) : quand le poste ne joint pas le serveur en HTTPS, indiquez ici le fichier copié depuis le serveur ; il est alors utilisé à la place de la demande au serveur. Fichier `.cer`, `.crt` ou `.pem`, binaire ou texte « BEGIN CERTIFICATE », de moins de 64 Ko.
+    - La page indique aussi le **navigateur** que le raccourci utilisera : « Navigateur : Google Chrome 109 convient… », ou « Navigateur : Google Chrome 100, trop ancien ; Firefox ESR 115 sera installé… » (« aucun navigateur récent sur ce poste » quand il n'y a qu'Internet Explorer).
+    - **Suivant** affiche l'empreinte SHA-256 du certificat reçu et demande si elle est **identique** à celle du serveur. Comparez-la caractère par caractère : **Non** (le choix par défaut) refuse le certificat et laisse sur la page ; une empreinte différente signifie qu'un autre ordinateur répond à la place du serveur, ou que le nom saisi est le mauvais.
+4. **Tâches supplémentaires** : **Créer une icône sur le Bureau**. Le raccourci « MarocLIS » est toujours créé dans le menu Démarrer.
+5. **Prêt à installer** : le serveur (`https://<nom>:5443/`), l'empreinte du certificat qui sera ajouté aux autorités de confiance de Windows, le navigateur du raccourci (ou « Firefox ESR 115, installé par ce programme »), et, si Firefox est utilisé, ses réglages.
+6. **Installation**, puis **Fin** : « MarocLIS est prêt sur ce poste : le raccourci « MarocLIS » (bureau et menu Démarrer) ouvre https://<nom>:5443/ dans <navigateur>. » La case **Lancer MarocLIS** ouvre aussitôt la page de connexion.
+
+#### Ce que fait l'installation sur le poste
+
+1. **Firefox ESR 115**, s'il le faut, avant la copie des fichiers : installation silencieuse (`/S`) du programme officiel de Mozilla, dans `C:\Program Files\Mozilla Firefox` (ou `Program Files (x86)`). En cas d'échec, le raccourci ouvrira le navigateur par défaut, et la liste « À vérifier » le signale.
+2. **Certificat du serveur** : copié dans `C:\ProgramData\MarocLIS\certificat-serveur.cer`, puis ajouté au magasin **Autorités de certification racines de confiance de l'ordinateur** (`certutil -f -addstore Root`). Chrome et Edge le lisent là.
+3. **Firefox** (chaque Firefox 115 ou plus récent du poste, installé ou non par MarocLIS) : un fichier de stratégies `distribution\policies.json` à côté de `firefox.exe`, qui lui fait reconnaître le certificat du serveur et les autorités de Windows (`Certificates`, `ImportEnterpriseRoots`), ouvre MarocLIS comme page d'accueil, et lui épargne les questions du premier lancement et du navigateur par défaut. Les mises à jour de Firefox restent actives. Un `policies.json` déjà présent et qui n'a pas été écrit par MarocLIS est **conservé** ; l'installation le signale, et il faut alors, dans Firefox, **Paramètres › Vie privée et sécurité › Certificats**, cocher « Autoriser Firefox à faire confiance aux certificats racines tiers ».
+4. **Raccourcis « MarocLIS »** (menu Démarrer, et Bureau si demandé) : le navigateur retenu, avec l'adresse `https://<nom>:5443/`, et l'icône MarocLIS.
+
+Aucun service, aucune tâche, aucune règle de pare-feu, aucun runtime .NET, aucun PowerShell n'est utilisé sur un Poste Web. Le journal est `{app}\Installer\install.log`.
+
+#### Ce que voit l'utilisateur
+
+Le raccourci ouvre la **page de connexion** de MarocLIS ; l'utilisateur s'identifie avec son compte MarocLIS. Les écrans sont ceux de la version Web (en français, anglais ou arabe), sans alerte de certificat. Si le navigateur est trop ancien (par exemple un Chrome resté en version 100), la page de connexion l'annonce et nomme les navigateurs qui conviennent.
+
+Pour changer de serveur, ou après un renouvellement du certificat du serveur (4.8), relancez simplement le programme d'installation avec le type « Poste Web ».
 
 ## 6. Premier démarrage
 
@@ -480,22 +585,23 @@ Dans `%APPDATA%\MarocLIS\GenerateurLicences\` (ou le dossier donné par `--dossi
 
 ## 9. Mise à jour vers une nouvelle version
 
-Une nouvelle version s'installe en lançant simplement le nouveau `MarocLIS-Setup-<version>.exe`, sur le serveur puis sur chaque poste. Le programme garde le même identifiant d'application : il reconnaît l'installation existante et reprend son dossier, son type (Serveur ou Poste client) et les valeurs saisies la fois précédente.
+Une nouvelle version s'installe en lançant simplement le nouveau `MarocLIS-Setup-<version>.exe`, sur le serveur puis sur chaque poste. Le programme garde le même identifiant d'application : il reconnaît l'installation existante et reprend son dossier, son type (Serveur, Poste Windows ou Poste Web) et les valeurs saisies la fois précédente.
 
 Ce qui est conservé :
 
-- les fichiers `appsettings.json` de `{app}\Desktop` et `{app}\Api` (jamais remplacés : les nouveaux réglages éventuels du fichier livré ne sont donc pas ajoutés d'eux-mêmes) ;
+- les fichiers `appsettings.json` de `{app}\Desktop`, `{app}\Api` et `{app}\Web` (jamais remplacés : les nouveaux réglages éventuels du fichier livré ne sont donc pas ajoutés d'eux-mêmes) ;
 - la base de données et ses données ;
 - les réglages de sauvegarde faits dans MarocLIS (la page Sauvegarde de l'assistant ne sert alors pas ; la tâche planifiée est réenregistrée avec les mêmes chemins) ;
-- la licence, qui est dans la base.
+- la licence, qui est dans la base ;
+- le certificat HTTPS du serveur, réutilisé tant qu'il lui reste plus de 30 jours : les Postes Web n'ont rien à refaire.
 
 Déroulement :
 
 1. **Avant** : faites une sauvegarde (**Paramètres › Sauvegardes › Sauvegarder maintenant**) et fermez MarocLIS (l'assistant propose de fermer les applications ouvertes).
-2. **Sur le serveur** : lancez le programme. Le service `MarocLIS.Api` est arrêté avant la copie, puis redémarré ; la base, les accès, le pare-feu et la tâche de sauvegarde sont reconfigurés de la même façon qu'à l'installation (opérations sans effet si tout est déjà en place).
-3. **Mettre la base à jour** : le schéma n'est pas modifié par le programme d'installation, mais par **le premier MarocLIS de la nouvelle version qui démarre** (migrations appliquées au démarrage, depuis n'importe quel poste, le serveur compris). Le service ne met pas la base à jour.
+2. **Sur le serveur** : lancez le programme. Les services `MarocLIS.Api` et `MarocLIS.Web` sont arrêtés avant la copie, puis redémarrés ; la base, les accès, le pare-feu et la tâche de sauvegarde sont reconfigurés de la même façon qu'à l'installation (opérations sans effet si tout est déjà en place).
+3. **Mettre la base à jour** : le schéma n'est pas modifié par le programme d'installation, mais par **le premier MarocLIS de la nouvelle version qui démarre** (migrations appliquées au démarrage, depuis n'importe quel Poste Windows, le serveur compris). Le service `MarocLIS.Web`, redémarré à la fin de l'installation du serveur, applique lui aussi les migrations à son démarrage : c'est en général lui qui met la base à jour. Le service `MarocLIS.Api` ne met pas la base à jour.
 4. **Redémarrer le service `MarocLIS.Api`** après ce premier démarrage (Services Windows, ou `sc.exe stop MarocLIS.Api` puis `sc.exe start MarocLIS.Api`). La dernière page de l'assistant le rappelle : « Mise à jour : lancez d'abord MarocLIS sur un poste (il met la base à jour), puis redémarrez le service MarocLIS.Api. » Les téléphones doivent se reconnecter.
-5. **Sur chaque poste** : lancez le programme ; la chaîne de connexion existante est conservée.
+5. **Sur chaque Poste Windows** : lancez le programme ; la chaîne de connexion existante est conservée. **Sur un Poste Web**, rien n'est à mettre à jour : il reçoit la nouvelle version du serveur à la connexion suivante (rechargez la page si elle était ouverte pendant la mise à jour).
 
 Une licence perpétuelle ne couvre les mises à jour que jusqu'à sa date « mises à jour jusqu'au » : au-delà, MarocLIS le signale (section 11.7).
 
@@ -506,14 +612,17 @@ Par **Paramètres Windows › Applications** (ou Programmes et fonctionnalités)
 Ce qui est retiré :
 
 - le service `MarocLIS.Api` (arrêté puis supprimé, sur un serveur) ;
+- le service `MarocLIS.Web` et sa règle de pare-feu « MarocLIS - Web (HTTPS 5443) » (sur un serveur) ;
 - la tâche planifiée « MarocLIS - Sauvegarde » (sur un serveur) ;
-- les fichiers installés par le programme dans `{app}` (`Desktop`, `Api`, `Sauvegarde`), les raccourcis, et le dossier `{app}\Installer` (journal d'installation).
+- les fichiers installés par le programme dans `{app}` (`Desktop`, `Api`, `Web`, `Sauvegarde`, l'icône d'un Poste Web), les raccourcis, et le dossier `{app}\Installer` (journal d'installation).
 
 Ce qui est conservé, volontairement :
 
 - la **base de données** `MarocLIS` et **SQL Server** lui-même ;
 - les **fichiers de sauvegarde**, où qu'ils soient ;
-- ce que le programme d'installation n'a pas copié lui-même, notamment les journaux (`logs`) et le fichier `licence.lic` copié par l'assistant : le dossier qui les contient reste en place.
+- ce que le programme d'installation n'a pas copié lui-même, notamment les journaux (`logs`), le fichier `licence.lic` copié par l'assistant et le certificat exporté `{app}\Web\certificat-serveur.cer` : le dossier qui les contient reste en place ;
+- sur le serveur, le **certificat HTTPS** dans les magasins `LocalMachine\My` et `Root` : une réinstallation le reprend, et les Postes Web qui lui font confiance continuent de fonctionner. Pour le retirer : `certlm.msc`, certificats « MarocLIS Web » des dossiers Personnel et Autorités de certification racines de confiance ;
+- sur un Poste Web, **Firefox ESR** (il se désinstalle à part, comme tout programme), son `distribution\policies.json`, le certificat du serveur dans les autorités de confiance de Windows et sa copie `C:\ProgramData\MarocLIS\certificat-serveur.cer`.
 
 Le code de désinstallation ne retire pas non plus le groupe local `MarocLIS-Utilisateurs`, les connexions SQL Server, ni les règles de pare-feu du groupe « MarocLIS » : retirez-les à la main si le serveur ne sert plus à MarocLIS.
 
@@ -528,6 +637,10 @@ Le code de désinstallation ne retire pas non plus le groupe local `MarocLIS-Uti
 | PowerShell refuse d'exécuter le script (exécution de scripts désactivée) | Lancer `powershell -ExecutionPolicy Bypass -File .\installer\build-installer.ps1`. |
 | « MarocLIS embeds the DEVELOPMENT licence key … » | Clé de développement compilée : remplacer la clé publique (section 8, partie 2), ou `-AllowDevelopmentKey` pour un essai interne. |
 | « ISCC.exe (Inno Setup 6) not found. … » | Installer Inno Setup 6, ou passer `-Iscc`, ou définir `INNO_SETUP_ISCC`. |
+| « Inno Setup … found (…): use Inno Setup 6.3 or later 6.x … » | Installer une version 6.3 ou ultérieure de la série 6 (6.7.3 essayée). |
+| « Firefox ESR … could not be downloaded from … » / « No 115.x ESR release found … » | Pas d'Internet ou site de Mozilla injoignable : télécharger à la main le programme français 32 bits de Firefox ESR 115 sur `https://ftp.mozilla.org/pub/firefox/releases/` et l'enregistrer sous `installer\prereqs\Firefox-Setup-esr115-fr-win32.exe`. |
+| « Firefox installer … is not validly signed by Mozilla Corporation … » / « … has SHA-256 …, not the expected … » | Fichier altéré ou d'une autre origine : le supprimer et relancer ; ne jamais livrer le programme avec ce fichier. |
+| « Authenticode cannot be checked here: pass -FirefoxSha256 … » | Construction hors Windows : comparer l'empreinte affichée au fichier `SHA256SUMS` publié par Mozilla pour cette version, puis la passer en `-FirefoxSha256`. |
 | « dotnet publish … failed (exit code …) » | Vérifier le SDK .NET 10 (`global.json`) et relire la sortie de `dotnet publish`. |
 | « Missing from the published files: … » | Un fichier indispensable manque après la publication (police, bibliothèque native, application du téléphone) : corriger la publication ; ne pas livrer le programme. |
 | « No <Version> in Directory.Build.props. » | Ajouter l'élément `<Version>`. |
@@ -539,7 +652,11 @@ Le code de désinstallation ne retire pas non plus le groupe local `MarocLIS-Uti
 | « Le téléchargement de SQL Server Express a échoué : … » | Vérifier la connexion Internet, ou poser `SQLEXPR_x64_ENU.exe` à côté du programme et le relancer. |
 | « Le support d'installation de SQL Server Express est introuvable après le téléchargement. » | Même remède : support hors ligne. |
 | « L'installation de SQL Server Express a échoué (code …). » / « … aucune instance SQL Server n'est enregistrée … » | Lire `C:\Program Files\Microsoft SQL Server\<version>\Setup Bootstrap\Log\Summary.txt`. |
-| « Indiquez le nom du serveur. » / « Le nom du serveur ne doit contenir ni espace, ni « \ », ni « ; ». … » | Poste client : nom de l'ordinateur seul ; l'instance va dans le champ suivant. |
+| « Indiquez le nom du serveur. » / « Le nom du serveur ne doit contenir ni espace, ni « \ », ni « ; ». … » | Poste Windows : nom de l'ordinateur seul ; l'instance va dans le champ suivant. |
+| « … a besoin de Windows 10 ou 11 (64 bits) … » / « … a besoin d'un Windows 64 bits (x64) … » | Ce poste ne peut pas recevoir ce type : choisir « Poste Web » (5.5). Le serveur doit être un Windows 10, 11 ou Windows Server 2016 et ultérieur, 64 bits. |
+| « Le certificat n'a pas pu être demandé à … » | Poste Web : vérifier le nom, que le serveur est allumé et que le service « MarocLIS - version Web » y fonctionne (11.10). Sous Windows 7 ou 8 sans ses mises à jour, utiliser le fichier `certificat-serveur.cer` copié du serveur (5.5). |
+| « Ce fichier n'est pas un certificat lisible … » | Indiquer le fichier `certificat-serveur.cer` du dossier `C:\MarocLIS\Web` du serveur. |
+| « Le certificat n'est pas accepté. … » | L'empreinte n'a pas été confirmée. Si elle diffère vraiment de celle du serveur, ne pas continuer : vérifier le nom saisi, ou utiliser le fichier copié du serveur. |
 | « Connexion impossible à … » (bouton Tester) | Voir 11.5. On peut continuer : la chaîne est écrite telle quelle. |
 | « Indiquez le dossier des sauvegardes (chemin complet …) » | Chemin `X:\…` ou `\\serveur\partage`, sans guillemet ni apostrophe. |
 | « L'heure doit s'écrire HH:MM, de 00:00 à 23:59. » / « La conservation est un nombre de jours, de 1 à 365. » | Corriger la valeur. |
@@ -556,6 +673,12 @@ Les étapes de configuration écrivent leur détail dans **`{app}\Installer\inst
 | « Firewall rule '…' could not be created … » / « sqlservr.exe of … not found … » | Créer à la main la règle entrante pour SQL Server (et UDP 1434 pour une instance nommée), limitée au sous-réseau local. |
 | « Backup folder … is a network share … » | Donner au compte ordinateur du serveur (`DOMAINE\SERVEUR$`) le droit d'écrire sur le partage et dans le dossier. |
 | « Backup folder … could not be created … » / « icacls could not give … » | Créer le dossier, donner le droit Modifier au compte du service SQL Server, ou choisir un autre dossier dans **Paramètres › Sauvegardes**. |
+| « Service MarocLIS.Web is installed but https://localhost:5443/ does not answer yet … » | Le service peut mettre un moment à démarrer : réessayer `https://localhost:5443/` sur le serveur ; sinon voir 11.10. |
+| « The certificate does not name … (a new address?) … » | Le serveur a une adresse IP absente de son certificat : utiliser son nom dans les Postes Web, ou renouveler le certificat (4.8). |
+| « appsettings.json already names another certificate for Kestrel: kept as it is. » | Un certificat choisi à la main est conservé : c'est son empreinte que les Postes Web doivent confirmer. |
+| « Firefox ESR n'a pas pu être installé (…) … » (Poste Web) | Installer Firefox ESR 115 à la main, ou mettre à jour Chrome ou Edge en 109, puis relancer l'installation « Poste Web ». |
+| « Firefox (…) a déjà ses propres stratégies … conservées … » (Poste Web) | Dans Firefox, **Paramètres › Vie privée et sécurité › Certificats**, cocher « Autoriser Firefox à faire confiance aux certificats racines tiers ». |
+| « Le certificat du serveur n'a pas pu être ajouté aux autorités de confiance de Windows … » (Poste Web) | En administrateur : `certutil -addstore Root C:\ProgramData\MarocLIS\certificat-serveur.cer`, ou relancer l'installation. |
 | « FAILED: … » | L'étape a échoué : lire le message. Relancer le programme d'installation (comme une mise à jour) une fois la cause corrigée reprend toutes les étapes. |
 
 ### 11.4 MarocLIS ne démarre pas
@@ -613,6 +736,23 @@ L'avertissement de la section 6 signifie qu'une police configurée (`Reporting:L
 | « La restauration se fait uniquement depuis le serveur, par un administrateur Windows de ce poste. » | Ouvrir MarocLIS sur le serveur. |
 | « Le compte « … » n'a pas le droit de restaurer la base. … » | Accepter la relance « en tant qu'administrateur ». |
 
+### 11.10 La version Web ne répond pas
+
+- Sur le serveur, Services Windows : « MarocLIS - version Web » doit être démarré (démarrage automatique différé). `https://localhost:5443/connexion` doit afficher la page de connexion dans le navigateur du serveur.
+- Journaux : `{app}\Web\logs\maroclis-web-*.log`, et le journal d'événements Windows en cas d'échec au démarrage. « The database could not be initialised » : voir 11.5 (le service se connecte avec le compte `NT AUTHORITY\SYSTEM`).
+- Pare-feu : la règle « MarocLIS - Web (HTTPS 5443) » doit exister et le poste être dans le même sous-réseau que le serveur. Une réponse « 403 » vient du service lui-même : l'adresse du poste n'est pas dans `Web:AllowedNetworks`.
+- Certificat : le service doit trouver son certificat (`Kestrel:Endpoints:Https:Certificate` de `{app}\Web\appsettings.json`, sujet `CN=MarocLIS Web <SERVEUR>`, magasin `LocalMachine\My`). En cas de doute, en administrateur dans `{app}\Web` : `.\install-web-service.ps1` (sans effet si tout est en place), ou `.\install-web-service.ps1 -RenewCertificate` puis réinstaller les Postes Web.
+
+### 11.11 Un Poste Web n'ouvre pas MarocLIS
+
+| Symptôme | Que faire |
+|---|---|
+| Le navigateur affiche une alerte de sécurité (certificat non fiable, `NET::ERR_CERT_AUTHORITY_INVALID`, `SEC_ERROR_UNKNOWN_ISSUER`) | Le certificat du serveur n'est pas dans les autorités de confiance du poste, ou le serveur en a changé : relancer l'installation « Poste Web ». Pour Firefox avec ses propres stratégies : 11.3. |
+| Alerte « le nom ne correspond pas » (`ERR_CERT_COMMON_NAME_INVALID`, `SSL_ERROR_BAD_CERT_DOMAIN`) | L'adresse du raccourci n'est pas dans le certificat (serveur renommé, nouvelle adresse IP) : sur le serveur `install-web-service.ps1 -RenewCertificate` (4.8), puis relancer l'installation sur chaque Poste Web. |
+| La page de connexion annonce un navigateur trop ancien | Mettre à jour le navigateur (Chrome ou Edge 109, Firefox 115 ou plus récent), ou relancer l'installation « Poste Web », qui installe Firefox ESR 115 quand aucun navigateur ne convient. |
+| « Accès refusé » / « 403 » | L'adresse du poste n'est pas dans un réseau privé autorisé (`Web:AllowedNetworks` du serveur). |
+| La page ne se charge pas du tout | Voir 11.10 ; vérifier depuis le poste que le serveur répond au nom saisi (`ping <nom>`). |
+
 ## 12. Annexe : fichiers et emplacements
 
 ### 12.1 Dossiers et fichiers
@@ -630,6 +770,14 @@ L'avertissement de la section 6 signifie qu'une police configurée (`Reporting:L
 | `{app}\Api\appsettings.json` | Configuration du service, jamais remplacée par une mise à jour |
 | `{app}\Api\install-api-service.ps1` | Création et suppression du service |
 | `{app}\Api\logs\maroclis-api-AAAAMMJJ.log` | Journal du service, un fichier par jour, 31 conservés |
+| `{app}\Web\MarocLIS.Web.exe`, `{app}\Web\wwwroot` | Version Web (serveur) |
+| `{app}\Web\appsettings.json` | Configuration de la version Web, jamais remplacée par une mise à jour (le certificat y est ajouté par `install-web-service.ps1`) |
+| `{app}\Web\install-web-service.ps1` | Certificat, pare-feu, création et suppression du service `MarocLIS.Web` |
+| `{app}\Web\certificat-serveur.cer`, `{app}\Web\certificat-serveur.txt` | Partie publique du certificat HTTPS du serveur, et son empreinte SHA-256 |
+| `{app}\Web\logs\maroclis-web-AAAAMMJJ.log` | Journal de la version Web, un fichier par jour, 31 conservés |
+| `{app}\maroclis-web.ico` | Icône du raccourci « MarocLIS » (Poste Web) |
+| `C:\ProgramData\MarocLIS\certificat-serveur.cer` | Certificat du serveur reconnu par le Poste Web |
+| `<dossier de Firefox>\distribution\policies.json` | Stratégies de Firefox écrites par l'installation d'un Poste Web |
 | `{app}\Sauvegarde\maroclis-backup.ps1` | Script de la tâche de sauvegarde (serveur) |
 | `{app}\Sauvegarde\logs\maroclis-backup-AAAAMM.log` | Journal mensuel de la tâche |
 | `{app}\Installer\install.log` | Journal des étapes de configuration de l'installation |
@@ -645,8 +793,12 @@ L'avertissement de la section 6 signifie qu'une police configurée (`Reporting:L
 | Groupe local Windows | `MarocLIS-Utilisateurs` |
 | Connexions SQL Server (`db_owner` de `MarocLIS`) | `<SERVEUR>\MarocLIS-Utilisateurs`, le compte qui a installé, `NT AUTHORITY\SYSTEM` (avec `CREATE ANY DATABASE`) |
 | Service Windows | `MarocLIS.Api` (« MarocLIS - validation a distance (API) »), LocalSystem, automatique différé, `http://127.0.0.1:5080` |
+| Service Windows | `MarocLIS.Web` (« MarocLIS - version Web »), LocalSystem, automatique différé, `https://*:5443` |
+| Certificat | « MarocLIS Web », sujet `CN=MarocLIS Web <SERVEUR>`, dans `LocalMachine\My` et `LocalMachine\Root`, 10 ans |
 | Tâche planifiée | `MarocLIS - Sauvegarde`, SYSTEM, toutes les 15 minutes et au démarrage |
-| Règles de pare-feu (groupe « MarocLIS ») | `MarocLIS - SQL Server (<instance>)`, `MarocLIS - SQL Server Browser` (UDP 1434) |
+| Règles de pare-feu (groupe « MarocLIS ») | `MarocLIS - SQL Server (<instance>)`, `MarocLIS - SQL Server Browser` (UDP 1434), `MarocLIS - Web (HTTPS 5443)` (TCP 5443) |
+
+Sur un Poste Web : le certificat du serveur dans les autorités de certification racines de confiance de l'ordinateur, et, s'il a fallu l'installer, Firefox ESR 115.
 
 ### 12.3 Clés de `appsettings.json` utiles à l'installation
 
@@ -674,6 +826,18 @@ Service (`{app}\Api\appsettings.json`) :
 | `Database:ConnectionString` | réécrite par l'installation | Même base que les postes |
 | `MobileApi:MaxSessionLifetime` | `12:00:00` | Durée maximale d'une session de téléphone |
 | `PasswordPolicy`, `Reporting` | — | À garder identiques à ceux des postes |
+
+Version Web (`{app}\Web\appsettings.json`) :
+
+| Clé | Valeur livrée | Rôle |
+|---|---|---|
+| `Kestrel:Endpoints:Https:Url` | `https://*:5443` | Adresse et port de la version Web ; un autre port demande aussi de changer la règle de pare-feu et les raccourcis des Postes Web |
+| `Kestrel:Endpoints:Https:Certificate` | ajoutée par l'installation (`Subject`, `Store` `My`, `Location` `LocalMachine`, `AllowInvalid` `true`) | Certificat HTTPS du serveur |
+| `Database:ConnectionString` | réécrite par l'installation | Même base que les postes |
+| `Web:AllowedNetworks` | plages privées IPv4 et IPv6, boucle locale, `100.64.0.0/10` | Seules adresses servies ; les autres reçoivent « 403 » |
+| `Web:InitializeDatabase` | `true` | Crée ou met à jour le schéma au démarrage du service |
+| `Web:ServerCertificateFile` | `certificat-serveur.cer` | Certificat servi aux Postes Web à `/certificat-serveur.cer` et `/certificat-serveur.pem` |
+| `Application`, `PasswordPolicy`, `Reporting`, `Instruments` | — | À garder identiques à ceux des postes |
 
 ### 12.4 Réglages de sauvegarde dans la base
 
