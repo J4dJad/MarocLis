@@ -5800,6 +5800,7 @@
   "Interface_ResultNotOrdered": "L'automate a rendu une analyse non demandée sur ce tube.",
   "Interface_ParameterNotFound": "Le paramètre associé à ce code n'existe plus au catalogue.",
   "Interface_ResultAlreadyValidated": "Résultat déjà validé biologiquement : la correction passe par un compte rendu rectifié.",
+  "Interface_NewerValueStored": "Valeur non appliquée : une valeur plus récente est déjà enregistrée (mesurée après cette trame, ou saisie depuis sa réception). Pour importer celle-ci, effacez d'abord la valeur actuelle puis rejouez la trame.",
   "Interface_CorrectionAfterValidation": "L'automate transmet une correction d'un résultat déjà validé : elle exige un compte rendu rectifié.",
   "Interface_AnalyserReportedNotDone": "L'automate signale l'analyse comme non réalisée.",
   "Interface_EmptyValue": "Valeur vide transmise pour ce paramètre.",

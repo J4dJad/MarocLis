@@ -148,7 +148,7 @@ public sealed class InstrumentMessageSink(
             return true;
         }
 
-        var imported = await ImportAsync(link, message, issues, ct);
+        var imported = await ImportAsync(link, message, now, issues, ct);
 
         var status = imported == 0
             ? InstrumentMessageProcessingStatus.Failed
@@ -224,7 +224,7 @@ public sealed class InstrumentMessageSink(
                 string.Join("; ", reparsed.Issues.Where(i => i.IsBlocking)
                                                   .Select(i => i.ResourceKey))));
 
-        return await ReplayParsedAsync(logId, link, reparsed, byUserId, ct);
+        return await ReplayParsedAsync(logId, link, reparsed, entry.OccurredAt, byUserId, ct);
     }
 
     /// <summary>The issue that holds the link's results back, or null when its analyser may produce them.</summary>
@@ -263,11 +263,11 @@ public sealed class InstrumentMessageSink(
         };
 
     private async Task<Result<int>> ReplayParsedAsync(Guid logId, InstrumentInterface link,
-                                                       InstrumentMessage message, Guid byUserId,
-                                                       CancellationToken ct)
+                                                       InstrumentMessage message, DateTimeOffset receivedAt,
+                                                       Guid byUserId, CancellationToken ct)
     {
         var issues = new List<string>();
-        var imported = await ImportAsync(link, message, issues, ct);
+        var imported = await ImportAsync(link, message, receivedAt, issues, ct);
 
         await messageLog.MarkProcessedAsync(
             logId,
@@ -285,8 +285,13 @@ public sealed class InstrumentMessageSink(
 
     // ---- Import --------------------------------------------------------------------------------
 
+    /// <param name="receivedAt">
+    /// When the frame reached the laboratory system: now for a live frame, the time it was logged
+    /// for a replay or a late acceptance. The measurement time of a value the analyser sent without
+    /// one, and what a value typed at the bench since is compared with.
+    /// </param>
     private async Task<int> ImportAsync(InstrumentInterface link, InstrumentMessage message,
-                                         List<string> issues, CancellationToken ct)
+                                         DateTimeOffset receivedAt, List<string> issues, CancellationToken ct)
     {
         var imported = 0;
 
@@ -304,7 +309,7 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
-            imported += await ImportPatientAsync(link, specimen, issues, ct);
+            imported += await ImportPatientAsync(link, specimen, receivedAt, issues, ct);
         }
 
         if (imported > 0)
@@ -319,7 +324,7 @@ public sealed class InstrumentMessageSink(
     }
 
     private async Task<int> ImportPatientAsync(InstrumentInterface link,
-                                                InstrumentSpecimenResults specimen,
+                                                InstrumentSpecimenResults specimen, DateTimeOffset receivedAt,
                                                 List<string> issues, CancellationToken ct)
     {
         var barcode = specimen.SpecimenId!.Trim();
@@ -409,13 +414,12 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
-            var applied = await ApplyAsync(link, mapping, incoming, target, order, issues, ct);
+            var applied = await ApplyAsync(link, mapping, incoming, target, order, receivedAt, issues, ct);
 
-            if (applied)
-            {
-                imported++;
-                touched.Add(target);
-            }
+            // A value this very frame already put there counts as imported, and is left as it
+            // stands: re-entering it would stamp a new entry time and clear its technical check.
+            if (applied is FrameValue.Applied or FrameValue.AlreadyStored) imported++;
+            if (applied == FrameValue.Applied) touched.Add(target);
         }
 
         if (imported > 0)
@@ -484,17 +488,45 @@ public sealed class InstrumentMessageSink(
                ?? candidates.FirstOrDefault(r => live[r.LabOrderItemId].SampleId is null);
     }
 
-    private async Task<bool> ApplyAsync(InstrumentInterface link, InstrumentTestMapping mapping,
-                                         InstrumentResult incoming, TestResult target,
-                                         LabOrder order, List<string> issues,
-                                         CancellationToken ct)
+    /// <summary>What became of one value of a frame.</summary>
+    private enum FrameValue
+    {
+        Refused,
+        Applied,
+
+        /// <summary>The value already on the row is this frame's own: replayed, it is left alone.</summary>
+        AlreadyStored
+    }
+
+    /// <summary>
+    /// Whether the row already holds a value newer than the frame's: measured by the analyser after
+    /// it, or typed at the bench after the frame was received. A replay, or the late acceptance of
+    /// a held transmission, put the older value back over the re-run — haemolysed K 6.8 over the
+    /// 4.5 measured since — with a fresh entry time that made it look the most recent.
+    /// </summary>
+    private static bool HoldsNewerValue(TestResult target, DateTimeOffset measuredAt, DateTimeOffset receivedAt)
+    {
+        if (!target.HasValue && !target.Flags.HasFlag(ResultFlag.NotDone)) return false;
+
+        // An analyser's value carries the analyser's measurement time: compared like with like.
+        if (target.IsAutoTransmitted)
+            return target.MeasuredAt is { } stored && stored > measuredAt;
+
+        // A value typed at the bench is compared on the laboratory system's clock, both sides.
+        return target.EnteredAt is { } entered && entered > receivedAt;
+    }
+
+    private async Task<FrameValue> ApplyAsync(InstrumentInterface link, InstrumentTestMapping mapping,
+                                              InstrumentResult incoming, TestResult target,
+                                              LabOrder order, DateTimeOffset receivedAt, List<string> issues,
+                                              CancellationToken ct)
     {
         var parameter = await ResolveParameterAsync(order, target, mapping.TestParameterId, ct);
 
         if (parameter is null)
         {
             issues.Add(Describe("Interface_ParameterNotFound", mapping.InstrumentTestCode));
-            return false;
+            return FrameValue.Refused;
         }
 
         if (target.IsValidated)
@@ -506,7 +538,24 @@ public sealed class InstrumentMessageSink(
                                     ? "Interface_CorrectionAfterValidation"
                                     : "Interface_ResultAlreadyValidated",
                                 $"{parameter.Code} / {order.AccessionNumber}"));
-            return false;
+            return FrameValue.Refused;
+        }
+
+        var measuredAt = incoming.MeasuredAt ?? receivedAt;
+
+        // The same value, from the same analyser and measured at the same time: this frame's own,
+        // already imported — a replay of a partly imported frame re-reads every code of it.
+        if (target is { IsAutoTransmitted: true } && target.MeasuredAt == measuredAt
+            && target.InstrumentId == link.InstrumentId
+            && string.Equals(target.RawInstrumentValue, TestResult.KeepRaw(incoming.Value?.Trim()), StringComparison.Ordinal))
+            return FrameValue.AlreadyStored;
+
+        // Kept in the log, not applied: replayable once the newer value is removed, if the older
+        // one really is the right one.
+        if (HoldsNewerValue(target, measuredAt, receivedAt))
+        {
+            issues.Add(Describe("Interface_NewerValueStored", $"{parameter.Code} / {order.AccessionNumber}"));
+            return FrameValue.Refused;
         }
 
         if (incoming.IsNotDone)
@@ -521,16 +570,16 @@ public sealed class InstrumentMessageSink(
             if (notDone.IsFailure)
             {
                 issues.Add(Describe(notDone.FirstError.ResourceKey, parameter.Code));
-                return false;
+                return FrameValue.Refused;
             }
 
-            return true;
+            return FrameValue.Applied;
         }
 
         if (string.IsNullOrWhiteSpace(incoming.Value))
         {
             issues.Add(Describe("Interface_EmptyValue", parameter.Code));
-            return false;
+            return FrameValue.Refused;
         }
 
         // Stamped with the time the value reached the laboratory system, not the analyser's
@@ -561,10 +610,12 @@ public sealed class InstrumentMessageSink(
         if (outcome.IsFailure)
         {
             issues.Add(Describe(outcome.FirstError.ResourceKey, $"{parameter.Code} = {raw}"));
-            return false;
+            return FrameValue.Refused;
         }
 
-        target.MeasuredAt = incoming.MeasuredAt ?? at;
+        // Without the analyser's own time, the value was measured at the latest when its frame
+        // arrived — not when a held transmission was accepted or a frame replayed.
+        target.MeasuredAt = measuredAt;
         target.InstrumentId = link.InstrumentId;
         target.RawInstrumentValue = TestResult.KeepRaw(raw);
         target.InstrumentFlags = link.KeepInstrumentFlags ? DescribeInstrumentFlags(incoming) : null;
@@ -576,7 +627,7 @@ public sealed class InstrumentMessageSink(
         // the transmission is in: against this patient's demographics, on the day it was measured
         // and with this analyser, since a method-dependent interval is the norm for hormones and
         // immunoassays.
-        return true;
+        return FrameValue.Applied;
     }
 
     /// <summary>

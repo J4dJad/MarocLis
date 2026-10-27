@@ -5799,6 +5799,7 @@
   "Interface_ResultNotOrdered": "The analyser returned an analysis that was not ordered on this tube.",
   "Interface_ParameterNotFound": "The parameter this code points at no longer exists in the catalogue.",
   "Interface_ResultAlreadyValidated": "Result already biologically validated: a correction goes through an amended report.",
+  "Interface_NewerValueStored": "Value not applied: a newer value is already stored (measured after this frame, or entered since it was received). To import this one, clear the current value first, then replay the frame.",
   "Interface_CorrectionAfterValidation": "The analyser is transmitting a correction to an already validated result: it needs an amended report.",
   "Interface_AnalyserReportedNotDone": "The analyser reports the analysis as not done.",
   "Interface_EmptyValue": "An empty value was transmitted for this parameter.",

@@ -185,6 +185,67 @@ public sealed class ReviewFixesClinical3Tests
         k.MeasuredAt.Should().Be(Now.AddMinutes(-5));
     }
 
+    // ---- An older frame never overwrites a newer value ------------------------------------------
+
+    [Fact]
+    public async Task AcceptingTheOlderOfTwoHeldTransmissionsLast_KeepsTheNewerValue_AndLogsTheOlderAsNotApplied()
+    {
+        var bench = new SinkBench();
+        var k = bench.AddAnalysis(bench.Tube, Potassium())[0];
+        bench.Link.AutoAcceptResults = false;
+
+        bench.At = Now.AddHours(-1);                       // 09:00: haemolysed first run
+        var older = await bench.SendFrameAsync(bench.Tube, ("K", "6.8"));
+        bench.At = Now.AddMinutes(-30);                    // 09:30: the re-run
+        var newer = await bench.SendFrameAsync(bench.Tube, ("K", "4.5"));
+
+        bench.At = Now;                                    // The technician accepts the newer one first.
+        (await bench.ReplayAsync(newer)).Value.Should().Be(1);
+        k.NumericValue.Should().Be(4.5m);
+        k.MeasuredAt.Should().Be(Now.AddMinutes(-30), "a frame without its own time was measured when it arrived");
+
+        bench.At = Now.AddMinutes(1);
+        (await bench.ReplayAsync(older)).Value.Should().Be(0);
+
+        k.NumericValue.Should().Be(4.5m, "the older transmission does not overwrite the newer value");
+        k.EnteredAt.Should().Be(Now);
+        bench.Log[older].Status.Should().Be(InstrumentMessageProcessingStatus.Failed);
+        bench.Log[older].Issues.Should().Contain("Interface_NewerValueStored");
+    }
+
+    [Fact]
+    public async Task ReplayingAnOldFrame_LeavesAValueTypedSince_AndAValueAlreadyImported_AndAppliesOnlyWhatIsMissing()
+    {
+        var bench = new SinkBench();
+        var results = bench.AddAnalysis(bench.Tube, Potassium(), Numeric("NA"));
+        var (k, na) = (results[0], results[1]);
+        var cl = Numeric("CL");
+
+        bench.At = Now.AddHours(-1);                       // 09:00: CL is not mapped yet.
+        var frame = await bench.SendFrameAsync(bench.Tube, ("K", "6.8"), ("NA", "140"), ("CL", "101"));
+        bench.Log[frame].Status.Should().Be(InstrumentMessageProcessingStatus.PartiallyImported);
+        var naEnteredAt = na.EnteredAt;
+
+        // 09:20: the technician types the re-run's potassium.
+        k.EnterNumeric(Potassium(), 4.5m, Now.AddMinutes(-40), Guid.NewGuid()).IsSuccess.Should().BeTrue();
+
+        // 10:00: CL is mapped, and the frame replayed.
+        var clRow = bench.AddAnalysis(bench.Tube, cl)[0];
+        bench.At = Now;
+        (await bench.ReplayAsync(frame)).IsSuccess.Should().BeTrue();
+
+        clRow.NumericValue.Should().Be(101m);
+        k.NumericValue.Should().Be(4.5m, "a value typed after the frame was received is the newer one");
+        na.EnteredAt.Should().Be(naEnteredAt, "a value already imported from this frame is not imported again");
+        bench.Log[frame].Status.Should().Be(InstrumentMessageProcessingStatus.PartiallyImported);
+        bench.Log[frame].Issues.Should().Contain("Interface_NewerValueStored");
+
+        // Once the newer value is removed, the frame can be replayed explicitly.
+        k.ClearValue().IsSuccess.Should().BeTrue();
+        await bench.ReplayAsync(frame);
+        k.NumericValue.Should().Be(6.8m);
+    }
+
     // ---- K2: "not done" is printed once a biologist validated its analysis ---------------------
 
     [Fact]
@@ -467,6 +528,14 @@ public sealed class ReviewFixesClinical3Tests
         public Dictionary<Guid, Patient> Patients { get; } = [];
         public PreviousValue? Previous { get; set; }
 
+        /// <summary>The bench's clock; fixed at <see cref="Now"/> unless a test moves it.</summary>
+        public DateTimeOffset At { get; set; } = Now;
+
+        /// <summary>The frames received, as the message log keeps them.</summary>
+        public Dictionary<Guid, InstrumentMessageLog> Log { get; } = [];
+
+        public InstrumentInterface Link => _link;
+
         private readonly InstrumentInterface _link;
         private readonly InstrumentMessageSink _sink;
         private readonly List<Sample> _tubes = [];
@@ -489,7 +558,11 @@ public sealed class ReviewFixesClinical3Tests
             };
 
             var self = this;
-            var clock = Clock();
+            var clock = Stub.Of<IClock>(new()
+            {
+                ["get_Now"] = _ => self.At,
+                ["get_Today"] = _ => DateOnly.FromDateTime(self.At.Date)
+            });
             var analyses = Stub.Of<IRepository<AnalysisTest>>(new()
             {
                 ["GetByIdWithDetailsAsync"] = args => Task.FromResult(self._analyses.GetValueOrDefault((Guid)args![0]!))
@@ -539,7 +612,23 @@ public sealed class ReviewFixesClinical3Tests
                 new ResultPostEntryPipeline(analyses, patients, samples, queries, clock),
                 Stub.Of<IInstrumentMessageLogStore>(new()
                 {
-                    ["RecordAsync"] = _ => Task.FromResult(Guid.NewGuid())
+                    ["RecordAsync"] = args =>
+                    {
+                        var entry = (InstrumentMessageLog)args![0]!;
+                        self.Log[entry.Id] = entry;
+                        return Task.FromResult(entry.Id);
+                    },
+                    ["GetByIdAsync"] = args => Task.FromResult(self.Log.GetValueOrDefault((Guid)args![0]!)),
+                    ["MarkProcessedAsync"] = args =>
+                    {
+                        if (self.Log.GetValueOrDefault((Guid)args![0]!) is { } entry)
+                        {
+                            entry.Status = (InstrumentMessageProcessingStatus)args[1]!;
+                            entry.ImportedCount = (int?)args[3];
+                            entry.Issues = (string?)args[4];
+                        }
+                        return Task.CompletedTask;
+                    }
                 }),
                 Stub.Of<IUnitOfWork>(),
                 clock,
@@ -597,6 +686,22 @@ public sealed class ReviewFixesClinical3Tests
 
         public Task<bool> SendAsync(Sample tube, params (string Code, string Value)[] values) =>
             SendAsync(tube, null, values);
+
+        /// <summary>An ASTM frame from the analyser, received now; returns its line in the log.</summary>
+        public async Task<Guid> SendFrameAsync(Sample tube, params (string Code, string Value)[] values)
+        {
+            string[] lines =
+            [
+                @"H|\^&|||AU480^1|||||||P|1", "P|1", $"O|1|{tube.Barcode}||^^^{values[0].Code}|R",
+                .. values.Select((v, i) => $"R|{i + 1}|^^^{v.Code}|{v.Value}|||N||F"), "L|1|N"
+            ];
+
+            var before = Log.Keys.ToHashSet();
+            await _sink.HandleAsync(_link.Id, MarocLIS.Instruments.Protocol.AstmMessageParser.Parse(lines));
+            return Log.Keys.Single(k => !before.Contains(k));
+        }
+
+        public Task<Result<int>> ReplayAsync(Guid logId) => _sink.ReplayAsync(logId, Guid.NewGuid());
 
         public Task<bool> SendAsync(Sample tube, DateTimeOffset? measuredAt,
                                     params (string Code, string Value)[] values) =>
