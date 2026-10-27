@@ -611,8 +611,10 @@ public sealed class PatientSearchView : LocalizedView
         _search.AccessibleName = T("PatientList.SearchPlaceholder");
 
         _newPatient.Text = T("Patient.NewFile");
-        _editPatient.Text = T("Action.Edit");
-        _detailEdit.Text = T("Action.Edit");
+        // « Consulter » for who may only read the file (PatientFileRules.ListActions).
+        var open = T(PatientFileRules.ListActions(false, false, 0, _currentUser).OpenKey);
+        _editPatient.Text = open;
+        _detailEdit.Text = open;
         _more.Text = T("ResultEntry.MoreActions");
         _merge.Text = T("Patient.Merge");
         _anonymize.Text = T("Patient.Anonymize");

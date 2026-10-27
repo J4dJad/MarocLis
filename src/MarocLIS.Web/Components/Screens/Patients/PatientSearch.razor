@@ -163,7 +163,7 @@
     <ActionBar StatusText="@_status" StatusClass="@($"is-{_statusTone}")">
         <Secondary>
             <ActionButton Key="Patient.NewFile" Disabled="@(!Actions.NewPatient)" OnClick="NewPatient" />
-            <ActionButton Key="Action.Edit" Disabled="@(!Actions.Edit)" OnClick="() => Edit(_selected!)" />
+            <ActionButton Key="@Actions.OpenKey" Disabled="@(!Actions.Edit)" OnClick="() => Edit(_selected!)" />
         </Secondary>
         <More>
             <ActionButton Key="Patient.Merge" Disabled="@(!Actions.Merge)" OnClick="() => Merge(_selected!)" />

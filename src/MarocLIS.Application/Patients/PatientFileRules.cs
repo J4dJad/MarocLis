@@ -23,7 +23,14 @@ public sealed record PatientFileActions(bool Save, bool EditLists, bool ReadOnly
 
 /// <summary>What the patient list offers on the file it points at.</summary>
 public sealed record PatientListActions(bool NewPatient, bool Edit, bool NewOrder, bool Anonymize, bool Merge,
-                                        bool OpenOrders);
+                                        bool OpenOrders)
+{
+    /// <summary>
+    /// The caption of the button that opens the file: « Modifier » for who may change it,
+    /// « Consulter » for who may only read it.
+    /// </summary>
+    public string OpenKey { get; init; } = "Action.Edit";
+}
 
 /// <summary>
 /// The rules of the patient file that need no window — the age it shows, when a guardian is asked
@@ -117,6 +124,18 @@ public static class PatientFileRules
         return new PatientFileActions(save, save && user.Has(Permissions.Patients.Edit), isAnonymized);
     }
 
+    /// <summary>
+    /// The title of the file's window: « Nouveau patient », « Modifier le dossier », or « Consulter
+    /// le dossier » when nothing in it can be saved. A technician without the right to edit opened
+    /// « Modifier le dossier » with every field open to typing and only « Enregistrer » greyed, and
+    /// could believe the change was kept.
+    /// </summary>
+    public static string TitleKey(bool isNewFile, PatientFileActions actions)
+    {
+        ArgumentNullException.ThrowIfNull(actions);
+        return isNewFile ? "Patient.NewFile" : actions.Save ? "Patient.EditFile" : "Patient.ViewFile";
+    }
+
     // ---- The list -------------------------------------------------------------------------------
 
     /// <summary>
@@ -134,7 +153,10 @@ public static class PatientFileRules
             NewOrder: live && user.Has(Permissions.Orders.Create),
             Anonymize: live && user.Has(Permissions.Patients.Anonymize),
             Merge: live && filesShown > 1 && user.Has(Permissions.Patients.Merge),
-            OpenOrders: user.Has(Permissions.Orders.View));
+            OpenOrders: user.Has(Permissions.Orders.View))
+        {
+            OpenKey = user.Has(Permissions.Patients.Edit) ? "Action.Edit" : "Action.Consult"
+        };
     }
 
     /// <summary>

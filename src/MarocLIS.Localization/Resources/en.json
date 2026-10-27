@@ -2946,6 +2946,7 @@
   },
 
   "Action": {
+    "Consult": "View",
     "CollectAndDispatch": "Collect and dispatch",
     "New": "New",
     "Open": "Open",
@@ -3030,6 +3031,8 @@
   },
 
   "Patient": {
+    "ReadOnlyNotice": "Read only: your profile does not allow changes to this file.",
+    "ViewFile": "View patient file",
     "ProvisionalCreate": "Open provisional file",
     "EstimatedAge": "Estimated age (years)",
     "ProvisionalHelp": "Patient who cannot be identified yet. A provisional \"X-URG\" file is opened so the sample can be drawn now; complete the identity later from the patient file.",

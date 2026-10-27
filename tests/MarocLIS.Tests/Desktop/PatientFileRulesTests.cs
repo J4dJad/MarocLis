@@ -73,8 +73,26 @@ public sealed class PatientFileRulesTests
         PatientFileRules.ListActions(true, false, 1, dpo).Merge.Should().BeFalse("merging needs two files");
         PatientFileRules.ListActions(true, false, 2, dpo).Merge.Should().BeTrue();
         PatientFileRules.ListActions(true, true, 2, dpo).Should()
-            .Be(new PatientListActions(false, true, false, false, false, false));
+            .Be(new PatientListActions(false, true, false, false, false, false) { OpenKey = "Action.Consult" });
         PatientFileRules.ListActions(false, false, 2, clerk).Edit.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Who_may_only_read_a_file_consults_it_and_is_not_offered_to_modify_it()
+    {
+        // Before: the technician double-clicked a patient and got « Modifier le dossier » with every
+        // field open to typing and only « Enregistrer » greyed.
+        var technician = new LicenceTestKit.User(true, Permissions.Patients.View);
+        var clerk = new LicenceTestKit.User(true, Permissions.Patients.View, Permissions.Patients.Create,
+                                            Permissions.Patients.Edit);
+
+        PatientFileRules.ListActions(true, false, 1, technician).OpenKey.Should().Be("Action.Consult");
+        PatientFileRules.ListActions(true, false, 1, clerk).OpenKey.Should().Be("Action.Edit");
+
+        PatientFileRules.TitleKey(false, PatientFileRules.Actions(false, false, technician)).Should().Be("Patient.ViewFile");
+        PatientFileRules.TitleKey(false, PatientFileRules.Actions(false, true, clerk)).Should().Be("Patient.ViewFile");
+        PatientFileRules.TitleKey(false, PatientFileRules.Actions(false, false, clerk)).Should().Be("Patient.EditFile");
+        PatientFileRules.TitleKey(true, PatientFileRules.Actions(true, false, clerk)).Should().Be("Patient.NewFile");
 
         var (a, b, c) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         (Guid Id, bool Anonymized, int Orders)[] shown = [(a, false, 1), (b, false, 5), (c, true, 9)];

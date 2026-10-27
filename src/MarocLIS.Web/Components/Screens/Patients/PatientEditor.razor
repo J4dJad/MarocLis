@@ -18,7 +18,7 @@
     application's rules (PatientFileRules); the save is PatientRegistrationService's, with its
     duplicate question. On a new file the coverages, consents and alerts wait for the save.
 *@
-<Modal Name="patient" Wide="true" Title="@(IsNew ? Texts["Patient.NewFile"] : Texts["Patient.EditFile"])"
+<Modal Name="patient" Wide="true" Title="@Texts[PatientFileRules.TitleKey(IsNew, FileActions)]"
        Hint="@(IsNew ? Texts["PatientDialog.EditorNewHint"] : _header)" OnCancel="CancelAsync">
     <ChildContent>
         <nav class="tabs" role="tablist">

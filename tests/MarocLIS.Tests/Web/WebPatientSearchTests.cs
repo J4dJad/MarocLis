@@ -83,6 +83,10 @@ public sealed class WebPatientSearchTests : WebScreenContext
         page.Find("[data-action='PatientList.NewOrderForPatient']").HasAttribute("disabled").Should().BeTrue();
         page.Find("[data-action='Patient.Merge']").HasAttribute("disabled").Should().BeTrue();
         page.Find("[data-action='Patient.Anonymize']").HasAttribute("disabled").Should().BeTrue();
+
+        // Who may only read the file is offered to consult it, not to modify it.
+        page.FindAll("[data-action='Action.Edit']").Should().BeEmpty();
+        page.Find("[data-action='Action.Consult']").TextContent.Should().Contain("Consulter");
     }
 
     [Fact]

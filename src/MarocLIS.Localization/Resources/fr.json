@@ -2946,6 +2946,7 @@
   },
 
   "Action": {
+    "Consult": "Consulter",
     "CollectAndDispatch": "Prélever et expédier",
     "New": "Nouveau",
     "Open": "Ouvrir",
@@ -3030,6 +3031,8 @@
   },
 
   "Patient": {
+    "ReadOnlyNotice": "Consultation seule : votre profil ne permet pas de modifier ce dossier.",
+    "ViewFile": "Consulter le dossier",
     "ProvisionalCreate": "Ouvrir le dossier provisoire",
     "EstimatedAge": "Âge estimé (ans)",
     "ProvisionalHelp": "Patient non identifiable pour l'instant. Un dossier provisoire « X-URG » est ouvert pour prélever tout de suite ; complétez l'identité plus tard depuis la fiche patient.",

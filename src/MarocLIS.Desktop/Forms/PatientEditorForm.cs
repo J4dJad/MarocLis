@@ -130,6 +130,8 @@ public sealed class PatientEditorForm : LocalizedForm
     private readonly List<(PatientAlertSeverity Severity, MultilingualText Message, DateOnly? ExpiresOn)>
         _pendingAlerts = [];
 
+    private readonly bool _readOnly;
+
     /// <summary>The file that was created or edited. Null when the operator backed out.</summary>
     public Guid? ResultPatientId { get; private set; }
 
@@ -142,6 +144,10 @@ public sealed class PatientEditorForm : LocalizedForm
         _queries = queries;
         _dialogs = dialogs;
         _patientId = patientId;
+
+        // Who may not save this file reads it: « Consulter le dossier », fields locked, « Fermer ».
+        _readOnly = PermissionGate.User is { } user
+                    && !PatientFileRules.Actions(_patientId is null, isAnonymized: false, user).Save;
 
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = MaximizeBox = false;
@@ -689,7 +695,8 @@ public sealed class PatientEditorForm : LocalizedForm
 
     protected override void ApplyTexts()
     {
-        Text = _patientId is null ? T("Patient.NewFile") : T("Patient.EditFile");
+        Text = T(PatientFileRules.TitleKey(_patientId is null,
+                                           new PatientFileActions(!_readOnly, !_readOnly, false)));
         _frame?.SetTexts(Text, _patientId is null ? T("PatientDialog.EditorNewHint") : null);
 
         _identityTab.Text = T("Patient.Identity");
@@ -717,7 +724,8 @@ public sealed class PatientEditorForm : LocalizedForm
         _consentNotice.Text = T("Consent.WrittenEvidenceNotice");
 
         _save.Text = T("Action.Save");
-        _cancel.Text = T("Action.Cancel");
+        _cancel.Text = T(_readOnly ? "Action.Close" : "Action.Cancel");
+        if (_readOnly) _status.Text = T("Patient.ReadOnlyNotice");
 
         SetText(_contactTab, "optOutNote", T("Patient.OptOutExplanation"));
         SetText(_clinicalTab, "pregnancyNote", T("Patient.PregnancyExplanation"));
@@ -795,12 +803,38 @@ public sealed class PatientEditorForm : LocalizedForm
             _payers = payers;
 
             if (_patientId is { } id) await LoadExistingAsync(id);
+            if (_readOnly) LockFields();
         }
         catch (Exception ex)
         {
             _status.ForeColor = UiTheme.Critical;
             _status.Text = T("Message.UnexpectedError");
             _dialogs.Error(ex.Message, T("Message.UnexpectedError"));
+        }
+    }
+
+    /// <summary>
+    /// The file stays readable — text can still be selected and copied — but nothing can be typed,
+    /// ticked or picked: locked once filled, as filling it switches some fields on.
+    /// </summary>
+    private void LockFields()
+    {
+        foreach (var page in new[] { _identityTab, _contactTab, _clinicalTab })
+            Lock(page);
+
+        static void Lock(Control parent)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                switch (c)
+                {
+                    case TextBoxBase box: box.ReadOnly = true; break;
+                    case ComboBox or DateTimePicker or CheckBox or RadioButton or NumericUpDown or Button:
+                        c.Enabled = false;
+                        break;
+                    default: Lock(c); break;
+                }
+            }
         }
     }
 
