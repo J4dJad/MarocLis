@@ -75,6 +75,28 @@ public sealed partial class MainShellForm
         // once, without signing out.
         RenderNavigation();
         ShowLicenceBanner();
+        _ = RefreshLanguagesAsync();
+    }
+
+    /// <summary>
+    /// Arabic is a module of the licence: the language list offers it as soon as a licence with it
+    /// is in force, and stops offering it when one without it replaces it.
+    /// </summary>
+    private async Task RefreshLanguagesAsync()
+    {
+        try
+        {
+            await using var scope = _scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<Application.Administration.IActiveLanguages>().GetAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "The languages could not be read again after the licence changed.");
+            return;
+        }
+
+        if (IsDisposed || _endingSession) return;
+        LanguageChoices.Fill(_languagePicker, LanguageChoices.OwnName, _cultureManager.CurrentLanguage);
     }
 
     private void ShowLicenceBanner()

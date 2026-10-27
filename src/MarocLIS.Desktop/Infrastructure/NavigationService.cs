@@ -20,6 +20,13 @@ public interface INavigationService
 
     Task NavigateToAsync<TView>(Action<TView>? configure = null) where TView : LocalizedView;
 
+    /// <summary>
+    /// Lets go of the host and of the view shown in it, which is disposed with its scope (once idle,
+    /// for a view awaiting a write). Called when the window closes or is replaced by a new one;
+    /// nothing happens when the navigation is attached to another window's <paramref name="host"/>.
+    /// </summary>
+    void Detach(Panel host);
+
     /// <summary>The view currently shown, or null before the first navigation.</summary>
     LocalizedView? Current { get; }
 
@@ -45,6 +52,26 @@ public sealed class NavigationService(
         _onViewActivated = onViewActivated;
     }
 
+    public void Detach(Panel host)
+    {
+        if (!ReferenceEquals(_host, host)) return;
+
+        _activation?.Cancel();
+        _activation?.Dispose();
+        _activation = null;
+
+        var view = Current;
+        var scope = _currentScope;
+        Current = null;
+        _currentScope = null;
+
+        if (view is not null) view.Parent?.Controls.Remove(view);
+        Retire(view, scope);
+
+        _host = null;
+        _onViewActivated = null;
+    }
+
     public async Task NavigateToAsync<TView>(Action<TView>? configure = null)
         where TView : LocalizedView
     {
@@ -61,6 +88,10 @@ public sealed class NavigationService(
         {
             await _activation.CancelAsync();
             _activation.Dispose();
+            _activation = null;
+
+            // The window was closed or replaced meanwhile.
+            if (_host is null) return;
         }
 
         _activation = new CancellationTokenSource();

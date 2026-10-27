@@ -55,6 +55,27 @@ public sealed record LanguageSettings
     /// <summary>The language itself when the laboratory works in it, French otherwise.</summary>
     public AppLanguage Coerce(AppLanguage language) => IsActive(language) ? language : AppLanguage.French;
 
+    /// <summary>
+    /// The language a session opens in, on every client: the one chosen on this workstation or in
+    /// this browser — at the sign-in or in the header — when the laboratory still works in it; the
+    /// account's preferred language otherwise; French when that one is switched off.
+    /// <para>
+    /// The choice made at the sign-in wins over the account's: an operator who picks « العربية »
+    /// before signing in reads the interface in Arabic afterwards, and finds it in Arabic at the
+    /// next sign-in on the same workstation. The account's language is set in the user
+    /// administration and serves the workstation that never chose.
+    /// </para>
+    /// </summary>
+    public AppLanguage ForSession(AppLanguage? chosen, AppLanguage account) =>
+        chosen is { } language && IsActive(language) ? language : Coerce(account);
+
+    /// <summary>A language as stored by a client (its enum name), or null for anything else.</summary>
+    public static AppLanguage? Parse(string? text) =>
+        Enum.TryParse<AppLanguage>(text, ignoreCase: false, out var language) && Enum.IsDefined(language)
+            && !int.TryParse(text, out _)
+            ? language
+            : null;
+
     public static LanguageSettings FromValues(IReadOnlyDictionary<string, string?> values)
     {
         ArgumentNullException.ThrowIfNull(values);
@@ -128,6 +149,16 @@ public sealed class ActiveLanguagesCache
 
     public void Store(LanguageSettings settings, DateTimeOffset readAt) =>
         _reading = new Reading(settings, readAt);
+
+    /// <summary>
+    /// Keeps the last reading but has the next call read the setting again: the licence changed,
+    /// and Arabic — a module of it — may have come or gone. Without it, a licence imported with
+    /// the Arabic module left the language lists at French and English until the next restart.
+    /// </summary>
+    public void MarkStale()
+    {
+        if (_reading is { } reading) _reading = reading with { ReadAt = DateTimeOffset.MinValue };
+    }
 }
 
 /// <summary>Reads, caches and saves the languages the laboratory works in.</summary>

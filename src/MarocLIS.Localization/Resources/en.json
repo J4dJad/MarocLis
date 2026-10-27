@@ -5442,6 +5442,7 @@
   },
 
   "Message": {
+    "LogoutConfirm": "Do you want to sign out? Anything not saved will be lost.",
     "ConfirmDelete": "Delete \"{0}\"?",
     "ConfirmCancel": "Confirm cancellation?",
     "UnsavedChanges": "There are unsaved changes. Continue?",

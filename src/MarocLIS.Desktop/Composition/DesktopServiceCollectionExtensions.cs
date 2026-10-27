@@ -132,7 +132,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddMarocLisLicensing();
         services.AddTransient<LicenceImportForm>();
         services.AddTransient<ChangePasswordForm>();
-        services.AddSingleton<MainShellForm>();
+        // Transient: a change of reading direction replaces the main window by a new one for the
+        // same session (SessionContext), created untracked so the old ones are not kept alive.
+        services.AddTransient<MainShellForm>();
 
         services.AddTransient<DashboardView>();
         services.AddTransient<PatientSearchView>();

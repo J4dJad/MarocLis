@@ -428,7 +428,12 @@ public sealed class LoginForm : LocalizedForm
         if (_language.SelectedIndex < 0) return;
 
         var language = LanguageChoices.Selected(_language);
-        if (language != _cultureManager.CurrentLanguage) _cultureManager.SetLanguage(language);
+        if (language == _cultureManager.CurrentLanguage) return;
+
+        // Remembered for this workstation, and kept after the sign-in: it wins over the account's
+        // language (LanguageSettings.ForSession), as the web's language cookie does.
+        WorkstationLanguage.Chosen = language;
+        _cultureManager.SetLanguage(language);
     }
 
     private void ShowCapsLock() => _capsLock.Visible = IsKeyLocked(Keys.CapsLock);
@@ -460,9 +465,11 @@ public sealed class LoginForm : LocalizedForm
 
             Properties.LoginSettings.LastUserName = _rememberUser.Checked ? _userName.Text.Trim() : null;
 
-            // The signed-in user's own language preference now takes over from the login screen's —
-            // unless the laboratory has switched it off since, when the interface stays in French.
-            var language = LanguageChoices.Coerce(result.Value.Language);
+            // The language chosen on this workstation stays; the account's preferred language
+            // serves a workstation that never chose one — and French one the laboratory switched
+            // off. The operator who picked « العربية » here used to find the interface back in
+            // French once signed in.
+            var language = LanguageChoices.ForSession(WorkstationLanguage.Chosen, result.Value.Language);
             if (language != _cultureManager.CurrentLanguage)
                 _cultureManager.SetLanguage(language);
 
@@ -483,6 +490,10 @@ public sealed class LoginForm : LocalizedForm
                 return;
             }
 
+            // The licence as it is now, not as it was when this window opened: a licence imported
+            // meanwhile — from another workstation, or just before a restart — showed « Aucune
+            // licence » and a read-only menu until « Actualiser » was clicked.
+            await RefreshLicenceAsync(scope);
             ShowLicenceNotice();
 
             DialogResult = DialogResult.OK;
@@ -490,8 +501,11 @@ public sealed class LoginForm : LocalizedForm
         }
         finally
         {
-            Cursor = Cursors.Default;
-            _signIn.Enabled = true;
+            if (!IsDisposed)
+            {
+                Cursor = Cursors.Default;
+                _signIn.Enabled = true;
+            }
         }
     }
 
@@ -520,6 +534,26 @@ public sealed class LoginForm : LocalizedForm
         refusal.ShowDialog(this);
         _status.Text = T("Licence.Workstations.Reached", claim.InUse, claim.Limit);
         return false;
+    }
+
+    /// <summary>
+    /// Evaluates the licence again at the sign-in, and the languages it opens. A database that does not answer leaves the last
+    /// evaluation in place, as the heartbeat does.
+    /// </summary>
+    private static async Task RefreshLicenceAsync(IServiceScope scope)
+    {
+        try
+        {
+            await scope.ServiceProvider.GetRequiredService<LicenceService>().RefreshAsync();
+
+            // Arabic is a module of the licence: the shell's language list follows a licence
+            // imported since the start.
+            await scope.ServiceProvider.GetRequiredService<Application.Administration.IActiveLanguages>().GetAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            scope.ServiceProvider.GetService<ILogger<LoginForm>>()?.LogWarning(ex, "The licence could not be evaluated at sign-in.");
+        }
     }
 
     /// <summary>

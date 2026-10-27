@@ -250,6 +250,44 @@ public sealed class LicenceServiceTests
         (await readOnly.SaveAsync([AppLanguage.English])).FirstError.ResourceKey.Should().Be("Licence_ReadOnlySettings");
     }
 
+    [Fact]
+    public async Task ALicenceImportedAfterTheStart_IsInForceAtTheNextRefresh_AndTheLanguagesAreReadAgain()
+    {
+        // The workstation started without a licence: its evaluation said « Aucune licence », and
+        // the languages read then had no Arabic.
+        var store = new Store();
+        var holder = new LicenceStatusHolder();
+        var clock = new Clock();
+        var cache = new ActiveLanguagesCache();
+        var nobody = new User(false, []);
+        var atStart = new LicenceService(store, holder, new LicenceTrust(), clock, nobody, new Guard(nobody),
+                                         new Auditor(), languages: cache);
+        await atStart.RefreshAsync();
+        holder.Current.State.Should().Be(LicenceState.Missing);
+
+        var languages = new ActiveLanguagesService(new AllLanguages(), cache, new NoWriter(), new NoUnitOfWork(),
+                                                   new Guard(nobody), clock, holder);
+        (await languages.GetAsync()).Active.Should().Equal(AppLanguage.French, AppLanguage.English);
+
+        // Another workstation — or this one before a restart — imports the licence, with Arabic.
+        var admin = new User(true, [Permissions.Administration.License]);
+        var elsewhere = new LicenceService(store, new LicenceStatusHolder(), new LicenceTrust(), clock, admin,
+                                           new Guard(admin), new Auditor());
+        (await elsewhere.ImportAsync(Sign(Annual(365, LicenceModules.Arabic) with { ServerId = store.ServerId })))
+            .IsSuccess.Should().BeTrue();
+
+        // The sign-in evaluates it again: in force at once, without « Actualiser ».
+        await atStart.RefreshAsync();
+        holder.Current.State.Should().Be(LicenceState.Valid);
+
+        cache.IsFresh(clock.Now).Should().BeFalse("the licence's modules changed: the languages are read again");
+        (await languages.GetAsync()).Active.Should().Equal(AppLanguage.French, AppLanguage.Arabic, AppLanguage.English);
+
+        // A refresh that changes nothing leaves the reading alone.
+        await atStart.RefreshAsync();
+        cache.IsFresh(clock.Now).Should().BeTrue();
+    }
+
     private sealed class AllLanguages : ILanguageSettingsQueries
     {
         public Task<IReadOnlyDictionary<string, string?>> GetSettingValuesAsync(string prefix, CancellationToken ct = default) =>

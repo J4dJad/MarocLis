@@ -168,6 +168,50 @@ public sealed partial class MainShellForm : LocalizedForm
         _languagePicker.SelectedIndexChanged += OnLanguagePicked;
 
         StartLicence();
+
+        // Built in the reading direction of the language from the start, before any window handle
+        // exists: nothing has to be mirrored, and nothing recreated, when it first shows.
+        RtlLayout.Apply(this, cultureManager.CurrentLanguage);
+    }
+
+    // ---- Session ----------------------------------------------------------------------------------
+
+    /// <summary>The screen to open first, instead of the first of the menu (a rebuilt window).</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string? StartScreen { get; set; }
+
+    /// <summary>The screen shown now, by its menu key.</summary>
+    public string? ActiveScreen => string.IsNullOrEmpty(_activeKey) ? null : _activeKey;
+
+    /// <summary>Why the window closed; the session context goes on from it.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public ShellExit Exit { get; private set; } = ShellExit.Closed;
+
+    /// <summary>
+    /// Raised when the interface changed reading direction: the session context opens a new main
+    /// window for the same session, then closes this one with <see cref="CloseReplaced"/>.
+    /// </summary>
+    public event EventHandler? DirectionChanged;
+
+    /// <summary>Closes this window once a new one took over the session: nothing is signed out.</summary>
+    public void CloseReplaced()
+    {
+        Exit = ShellExit.Rebuilt;
+        _endingSession = true;
+        _idleTimer.Stop();
+        _sessionTimer.Stop();
+        _heartbeatTimer.Stop();
+        Close();
+    }
+
+    /// <summary>
+    /// Closes the window after the database was restored: the session belongs to a database that
+    /// no longer exists, and the next sign-in opens the restored one, checked from the start.
+    /// </summary>
+    public void CloseForRestart()
+    {
+        Exit = ShellExit.Restart;
+        Close();
     }
 
     // ---- Layout -----------------------------------------------------------------------------------
@@ -652,7 +696,17 @@ public sealed partial class MainShellForm : LocalizedForm
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        await ActivateAsync(_entries[0]);
+        Activate();
+
+        // The screen the operator was on before a change of direction, when they may still open
+        // it; the first of the menu otherwise.
+        var start = SessionFlow.StartScreen(StartScreen, key => _navButtons.ContainsKey(key)) is { } key
+            ? _entries.First(entry => entry.Key == key)
+            : _entries[0];
+        await ActivateAsync(start);
+
+        // The licence evaluated at once rather than at the first heartbeat, five minutes on.
+        await HeartbeatAsync();
         await CheckBackupAgeAsync();
     }
 
@@ -679,6 +733,9 @@ public sealed partial class MainShellForm : LocalizedForm
 
         // The sidebar carries translated labels, so it is rebuilt on a language change.
         if (_navButtons.Count > 0) RenderNavigation();
+
+        // The licence's banner too: it stayed in the language of the sign-in.
+        ShowLicenceBanner();
 
         PositionHeaderItems();
     }
@@ -722,7 +779,61 @@ public sealed partial class MainShellForm : LocalizedForm
         if (_languagePicker.SelectedIndex < 0) return;
 
         var language = LanguageChoices.Selected(_languagePicker);
-        if (language != _cultureManager.CurrentLanguage) _cultureManager.SetLanguage(language);
+        if (language == _cultureManager.CurrentLanguage) return;
+
+        if (SessionFlow.ChangesDirection(_cultureManager.CurrentLanguage, language))
+        {
+            // The window is rebuilt and the screen reopened: typed values not yet saved are
+            // confirmed first, as for leaving the screen.
+            if (_navigation.Current is { IsDisposed: false } view && !view.ConfirmLeave())
+            {
+                LanguageChoices.Select(_languagePicker, _cultureManager.CurrentLanguage);
+                return;
+            }
+
+            _rebuilding = true;
+        }
+
+        WorkstationLanguage.Chosen = language;
+        _cultureManager.SetLanguage(language);
+    }
+
+    private bool _rebuilding;
+
+    /// <summary>
+    /// A change of reading direction rebuilds the window instead of mirroring it in place (see
+    /// <see cref="SessionFlow.ChangesDirection"/>). From the language list, the open screen is let
+    /// go at once, before it would mirror itself; from elsewhere — the screen of the languages
+    /// switching one off — once that screen's own handler has finished.
+    /// </summary>
+    protected override bool ReplacesItselfFor(AppLanguage language)
+    {
+        if (DirectionChanged is null || _endingSession) return false;
+        if (!SessionFlow.ChangesDirection(RightToLeft == RightToLeft.Yes ? AppLanguage.Arabic : AppLanguage.French,
+                                          language))
+            return false;
+
+        if (_rebuilding)
+        {
+            HandOver();
+        }
+        else
+        {
+            _rebuilding = true;
+            BeginInvoke(HandOver);
+        }
+
+        return true;
+    }
+
+    private void HandOver()
+    {
+        _endingSession = true;
+        _idleTimer.Stop();
+        _sessionTimer.Stop();
+        _heartbeatTimer.Stop();
+        _navigation.Detach(_content);
+        DirectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // ---- Idle lock --------------------------------------------------------------------------------
@@ -967,20 +1078,19 @@ public sealed partial class MainShellForm : LocalizedForm
 
     private void SignOut()
     {
-        if (!_dialogs.Confirm(T("Action.Logout"))) return;
+        if (!_dialogs.Confirm(T("Message.LogoutConfirm"), T("Action.Logout"))) return;
 
         _ = EndSessionAsync(SecurityEventKind.Logout, details: null);
     }
 
     /// <summary>
-    /// Records the end of the session, then leaves the message loop so the process restarts.
+    /// Records the end of the session, then closes the window: the session context disposes every
+    /// service of the session and opens the sign-in on new ones.
     /// <para>
-    /// Restarting the process is the cleanest way to guarantee no scope, cached query or tracked
-    /// entity survives into the next operator's session on a shared workstation. It used to be
-    /// done here with <c>Environment.Exit</c>, which skipped everything after the message loop:
-    /// no sign-out event was recorded, the folder of patient PDFs viewed in the session was left
-    /// on disk, and the log was not flushed. The restart is now <see cref="Program"/>'s, once the
-    /// host — and with it that folder — is disposed and the log closed.
+    /// Building the services again is what guarantees no scope, cached query or tracked entity
+    /// survives into the next operator's session on a shared workstation; disposing them deletes
+    /// the folder of patient PDFs viewed in the session and flushes the log. It used to be done by
+    /// restarting the process, whose new sign-in opened while the old window was still closing.
     /// </para>
     /// <para>
     /// A <paramref name="notice"/> is shown only once the screen is concealed and the end of the
@@ -1013,10 +1123,12 @@ public sealed partial class MainShellForm : LocalizedForm
 
         if (notice is not null) _dialogs.Warn(notice);
 
-        Program.RestartAfterExit = true;
-
-        // Exit rather than Close: it also ends the loop of any dialog still open over the shell.
-        System.Windows.Forms.Application.Exit();
+        // Back to the sign-in in this process (SessionContext), once any dialog hidden above has
+        // left its loop. Restarting the process opened the new sign-in while the old window was
+        // still there, and left a stray « Connexion » window or a second instance behind.
+        Exit = ShellExit.SignedOut;
+        if (IsDisposed) return;
+        BeginInvoke(Close);
     }
 
     /// <summary>
@@ -1054,6 +1166,8 @@ public sealed partial class MainShellForm : LocalizedForm
     /// </summary>
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _navigation.Detach(_content);
+
         if (!_endingSession)
         {
             _endingSession = true;

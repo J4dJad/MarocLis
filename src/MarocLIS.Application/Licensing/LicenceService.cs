@@ -24,7 +24,8 @@ public sealed class LicenceService(
     ICurrentUser currentUser,
     IPermissionGuard guard,
     ISecurityAuditor securityAuditor,
-    ILogger<LicenceService>? logger = null)
+    ILogger<LicenceService>? logger = null,
+    Administration.ActiveLanguagesCache? languages = null)
 {
     public LicenceStatus Current => holder.Current;
 
@@ -46,6 +47,9 @@ public sealed class LicenceService(
             await securityAuditor.LogAsync(SecurityEventKind.LicenceRefused, succeeded: false,
                                            failureReasonKey: status.Problem?.ResourceKey,
                                            details: $"Licence en vigueur refusée : {stored.Number}", ct: ct);
+
+        // The languages depend on the licence's modules: read again once it changed.
+        if (!SameModules(holder.Current, status)) languages?.MarkStale();
 
         holder.Publish(status);
         return status;
@@ -133,6 +137,9 @@ public sealed class LicenceService(
 
     public Task<IReadOnlyList<LicenceHistoryRow>> GetHistoryAsync(CancellationToken ct = default) =>
         store.HistoryAsync(ct);
+
+    private static bool SameModules(LicenceStatus before, LicenceStatus after) =>
+        before.Mode == after.Mode && before.State == after.State && before.Modules.SetEquals(after.Modules);
 
     // ---- Evaluation ---------------------------------------------------------------------------
 

@@ -105,8 +105,7 @@ public static class WebEndpoints
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(active);
 
-        return Enum.TryParse<AppLanguage>(http.Request.Cookies[LanguageCookie], ignoreCase: false, out var language)
-               && Enum.IsDefined(language) && active.IsActive(language)
+        return LanguageSettings.Parse(http.Request.Cookies[LanguageCookie]) is { } language && active.IsActive(language)
             ? language
             : null;
     }

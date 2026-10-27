@@ -24,6 +24,10 @@ internal static class LanguageChoices
     /// <summary><paramref name="language"/> when it is offered, French otherwise.</summary>
     public static AppLanguage Coerce(AppLanguage language) => Current.Coerce(language);
 
+    /// <summary>The language a session opens in (<see cref="LanguageSettings.ForSession"/>).</summary>
+    public static AppLanguage ForSession(AppLanguage? chosen, AppLanguage account) =>
+        Current.ForSession(chosen, account);
+
     private static LanguageSettings Current => Languages?.Current ?? LanguageSettings.Default;
 
     /// <summary>Each language in its own name (<see cref="LanguageSettings.OwnName"/>).</summary>

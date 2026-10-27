@@ -165,6 +165,13 @@ public abstract class LocalizedForm : Form
     /// <summary>Assigns every user-visible string. Called on load and on each language change.</summary>
     protected abstract void ApplyTexts();
 
+    /// <summary>
+    /// True when the form handles a change to <paramref name="language"/> by replacing itself —
+    /// the main window, rebuilt in the new reading direction — rather than being translated and
+    /// mirrored in place.
+    /// </summary>
+    protected virtual bool ReplacesItselfFor(AppLanguage language) => false;
+
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
@@ -186,6 +193,8 @@ public abstract class LocalizedForm : Form
             BeginInvoke(() => OnLanguageChanged(sender, e));
             return;
         }
+
+        if (ReplacesItselfFor(e.Language)) return;
 
         // Suspend the layout so a mirrored form does not repaint through an intermediate state.
         SuspendLayout();

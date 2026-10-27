@@ -622,7 +622,7 @@ public sealed partial class SettingsView
         // belongs to a database that no longer exists: the application starts again on the
         // restored one, through its sign-in.
         _dialogs.Info(T("Backup.RestoreDone", restored.Value.RestoredPath, restored.Value.SafetyBackupPath), T("Backup.Restore"));
-        Program.RestartAfterExit = true;
-        FindForm()?.Close();
+        if (FindForm() is Forms.MainShellForm shell) shell.CloseForRestart();
+        else FindForm()?.Close();
     }
 }

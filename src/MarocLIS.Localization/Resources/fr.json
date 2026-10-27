@@ -5443,6 +5443,7 @@
   },
 
   "Message": {
+    "LogoutConfirm": "Voulez-vous vous déconnecter ? Ce qui n'est pas enregistré sera perdu.",
     "ConfirmDelete": "Confirmez-vous la suppression de « {0} » ?",
     "ConfirmCancel": "Confirmez-vous l'annulation ?",
     "UnsavedChanges": "Des modifications n'ont pas été enregistrées. Voulez-vous continuer ?",

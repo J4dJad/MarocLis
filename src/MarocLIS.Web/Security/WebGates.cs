@@ -17,7 +17,7 @@ public static class WebGates
         var active = services.GetRequiredService<ActiveLanguagesCache>().Current;
         var session = services.GetRequiredService<SessionContext>();
 
-        session.UseLanguage(active.Coerce(WebEndpoints.ChosenLanguage(context, active) ?? session.Language));
+        session.UseLanguage(active.ForSession(WebEndpoints.ChosenLanguage(context, active), session.Language));
         return next();
     }
 

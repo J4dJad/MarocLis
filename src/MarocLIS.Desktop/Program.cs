@@ -21,12 +21,6 @@ internal static class Program
 {
     private static IHost? _host;
 
-    /// <summary>
-    /// Set by the shell when the operator signs out or the session is ended: the process restarts
-    /// on the login screen once the host is disposed and the log flushed.
-    /// </summary>
-    internal static bool RestartAfterExit { get; set; }
-
     /// <summary>Service provider for forms created outside the container, e.g. by a menu click.</summary>
     internal static IServiceProvider Services =>
         _host?.Services ?? throw new InvalidOperationException("The host has not been built.");
@@ -43,41 +37,13 @@ internal static class Program
 
         try
         {
-            _host = BuildHost();
-            _host.Start();
+            // The sign-in, the main window and the sign-out take turns in this one process: see
+            // SessionFlow. Nothing to show — the database refused, the licence import abandoned —
+            // and the application ends here.
+            using var session = new SessionContext();
+            if (!session.Start()) return;
 
-            var configuration = _host.Services.GetRequiredService<IConfiguration>();
-            var cultureManager = _host.Services.GetRequiredService<ICultureManager>();
-
-            var defaultLanguage = Enum.TryParse<AppLanguage>(
-                configuration["Application:DefaultLanguage"], out var parsed)
-                ? parsed
-                : AppLanguage.French;
-
-            cultureManager.SetLanguage(defaultLanguage);
-
-            if (!InitialiseDatabase(configuration)) return;
-
-            // Before the languages, which Arabic is a module of, and before the login, which a new
-            // installation without a licence does not reach.
-            if (!CheckLicence()) return;
-
-            // Before the login screen fills its language list: only the languages the laboratory
-            // works in are offered, and a configured default switched off gives way to French.
-            ReadActiveLanguages(cultureManager);
-
-            // After the language is set, so the warning itself is readable, and before sign-in, so
-            // whoever opens the laboratory sees it rather than whoever first prints a report.
-            WarnAboutMissingFonts();
-
-            // Sign-in happens before the shell exists: the shell's navigation is built from the
-            // signed-in user's permissions, so there is nothing to build until they are known.
-            using (var login = _host.Services.GetRequiredService<LoginForm>())
-            {
-                if (login.ShowDialog() != DialogResult.OK) return;
-            }
-
-            System.Windows.Forms.Application.Run(_host.Services.GetRequiredService<MainShellForm>());
+            System.Windows.Forms.Application.Run(session);
         }
         catch (Exception ex)
         {
@@ -88,14 +54,79 @@ internal static class Program
         }
         finally
         {
-            // Disposing the host disposes the singletons, among them the document output, which
-            // deletes the folder of patient PDFs viewed in this session.
-            _host?.StopAsync().GetAwaiter().GetResult();
-            _host?.Dispose();
-            Log.CloseAndFlush();
+            StopHost();
+        }
+    }
+
+    /// <summary>
+    /// Builds the services of one session and gets the database, the licence and the languages
+    /// ready for its sign-in. The database is opened and checked (migrations, demonstration data)
+    /// only when <paramref name="openDatabase"/>: at start-up and after a restore.
+    /// <para>
+    /// The language is the one this workstation last chose, in the sign-in or the header, when the
+    /// laboratory still works in it; the configured default otherwise.
+    /// </para>
+    /// </summary>
+    internal static bool StartHost(bool openDatabase, bool warnAboutFonts)
+    {
+        _host = BuildHost();
+        _host.Start();
+
+        var configuration = _host.Services.GetRequiredService<IConfiguration>();
+        var cultureManager = _host.Services.GetRequiredService<ICultureManager>();
+
+        var defaultLanguage = Enum.TryParse<AppLanguage>(
+            configuration["Application:DefaultLanguage"], out var parsed)
+            ? parsed
+            : AppLanguage.French;
+
+        cultureManager.SetLanguage(WorkstationLanguage.Chosen ?? defaultLanguage);
+
+        if (openDatabase && !InitialiseDatabase(configuration)) return false;
+
+        // Before the languages, which Arabic is a module of, and before the login, which a new
+        // installation without a licence does not reach.
+        if (!CheckLicence()) return false;
+
+        // Before the login screen fills its language list: only the languages the laboratory
+        // works in are offered, and a configured default switched off gives way to French.
+        ReadActiveLanguages(cultureManager);
+
+        // After the language is set, so the warning itself is readable, and before sign-in, so
+        // whoever opens the laboratory sees it rather than whoever first prints a report.
+        if (warnAboutFonts) WarnAboutMissingFonts();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Stops and disposes the services of the session that ended. Disposing the host disposes the
+    /// singletons, among them the document output, which deletes the folder of patient PDFs viewed
+    /// in the session; the log is flushed. Run off the UI thread and for a bounded time: a hosted
+    /// service that waits for the UI, or a database that does not answer, must not freeze the
+    /// sign-in that follows.
+    /// </summary>
+    internal static void StopHost()
+    {
+        var host = _host;
+        _host = null;
+
+        if (host is not null)
+        {
+            try
+            {
+                if (!Task.Run(() => host.StopAsync()).Wait(TimeSpan.FromSeconds(15)))
+                    Log.Warning("The services of the session did not stop in time.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Stopping the services of the session failed.");
+            }
+
+            host.Dispose();
         }
 
-        if (RestartAfterExit) System.Windows.Forms.Application.Restart();
+        Log.CloseAndFlush();
     }
 
     private static IHost BuildHost()
