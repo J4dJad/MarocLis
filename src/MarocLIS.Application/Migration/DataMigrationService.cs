@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Migration;
@@ -51,7 +52,8 @@ public sealed class DataMigrationService(
     IDataMigrationStore store,
     IMigrationSourceReader sourceReader,
     IPermissionGuard guard,
-    IClock clock)
+    IClock clock,
+    ILicenceState? licence = null)
 {
     /// <summary>Rows a preview shows.</summary>
     public const int PreviewRows = 200;
@@ -60,6 +62,16 @@ public sealed class DataMigrationService(
     public const int MaxRows = 500_000;
 
     private Result Allowed() => guard.Require(Permissions.Administration.Migration);
+
+    /// <summary>
+    /// A take-over writes in bulk what read-only mode refuses one at a time: patients, history and
+    /// balances are new work, the catalogue and the prescribers are settings. Undoing a run deletes
+    /// as much, so it is held to the same rule.
+    /// </summary>
+    private Result Licensed(DataMigrationKind kind) =>
+        kind is DataMigrationKind.Catalogue or DataMigrationKind.Prescribers
+            ? licence.RequireSettingsChange()
+            : licence.RequireNewWork();
 
     // ---- The old application's database --------------------------------------------------------------
 
@@ -161,6 +173,7 @@ public sealed class DataMigrationService(
                                                             CancellationToken ct = default)
     {
         if (Allowed() is { IsFailure: true } refused) return Result.Failure<MigrationSummary>(refused.Errors);
+        if (Licensed(request.Kind) is { IsFailure: true } readOnly) return Result.Failure<MigrationSummary>(readOnly.Errors);
 
         var checkedRequest = Check(request);
         if (checkedRequest.IsFailure) return Result.Failure<MigrationSummary>(checkedRequest.Errors);
@@ -227,6 +240,7 @@ public sealed class DataMigrationService(
     public async Task<Result<MigrationUndoOutcome>> UndoLastAsync(CancellationToken ct = default)
     {
         if (Allowed() is { IsFailure: true } refused) return Result.Failure<MigrationUndoOutcome>(refused.Errors);
+        if (licence.RequireNewWork() is { IsFailure: true } readOnly) return Result.Failure<MigrationUndoOutcome>(readOnly.Errors);
 
         var outcome = await store.UndoLastAsync(ct);
         return outcome is null

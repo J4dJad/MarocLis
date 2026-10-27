@@ -18,6 +18,9 @@ using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
 using MarocLIS.Reporting;
+using MarocLIS.Application.Licensing;
+using MarocLIS.Application.Migration;
+using MarocLIS.Domain.Migration;
 using Xunit;
 
 namespace MarocLIS.Tests.Domain;
@@ -334,6 +337,32 @@ public sealed class Fix87mTests
 
         await Service(maySeeStock: true).RaiseReorderDraftsAsync();
         looked.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(DataMigrationKind.Patients, "Licence_ReadOnlyNewWork")]
+    [InlineData(DataMigrationKind.OpeningBalances, "Licence_ReadOnlyNewWork")]
+    [InlineData(DataMigrationKind.Catalogue, "Licence_ReadOnlySettings")]
+    public async Task ADataTakeOver_IsRefusedWhileTheLicenceIsReadOnly_AsEachEntryWouldBe(DataMigrationKind kind, string key)
+    {
+        var wrote = 0;
+        var store = Stub.Of<IDataMigrationStore>(new()
+        {
+            ["StartBatchAsync"] = _ => { wrote++; return Task.FromResult(Guid.NewGuid()); },
+            ["UndoLastAsync"] = _ => { wrote++; return Task.FromResult<MigrationUndoOutcome?>(null); }
+        });
+        var service = new DataMigrationService(store, Stub.Of<IMigrationSourceReader>(), Stub.Of<IPermissionGuard>(),
+                                               Stub.Of<IClock>(), new FixedLicenceState(Licensing.LicenceTestKit.ReadOnlyStatus()));
+        var table = CsvSource.Parse("Ancien identifiant;Nom\nP1;ALAOUI\n");
+        var request = new MigrationRequest
+        {
+            Kind = kind, SourceSystem = "OLD", SourceLabel = "test", Table = table,
+            Columns = ColumnMatcher.AutoMatch(kind, table.Columns), Correspondences = new CorrespondenceTables()
+        };
+
+        (await service.ImportAsync(request)).Errors.Single().ResourceKey.Should().Be(key);
+        (await service.UndoLastAsync()).Errors.Single().ResourceKey.Should().Be("Licence_ReadOnlyNewWork");
+        wrote.Should().Be(0);
     }
 
     private class Stub : DispatchProxy
