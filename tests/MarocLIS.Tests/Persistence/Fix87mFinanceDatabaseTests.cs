@@ -232,4 +232,57 @@ public sealed class Fix87mFinanceDatabaseTests(OrderEntryScratchDatabase databas
         biologist.SiteId = lab.SiteA;
         (await On<BillingService, Result<decimal>>(provider, s => s.CloseCashSessionAsync(150m, null))).Value.Should().Be(0m);
     }
+
+    [SqlServerFact]
+    public async Task TheService_RefusesANegativeFloatOrCount_AndACreditNoteReasonTooShortOrTooLong()
+    {
+        var lab = await LabAsync();
+        var accountant = new Operator([lab.SiteA], Shipped(SystemRoles.Administrator));
+        using var provider = Services(accountant);
+
+        (await On<BillingService, Result<Guid>>(provider, s => s.OpenCashSessionAsync(-500m)))
+            .FirstError.ResourceKey.Should().Be("Payment_AmountMustBePositive");
+        Ok(await On<BillingService, Result<Guid>>(provider, s => s.OpenCashSessionAsync(0m)));
+        (await On<BillingService, Result<decimal>>(provider, s => s.CloseCashSessionAsync(-10m, "Erreur de comptage")))
+            .FirstError.ResourceKey.Should().Be("Payment_AmountMustBePositive");
+
+        var invoiceId = await InvoicedRequestAsync(provider, lab);
+        (await On<BillingService, Result<Guid>>(provider, s => s.IssueCreditNoteAsync(invoiceId, "x")))
+            .FirstError.ResourceKey.Should().Be("Reason_TooShort");
+        (await On<BillingService, Result<Guid>>(provider, s => s.IssueCreditNoteAsync(invoiceId, new string('a', 501))))
+            .FirstError.ResourceKey.Should().Be("Reason_TooLong");
+        Ok(await On<BillingService, Result<Guid>>(provider, s => s.IssueCreditNoteAsync(invoiceId, "Erreur de destinataire")));
+    }
+
+    [SqlServerFact]
+    public async Task APeriodsTakings_DoNotChange_WhenAChequeBouncesInALaterPeriod()
+    {
+        var lab = await LabAsync();
+        var accountant = new Operator([lab.SiteA], Shipped(SystemRoles.Administrator));
+        using var provider = Services(accountant);
+
+        var invoiceId = await InvoicedRequestAsync(provider, lab);
+        Ok(await PayAsync(provider, invoiceId, 100m, PaymentMethod.Cheque, "CHQ-87"));
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var later = DateTimeOffset.Now.AddDays(8);
+
+        await using (var context = database.Context())
+        {
+            var cheque = await context.Payments.SingleAsync(p => p.SiteId == lab.SiteA);
+            Ok(cheque.MarkBounced(later, "Sans provision"));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = database.Context())
+        {
+            var statistics = new StatisticsQueries(context);
+            (await statistics.GetFinanceAsync(lab.SiteA, today, today)).Collected
+                .Should().Be(100m, "the cheque was taken that day");
+            var bounceDay = DateOnly.FromDateTime(later.Date);
+            (await statistics.GetFinanceAsync(lab.SiteA, bounceDay, bounceDay)).Collected
+                .Should().Be(-100m, "the bounce comes off the period it happened in");
+            (await statistics.GetFinanceAsync(lab.SiteA, today, bounceDay)).Collected.Should().Be(0m);
+        }
+    }
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Billing;
 using MarocLIS.Domain.Common;
@@ -619,8 +620,12 @@ public sealed class BillingService(
         var permitted = guard.Require(Permissions.Billing.CreditNote);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
-        if (string.IsNullOrWhiteSpace(reason))
-            return Result.Failure<Guid>(Error.Validation("Invoice_CorrectionReasonRequired"));
+        // The screens' lengths, held here too: the reason is printed on the credit note, and one
+        // longer than its column failed at the database instead of being refused.
+        if (ReasonRules.Problem(reason, BillingScreenRules.CreditNoteReasonMinimumLength,
+                                "Invoice_CorrectionReasonRequired",
+                                BillingScreenRules.CorrectionReasonMaxLength) is { } badReason)
+            return Result.Failure<Guid>(badReason);
 
         var original = await invoices.GetByIdWithDetailsAsync(originalInvoiceId, ct);
         if (original is null) return Result.Failure<Guid>(Error.NotFound("Invoice_NotFound"));
@@ -1494,6 +1499,10 @@ public sealed class BillingService(
     {
         var permitted = guard.Require(Permissions.Billing.RecordPayment);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
+
+        // The screens refuse a negative float; so does the service, whoever calls it.
+        if (openingFloat < 0m)
+            return Result.Failure<Guid>(Error.Validation("Payment_AmountMustBePositive"));
 
         var (existing, elsewhere) = await TillAsync(ct);
 

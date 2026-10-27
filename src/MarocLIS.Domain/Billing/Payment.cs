@@ -204,6 +204,7 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
 
     public CashSession(Guid siteId, Guid operatorUserId, DateTimeOffset openedAt, decimal openingFloat)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(openingFloat);
         SiteId = siteId;
         OperatorUserId = operatorUserId;
         OpenedAt = openedAt;
@@ -335,6 +336,11 @@ public sealed class CashSession : AuditableAggregateRoot, ISiteScoped
         // it afterwards (Reconcile), it does not close it in their place.
         if (byUserId != OperatorUserId)
             return Result.Failure(Error.Forbidden("CashSession_CloserIsNotOperator"));
+
+        // A drawer never holds less than nothing: a negative count is a typing error, refused
+        // here as the closing screens refuse it.
+        if (countedCash < 0m)
+            return Result.Failure(Error.Validation("Payment_AmountMustBePositive"));
 
         var counted = Money.Round(countedCash);
         var variance = Money.Round(counted - ExpectedClosingCash);

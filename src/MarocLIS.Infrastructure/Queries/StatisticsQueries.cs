@@ -63,10 +63,35 @@ public sealed class StatisticsQueries(LisDbContext db) : IStatisticsQueries
 
         // A write-off is recorded as a settled payment so the receivable closes, but no money came
         // in: counting it made a refused claim look like revenue collected.
-        var collected = await db.Payments.AsNoTracking()
-            .Where(p => p.SiteId == siteId && p.PaymentDate >= from && p.PaymentDate <= to)
-            .Where(Payment.IsMoneyCollected)
+        //
+        // A period's takings do not change afterwards. A cheque taken on 28/09 counts in
+        // September even if it bounces on 05/10; the bounce, like a refund, comes off the period
+        // in which it happened. Filtering on the payment's status today made a past month's figure
+        // drop after the fact, and no longer matched the report printed at the time.
+        var taken = await db.Payments.AsNoTracking()
+            .Where(p => p.SiteId == siteId && p.PaymentDate >= from && p.PaymentDate <= to
+                        && p.Method != PaymentMethod.WriteOff
+                        && (p.Status == PaymentStatus.Settled || p.Status == PaymentStatus.Bounced
+                            || p.Status == PaymentStatus.Refunded))
             .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+        // Instants a day wider than the period on each side; the day is then taken in memory from
+        // the offset each instant was recorded with, as the treasury and the accounts do.
+        var fromInstant = new DateTimeOffset(from.AddDays(-1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var toInstant = new DateTimeOffset(to.AddDays(2).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+        var reversals = await db.Payments.AsNoTracking()
+            .Where(p => p.SiteId == siteId && p.Method != PaymentMethod.WriteOff
+                        && ((p.Status == PaymentStatus.Bounced && p.BouncedAt >= fromInstant && p.BouncedAt < toInstant)
+                            || (p.Status == PaymentStatus.Refunded && p.RefundedAt >= fromInstant && p.RefundedAt < toInstant)))
+            .Select(p => new { p.Amount, At = p.Status == PaymentStatus.Bounced ? p.BouncedAt : p.RefundedAt })
+            .ToListAsync(ct);
+
+        var reversed = reversals
+            .Where(r => r.At is { } at && DateOnly.FromDateTime(at.Date) >= from && DateOnly.FromDateTime(at.Date) <= to)
+            .Sum(r => r.Amount);
+
+        var collected = taken - reversed;
 
         return new FinanceTotals(Money.Round(invoiced), Money.Round(credited), Money.Round(collected));
     }

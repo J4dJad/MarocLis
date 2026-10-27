@@ -1,3 +1,5 @@
+using MarocLIS.Domain.Common;
+
 namespace MarocLIS.Application.Input;
 
 /// <summary>
@@ -22,4 +24,17 @@ public static class ReasonRules
     /// <summary>Whether <paramref name="reason"/>, trimmed, is long enough.</summary>
     public static bool IsSufficient(string? reason, int minimumLength = DefaultMinimumLength) =>
         (reason?.Trim().Length ?? 0) >= minimumLength;
+
+    /// <summary>
+    /// The services' own check of a reason, with the screens' lengths: they are only the early
+    /// warning, and another caller (the API, a script, a new screen) reaches the service directly.
+    /// <paramref name="blankKey"/> is the service's existing message for no reason at all.
+    /// </summary>
+    public static Error? Problem(string? reason, int minimumLength, string blankKey, int? maxLength = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) return Error.Validation(blankKey);
+        if (!IsSufficient(reason, minimumLength)) return Error.Validation("Reason_TooShort", minimumLength);
+        if (maxLength is { } max && reason.Trim().Length > max) return Error.Validation("Reason_TooLong", max);
+        return null;
+    }
 }
