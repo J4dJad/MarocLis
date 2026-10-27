@@ -5444,7 +5444,9 @@
     "RememberUser": "تذكر المعرف",
     "SignIn": "دخول",
     "PasswordExpiredTitle": "تغيير كلمة السر مطلوب",
-    "PasswordExpiredMessage": "يجب تغيير كلمة السر قبل المتابعة."
+    "PasswordExpiredMessage": "يجب تغيير كلمة السر قبل المتابعة.",
+    "BrowserTooOld": "هذا المتصفح قديم جدًا بالنسبة إلى MarocLIS Web: لن تعمل الشاشات فيه بشكل صحيح. استخدم Google Chrome أو Microsoft Edge بالإصدار 109 أو أحدث، أو Mozilla Firefox بالإصدار 115 أو أحدث. على Windows 7 و8 و8.1، يثبّت برنامج تثبيت MarocLIS (نوع « محطة الويب ») متصفح Firefox ESR 115.",
+    "JavaScriptRequired": "يحتاج MarocLIS Web إلى JavaScript: فعّله في هذا المتصفح ثم أعد تحميل الصفحة."
   },
 
   "Message": {

@@ -456,7 +456,9 @@ html.nav-collapsed .when-collapsed { display: inline-flex !important; }
 .list-pane .list-tools > .search-box, .list-pane .list-tools > .input-with-button { grid-column: 1 / -1; }
 .list-pane .list-tools > .field-check { grid-column: 1; }
 .list-pane .list-tools > .list-tools-end { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
-.list-pane .list-tools:has(> .search-box, > .input-with-button) > .list-tools-end { grid-row: 2 / span 2; }
+/* A search or scan box on the first line pushes the end tools below it. The box's presence is a class the
+   screen sets (has-search), not a :has(), which Firefox 115 — the Windows 7 and 8 workstations' browser — lacks. */
+.list-pane .list-tools.has-search > .list-tools-end { grid-row: 2 / span 2; }
 .toolbar-spacer { flex: 1 1 auto; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -614,7 +616,7 @@ fieldset:disabled .input { background: var(--surface-sunken); }
 .action-bar-status { margin: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Alone in the middle, the message takes a second line before it is shortened: « Dossier 2610-000014 —
    2 échantillons — Étiquettes à imprimer depuis le poste Windows… » is read whole at 1366 px. */
-.action-bar-middle:not(:has(.action-bar-info)) > .action-bar-status {
+.action-bar-middle.is-alone > .action-bar-status {
     white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.3;
 }
 .action-bar-info { color: var(--text-secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -999,8 +1001,9 @@ fieldset.subcard:disabled { opacity: .7; }
 .grid-entry th.col-comment { inline-size: 26%; }
 /* A list beside its context keeps the height to show several rows: the pane scrolls, not the list to a slit. */
 .pane-fill { min-block-size: 360px; }
-/* A bar with no button and no message (a read-only tab): not drawn, no empty band at the foot of the screen. */
-.action-bar:not(:has(.btn, summary, .action-bar-info, .action-bar-status:not(:empty))) { display: none; }
+/* A bar with no button and no message (a read-only tab): not drawn, no empty band at the foot of the screen.
+   ActionBar.razor decides it (is-empty), so every browser draws the same bar. */
+.action-bar.is-empty { display: none; }
 /* « Journal d'audit »: the reason keeps the width to be read on two lines. */
 .grid td.col-reason { inline-size: 26%; min-inline-size: 220px; }
 

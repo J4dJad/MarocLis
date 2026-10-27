@@ -27,7 +27,7 @@
     <NavigationLock OnBeforeInternalNavigation="BeforeLeaving" ConfirmExternalNavigation="@HasTyped" />
 
     @{ var actions = Actions; }
-    <div class="list-tools" data-tools="filters">
+    <div class="list-tools has-search" data-tools="filters">
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
             <input class="input" type="search" placeholder="@Texts["Web.QcSearch"]" aria-label="@Texts["Web.QcSearch"]"

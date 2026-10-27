@@ -25,7 +25,7 @@
 *@
 <div class="screen inventorycounts" data-screen="inventorycounts">
     @{ var actions = Actions; var visible = Visible; var mayCount = InventoryCountScreenRules.MayCount(Context.User.Has, _detail); }
-    <div class="list-tools" data-tools="filters">
+    <div class="list-tools has-search" data-tools="filters">
         <div class="search-box">
             <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
             <input class="input" type="search" placeholder="@Texts["StocksUi.SearchCounts"]" aria-label="@Texts["StocksUi.SearchCounts"]"

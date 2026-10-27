@@ -11,7 +11,7 @@
 @* A bar with nothing to offer and nothing to say is not drawn: no empty band at the foot of the screen. *@
 @if (Secondary is not null || More is not null || Destructive is not null || Info is not null || Primary is not null || StatusText is { Length: > 0 })
 {
-<footer class="action-bar" data-bar="actions">
+<footer class="action-bar@(HasContent ? null : " is-empty")" data-bar="actions">
     <div class="action-bar-start">
         @Secondary
         @if (More is not null && ShowMore)
@@ -27,7 +27,7 @@
             @Destructive
         }
     </div>
-    <div class="action-bar-middle">
+    <div class="action-bar-middle@(Info is null ? " is-alone" : null)">
         @if (ShowStatus)
         {
             <p class="action-bar-status @StatusClass" role="status" data-state="status" title="@StatusText">@StatusText</p>
@@ -68,4 +68,18 @@
 
     /// <summary>The message's tone, as a class: is-muted, is-normal, is-abnormal, is-critical.</summary>
     [Parameter] public string StatusClass { get; set; } = "is-muted";
+
+    /// <summary>
+    /// Whether the bar has a button or a message to show. The screens pass their actions as
+    /// fragments whose buttons come and go with the operator's rights and the record's state; a bar
+    /// left with none is not drawn (is-empty). Decided here rather than by a CSS :has(), which
+    /// Firefox 115 — the browser of the Windows 7 and 8 workstations — does not know.
+    /// </summary>
+    private bool HasContent =>
+        (ShowStatus && StatusText is { Length: > 0 })
+        || Info is not null
+        || (More is not null && ShowMore)
+        || ActionBarContent.Renders(Secondary)
+        || ActionBarContent.Renders(Destructive)
+        || ActionBarContent.Renders(Primary);
 }

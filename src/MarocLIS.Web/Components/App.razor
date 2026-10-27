@@ -14,6 +14,8 @@
 
 <body>
     <Routes @rendermode="PageRenderMode" />
+    @* Before blazor.web.js: what Chrome/Edge 109 and Firefox 115 lack of it, and the notice to older browsers. *@
+    <script src="@Assets["js/compat.js"]"></script>
     <script src="_framework/blazor.web.js"></script>
     <script src="@Assets["js/maroclis.js"]"></script>
 </body>

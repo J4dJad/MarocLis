@@ -20,6 +20,10 @@
 <h1 class="form-title">@Texts["Login.Title"]</h1>
 <p class="form-lead">@Texts["Login.Prompt"]</p>
 
+@* Shown by js/compat.js to a browser the screens would not work in; the supported ones are named. *@
+<p class="message is-critical" role="alert" data-state="browser-too-old" hidden>@Texts["Login.BrowserTooOld"]</p>
+<noscript><p class="message is-critical" role="alert">@Texts["Login.JavaScriptRequired"]</p></noscript>
+
 @if (Reason is { } reason && WebEndpoints.Reasons.Contains(reason))
 {
     <p class="message is-warning" role="status">@Texts[reason]</p>
