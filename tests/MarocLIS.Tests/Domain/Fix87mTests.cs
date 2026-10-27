@@ -2,6 +2,15 @@ using System.Reflection;
 using FluentAssertions;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
+using MarocLIS.Application.Results;
+using MarocLIS.Application.Orders;
+using MarocLIS.Application.Samples;
+using MarocLIS.Domain.Catalog;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Patients;
+using MarocLIS.Domain.Results;
+using MarocLIS.Domain.Samples;
+using System.Linq.Expressions;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Localization;
@@ -104,6 +113,27 @@ public sealed class Fix87mTests
             UserName = "seca", FullName = "Compte A", InitialPassword = "Motdepasse#2026", SiteIds = [siteA]
         })).FirstError.ResourceKey.Should().Be("User_SiteNotYoursToGrant");
         saves.Should().Be(1);
+    }
+
+    // ---- Web and Desktop validate the value that was on screen ----------------------------------
+
+    [Fact]
+    public void AValidation_FromTheScreens_CarriesTheEntryTimeOfTheValueShown()
+    {
+        var shownAt = new DateTimeOffset(2026, 10, 27, 9, 0, 0, TimeSpan.FromHours(1));
+        var row = new ResultEntryRow
+        {
+            TestResultId = Guid.NewGuid(), LabOrderItemId = Guid.NewGuid(), TestParameterId = Guid.NewGuid(),
+            AnalysisCode = "IONO", AnalysisName = new MultilingualText("Ionogramme"),
+            ParameterCode = "K", ParameterName = new MultilingualText("Potassium"),
+            Status = MarocLIS.Domain.Results.TestResultStatus.TechnicallyValidated,
+            EnteredAt = shownAt
+        };
+
+        var decision = ValidationScreenRules.Decisions([row], _ => true, _ => null).Single();
+
+        decision.DisplayedEnteredAt.Should().Be(shownAt,
+            "a value re-run while the screen stood open is refused instead of released unseen");
     }
 
     private class Stub : DispatchProxy

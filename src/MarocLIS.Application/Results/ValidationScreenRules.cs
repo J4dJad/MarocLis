@@ -271,6 +271,8 @@ public static class ValidationScreenRules
     /// The decisions a validation sends, one per listed value awaiting release, ticked or not: a
     /// released row is listed for withdrawal only, and validating it again means nothing. The
     /// biologist's comment goes with the line it was typed for, and only if that line is validated.
+    /// Each decision carries the entry time of the value shown, so the service releases nothing
+    /// that changed since the screen was loaded.
     /// </summary>
     public static List<ValidationDecision> Decisions(IEnumerable<ResultEntryRow> listed, Func<Guid, bool> isTicked,
                                                      Func<Guid, string?> commentOf) =>
@@ -282,7 +284,10 @@ public static class ValidationScreenRules
                      var comment = selected && commentOf(r.TestResultId) is { Length: > 0 } text
                          ? new MultilingualText(text)
                          : null;
-                     return new ValidationDecision(r.TestResultId, selected, comment);
+                     // The value on screen is the one released: a re-run stored while the screen
+                     // stood open is refused (« modifié depuis l'affichage »), as on the phone.
+                     return new ValidationDecision(r.TestResultId, selected, comment,
+                                                   DisplayedEnteredAt: r.EnteredAt);
                  })
     ];
 

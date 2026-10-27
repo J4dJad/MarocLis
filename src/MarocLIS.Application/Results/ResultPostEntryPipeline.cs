@@ -292,6 +292,15 @@ public sealed class ResultPostEntryPipeline(
         // Measured values, keyed by parameter code, plus the patient context variables.
         var values = BuildValueBag(stored, catalogue, patient);
 
+        // A value given as a bound (« < 2 », « > 1000 ») is not a measurement: a creatinine below
+        // the measuring range, taken as exactly 2, printed a precise-looking eGFR flagged as if it
+        // were measured. A formula reading one is not calculable, and neither is one reading that.
+        var censored = new HashSet<string>(
+            stored.Where(r => r.NumericValue is not null && r.ValueOperator is not null)
+                  .Select(r => catalogue.Parameters.GetValueOrDefault(r.TestParameterId)?.Code)
+                  .OfType<string>(),
+            StringComparer.Ordinal);
+
         foreach (var code in ordering.Value)
         {
             var parameter = catalogue.Parameters.Values
@@ -301,6 +310,17 @@ public sealed class ResultPostEntryPipeline(
 
             var target = stored.FirstOrDefault(r => r.TestParameterId == parameter.Id);
             if (target is null || target.IsValidated) continue;
+
+            if (FormulaEvaluator.ReferencedParameters(parameter.CalculationFormula).Any(censored.Contains))
+            {
+                values.Remove(parameter.Code);
+                censored.Add(parameter.Code);
+
+                if (target.Status != TestResultStatus.NotDone
+                    && target.MarkNotDone(NotCalculableComment, now, byUserId).IsSuccess)
+                    changed.Add(target);
+                continue;
+            }
 
             var evaluation = FormulaEvaluator.Evaluate(parameter.CalculationFormula!, values);
 

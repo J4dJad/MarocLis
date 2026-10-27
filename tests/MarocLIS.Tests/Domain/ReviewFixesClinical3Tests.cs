@@ -102,6 +102,28 @@ public sealed class ReviewFixesClinical3Tests
     }
 
     [Fact]
+    public async Task ACalculatedValue_IsNotCalculable_FromAnInputGivenOnlyAsABound()
+    {
+        var bench = new SinkBench();
+        var ldl = Numeric("LDL", null, 1.60m);
+        ldl.CalculationFormula = Friedewald;
+        var rows = bench.AddAnalysis(bench.Tube, Numeric("CHOL"), Numeric("HDL"), Numeric("TG"), ldl);
+
+        // HDL below the measuring range: « < 0.20 » is a bound, not 0.20.
+        await bench.SendAsync(bench.Tube, ("CHOL", "2.50"), ("HDL", "<0.20"), ("TG", "1.50"));
+
+        rows[1].ValueOperator.Should().Be("<");
+        rows[3].NumericValue.Should().BeNull("2.50 − 0.20 − 0.30 = 2.00 would be printed as a measured LDL");
+        rows[3].Status.Should().Be(TestResultStatus.NotDone);
+        rows[3].TechnicalComment.Should().Be(ResultPostEntryPipeline.NotCalculableComment);
+
+        // Re-measured within range: calculated as usual.
+        await bench.SendAsync(bench.Tube, ("HDL", "0.50"));
+        rows[3].NumericValue.Should().Be(1.70m);
+        rows[3].Status.Should().NotBe(TestResultStatus.NotDone);
+    }
+
+    [Fact]
     public async Task K1_AnalyserValue_OnAHaemolysedTube_IsFlagged()
     {
         var bench = new SinkBench(SampleDefect.Haemolysed);
