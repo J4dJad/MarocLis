@@ -5,6 +5,7 @@ using MarocLIS.Application.Administration;
 using MarocLIS.Application.Results;
 using MarocLIS.Application.Orders;
 using MarocLIS.Application.Samples;
+using MarocLIS.Application.Reports;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
@@ -247,6 +248,30 @@ public sealed class Fix87mTests
         outcome.Value.ReplacementLabels.Should().ContainSingle();
         added.OfType<Sample>().Single().SiteId.Should().Be(order.SiteId, "the collection centre's worklist shows it");
         added.OfType<TestResult>().Should().NotBeEmpty().And.OnlyContain(r => r.SiteId == order.SiteId);
+    }
+
+    // ---- The texts the system writes go out in the report's language -----------------------------
+
+    [Fact]
+    public void TheAutomaticComments_AndTheReportMessages_AreWrittenInTheReportsLanguage()
+    {
+        var notCalculable = ResultPostEntryPipeline.NotCalculableComment;
+        ResultPostEntryPipeline.PrintedComment(notCalculable, AppLanguage.French).Should().Be(notCalculable);
+        ResultPostEntryPipeline.PrintedComment(notCalculable, AppLanguage.English).Should().StartWith("Not calculable");
+        ResultPostEntryPipeline.PrintedComment(notCalculable, AppLanguage.Arabic).Should().Contain("غير قابل للحساب");
+        ResultPostEntryPipeline.PrintedComment("Non fait", AppLanguage.English).Should().Be("Not done");
+        ResultPostEntryPipeline.PrintedComment("Tube coagulé", AppLanguage.English).Should().Be("Tube coagulé",
+            "what a person typed is printed as typed");
+
+        ReportReleaseService.SmsText(AppLanguage.Arabic, "2610-000015", "مختبر", null)
+            .Should().Contain("2610-000015").And.NotContain("compte rendu");
+        ReportReleaseService.SmsText(AppLanguage.English, "2610-000015", "Lab", "0522")
+            .Should().Be("Lab: your laboratory report (file 2610-000015) is ready. Tel. 0522");
+        ReportReleaseService.SmsText(AppLanguage.French, "2610-000015", "Labo", null)
+            .Should().Be("Labo : votre compte rendu d'analyses (dossier 2610-000015) est disponible.");
+        ReportReleaseService.EmailSubject(AppLanguage.English, "2610-000015", "Lab").Should().StartWith("Laboratory report");
+        ReportReleaseService.EmailBody(AppLanguage.Arabic, null, "2610-000015", 2, "مختبر", "0522")
+            .Should().Contain("2610-000015").And.NotContain("Veuillez");
     }
 
     private class Stub : DispatchProxy

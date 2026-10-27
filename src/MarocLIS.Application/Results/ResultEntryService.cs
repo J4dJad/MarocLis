@@ -817,7 +817,7 @@ public sealed class ResultEntryService(
                 : result.MarkNotDone(entry.TechnicalComment!.Trim(), now, currentUser.UserId);
 
         if (string.IsNullOrEmpty(raw))
-            return result.MarkNotDone(entry.TechnicalComment ?? "Non fait", now, currentUser.UserId);
+            return result.MarkNotDone(entry.TechnicalComment ?? ResultPostEntryPipeline.NotDoneComment, now, currentUser.UserId);
 
         switch (parameter.ValueType)
         {

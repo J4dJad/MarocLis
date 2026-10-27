@@ -558,8 +558,11 @@ public sealed class ReportReleaseService(
             if (string.IsNullOrWhiteSpace(recipientIdentifier))
                 return Result.Failure<DeliveryOutcome>(Error.Validation("Report_RecipientIdentifierRequired"));
 
+            // Written in the report's language, as the report it announces: a patient reading
+            // Arabic received a French SMS and e-mail.
+            var language = order.ReportLanguage;
             var site = await sites.GetByIdAsync(order.SiteId, ct);
-            var laboratory = site?.Name.For(AppLanguage.French) ?? string.Empty;
+            var laboratory = site?.Name.For(language) ?? string.Empty;
 
             Result sent;
 
@@ -570,15 +573,15 @@ public sealed class ReportReleaseService(
 
                 sent = await messages.SendEmailAsync(new EmailMessage(
                     recipientIdentifier,
-                    $"Compte rendu d'analyses {order.AccessionNumber} — {laboratory}",
-                    EmailBody(recipientName, order.AccessionNumber, report.VersionNumber, laboratory, site?.Phone),
+                    EmailSubject(language, order.AccessionNumber, laboratory),
+                    EmailBody(language, recipientName, order.AccessionNumber, report.VersionNumber, laboratory, site?.Phone),
                     [new EmailAttachment($"CR-{order.AccessionNumber}-v{report.VersionNumber}.pdf", pdf,
                                          "application/pdf")]), ct);
             }
             else
             {
                 sent = await messages.SendSmsAsync(recipientIdentifier,
-                    SmsText(order.AccessionNumber, laboratory, site?.Phone), ct);
+                    SmsText(language, order.AccessionNumber, laboratory, site?.Phone), ct);
             }
 
             if (sent.IsSuccess) outcome = DeliveryResultKind.Sent;
@@ -624,23 +627,63 @@ public sealed class ReportReleaseService(
     /// <summary>Whether e-mail and SMS are set up to really send, for the delivery form.</summary>
     public (bool Email, bool Sms) ElectronicChannels => (messages.CanSendEmail, messages.CanSendSms);
 
-    private static string EmailBody(string? recipient, string accession, int version, string laboratory,
-                                    string? phone) =>
-        $"""
-        Bonjour{(string.IsNullOrWhiteSpace(recipient) ? string.Empty : " " + recipient)},
+    public static string EmailSubject(AppLanguage language, string accession, string laboratory) => language switch
+    {
+        AppLanguage.Arabic => $"تقرير التحاليل {accession} — {laboratory}",
+        AppLanguage.English => $"Laboratory report {accession} — {laboratory}",
+        _ => $"Compte rendu d'analyses {accession} — {laboratory}"
+    };
 
-        Veuillez trouver ci-joint le compte rendu d'analyses du dossier {accession} (version {version}).
+    public static string EmailBody(AppLanguage language, string? recipient, string accession, int version,
+                                   string laboratory, string? phone)
+    {
+        var name = string.IsNullOrWhiteSpace(recipient) ? string.Empty : " " + recipient;
 
-        Ce document contient des données de santé confidentielles. Si vous n'en êtes pas le
-        destinataire, merci de le supprimer et de nous en informer.
+        return language switch
+        {
+            AppLanguage.Arabic => $"""
+                مرحباً{name}،
 
-        {laboratory}{(string.IsNullOrWhiteSpace(phone) ? string.Empty : "\nTél. " + phone)}
-        """;
+                تجدون رفقته تقرير التحاليل الخاص بالملف {accession} (النسخة {version}).
+
+                تتضمن هذه الوثيقة معطيات صحية سرية. إذا لم تكونوا المرسَل إليه، يرجى حذفها وإخبارنا بذلك.
+
+                {laboratory}{(string.IsNullOrWhiteSpace(phone) ? string.Empty : "\nالهاتف " + phone)}
+                """,
+            AppLanguage.English => $"""
+                Hello{name},
+
+                Please find attached the laboratory report for file {accession} (version {version}).
+
+                This document contains confidential health data. If you are not the intended
+                recipient, please delete it and let us know.
+
+                {laboratory}{(string.IsNullOrWhiteSpace(phone) ? string.Empty : "\nTel. " + phone)}
+                """,
+            _ => $"""
+                Bonjour{name},
+
+                Veuillez trouver ci-joint le compte rendu d'analyses du dossier {accession} (version {version}).
+
+                Ce document contient des données de santé confidentielles. Si vous n'en êtes pas le
+                destinataire, merci de le supprimer et de nous en informer.
+
+                {laboratory}{(string.IsNullOrWhiteSpace(phone) ? string.Empty : "\nTél. " + phone)}
+                """
+        };
+    }
 
     /// <summary>No result in an SMS: it says the report is ready, nothing about what it contains.</summary>
-    private static string SmsText(string accession, string laboratory, string? phone) =>
-        $"{laboratory} : votre compte rendu d'analyses (dossier {accession}) est disponible."
-        + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" Tél. {phone}");
+    public static string SmsText(AppLanguage language, string accession, string laboratory, string? phone) =>
+        language switch
+        {
+            AppLanguage.Arabic => $"{laboratory}: تقرير تحاليلكم (الملف {accession}) جاهز."
+                                  + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" الهاتف {phone}"),
+            AppLanguage.English => $"{laboratory}: your laboratory report (file {accession}) is ready."
+                                   + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" Tel. {phone}"),
+            _ => $"{laboratory} : votre compte rendu d'analyses (dossier {accession}) est disponible."
+                 + (string.IsNullOrWhiteSpace(phone) ? string.Empty : $" Tél. {phone}")
+        };
 
     /// <summary>
     /// What a release of the order carries: the results it prints, the analyses it covers, and
@@ -982,7 +1025,9 @@ public sealed class ReportReleaseService(
             PreviousDate = result.PreviousResultDate,
             Interpretation = result.Interpretation,
             Flags = result.Flags,
-            Comment = result.PrintTechnicalComment ? result.TechnicalComment : null,
+            Comment = result.PrintTechnicalComment
+                ? ResultPostEntryPipeline.PrintedComment(result.TechnicalComment, language)
+                : null,
             BiologistComment = result.BiologistComment
         };
     }

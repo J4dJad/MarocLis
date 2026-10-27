@@ -40,6 +40,31 @@ public sealed class ResultPostEntryPipeline(
     /// <summary>Printed next to a calculated parameter whose formula does not apply to the values.</summary>
     public const string NotCalculableComment = "Non calculable avec ces valeurs : dosage direct requis";
 
+    /// <summary>The reason a « not done » line keeps when none was typed.</summary>
+    public const string NotDoneComment = "Non fait";
+
+    /// <summary>
+    /// A technical comment as the report prints it, in the report's language. The comments the
+    /// system writes itself are stored in French and were printed in French under an Arabic or
+    /// English report; what a person typed is printed as typed.
+    /// </summary>
+    public static string? PrintedComment(string? comment, AppLanguage language) => comment switch
+    {
+        NotCalculableComment => language switch
+        {
+            AppLanguage.Arabic => "غير قابل للحساب بهذه القيم: يلزم قياس مباشر",
+            AppLanguage.English => "Not calculable from these values: direct measurement required",
+            _ => comment
+        },
+        NotDoneComment => language switch
+        {
+            AppLanguage.Arabic => "لم يُنجز",
+            AppLanguage.English => "Not done",
+            _ => comment
+        },
+        _ => comment
+    };
+
     /// <summary>
     /// The patient whose demographics an order's results are interpreted with: the order's own
     /// patient, or, when that file was merged as a duplicate, the surviving file it points at. The
