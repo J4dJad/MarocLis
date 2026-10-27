@@ -128,12 +128,27 @@ public sealed class MasterDataView : LocalizedView
         BuildPrescriberTab();
         BuildPayerTab();
 
-        _tabs.TabPages.AddRange([_instrumentTab, _qcTab, _stockTab, _supplierTab,
-                                 _prescriberTab, _payerTab]);
+        // Only the tabs this user may read or manage, the first of them open (shared with the web).
+        _visibleTabs = PermissionGate.User is { } viewer
+            ? MasterDataScreenRules.VisibleTabs(viewer)
+            : Enum.GetValues<MasterDataTab>();
+        _tabs.TabPages.AddRange([.. _visibleTabs.Select(PageOf)]);
 
         Controls.Add(AdminLayout.FlatTabs(_tabs));
         Controls.Add(AdminLayout.PageHeader(_pageTitle, _status, _includeInactive));
     }
+
+    private IReadOnlyList<MasterDataTab> _visibleTabs = [];
+
+    private TabPage PageOf(MasterDataTab tab) => tab switch
+    {
+        MasterDataTab.Instruments => _instrumentTab,
+        MasterDataTab.QualityControl => _qcTab,
+        MasterDataTab.Stock => _stockTab,
+        MasterDataTab.Suppliers => _supplierTab,
+        MasterDataTab.Prescribers => _prescriberTab,
+        _ => _payerTab
+    };
 
     private static void Columns(DataGridView grid,
                                  params (string Name, int Weight, Font? Font, bool Right)[] columns)
@@ -564,8 +579,10 @@ public sealed class MasterDataView : LocalizedView
             var inactive = _includeInactive.Checked;
 
             var instruments = await _master.GetInstrumentsAsync(inactive, ct);
+            // A list the user may not read stays empty without a message, as for the others: its
+            // tab is not shown to them.
             if (instruments.IsSuccess) _instrumentRows = instruments.Value;
-            else _dialogs.ShowFailure(instruments);
+            else if (_visibleTabs.Contains(MasterDataTab.Instruments)) _dialogs.ShowFailure(instruments);
 
             var materials = await _master.GetQcMaterialsAsync(inactive, ct);
             if (materials.IsSuccess) _materialRows = materials.Value;
@@ -609,8 +626,10 @@ public sealed class MasterDataView : LocalizedView
     /// </summary>
     private void ShowCompleteness()
     {
-        var blockers = MasterDataScreenRules.Blockers(_instrumentRows.Count, _materialRows.Count, _targetRows.Count,
-                                                      _stockRows.Count, _prescriberRows.Count, _payerRows);
+        var blockers = MasterDataScreenRules.VisibleBlockers(
+            MasterDataScreenRules.Blockers(_instrumentRows.Count, _materialRows.Count, _targetRows.Count,
+                                           _stockRows.Count, _prescriberRows.Count, _payerRows),
+            [.. _visibleTabs]);
 
         _status.ForeColor = blockers.Count == 0 ? UiTheme.Normal : UiTheme.Abnormal;
         _status.Text = MasterDataScreenRules.Completeness(blockers, T);

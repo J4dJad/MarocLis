@@ -70,6 +70,26 @@ public sealed class MasterDataScreenRulesTests
     }
 
     [Fact]
+    public void A_secretary_is_shown_only_the_tabs_she_may_read_and_the_screen_opens_on_the_first()
+    {
+        // Before: the screen opened on the analysers' tab and answered « Vous n'avez pas le droit ».
+        var secretary = new LicenceTestKit.User(true, Permissions.Orders.Create, Permissions.Billing.View);
+        MasterDataScreenRules.VisibleTabs(secretary).Should().Equal(MasterDataTab.Prescribers, MasterDataTab.Payers);
+
+        var engineer = new LicenceTestKit.User(true, Permissions.Equipment.Manage);
+        MasterDataScreenRules.VisibleTabs(engineer).Should().Equal(MasterDataTab.Instruments);
+
+        var everything = new LicenceTestKit.User(true, Permissions.Equipment.View, Permissions.Quality.View,
+                                                 Permissions.Inventory.View, Permissions.Orders.View, Permissions.Billing.View);
+        MasterDataScreenRules.VisibleTabs(everything).Should().Equal(Enum.GetValues<MasterDataTab>());
+
+        // The lists she may not read are empty for her, not for the laboratory: not named as missing.
+        var blockers = MasterDataScreenRules.Blockers(0, 0, 0, 0, 0, [Payer(rate: 0m)]);
+        MasterDataScreenRules.VisibleBlockers(blockers, [MasterDataTab.Prescribers, MasterDataTab.Payers])
+            .Should().Equal("Order.Prescribers", "Coverage.Payers");
+    }
+
+    [Fact]
     public void The_completeness_names_each_screen_the_reference_data_leaves_unusable()
     {
         var none = MasterDataScreenRules.Blockers(0, 1, 0, 0, 0, [Payer(rate: 0m)]);

@@ -48,6 +48,20 @@ public sealed class WebMasterDataTests : WebReferenceContext
     }
 
     [Fact]
+    public void ASecretary_SeesOnlyThePrescribersAndPayers_AndTheScreenOpensOnThePrescribers()
+    {
+        SignIn(AppLanguage.French, [Permissions.Orders.Create, Permissions.Billing.View]);
+        MasterData.On(nameof(IMasterDataQueries.GetPrescribersAsync), _ => new[] { Rules.Prescriber() });
+        Payers(Rules.Payer());
+
+        var page = Render<MasterDataScreen>();
+
+        page.FindAll("[role=tab]").Select(t => t.GetAttribute("data-tab")).Should().Equal("Prescribers", "Payers");
+        page.Find("[role=tab][aria-selected=true]").GetAttribute("data-tab").Should().Be("Prescribers");
+        page.FindAll("[data-grid=instruments]").Should().BeEmpty();
+    }
+
+    [Fact]
     public void WhoKeepsOnlyThePrescribers_SeesEveryTab_ButTheOtherTabsButtonsTurnedOff()
     {
         SignIn(AppLanguage.French, With(Permissions.Catalog.Manage));

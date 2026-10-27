@@ -65,6 +65,48 @@ public static class MasterDataScreenRules
         _ => Permissions.Billing.ManageTariffs
     };
 
+    /// <summary>The rights that let a user read a tab's list (any one of them).</summary>
+    public static IReadOnlyList<string> ViewRights(MasterDataTab tab) => tab switch
+    {
+        MasterDataTab.Instruments => [Permissions.Equipment.View],
+        MasterDataTab.QualityControl => [Permissions.Quality.View],
+        MasterDataTab.Stock or MasterDataTab.Suppliers => [Permissions.Inventory.View],
+        MasterDataTab.Prescribers => [Permissions.Orders.View, Permissions.Orders.Create],
+        _ => [Permissions.Billing.View]
+    };
+
+    /// <summary>
+    /// The tabs a user is shown, in their order: those whose list they may read or whose entries
+    /// they may manage. The screen opens on the first of them. A secretary opened it on the
+    /// analysers' tab, which she may not read, and met « Vous n'avez pas le droit d'effectuer
+    /// cette opération » before seeing the prescribers and payers she came for.
+    /// </summary>
+    public static IReadOnlyList<MasterDataTab> VisibleTabs(ICurrentUser user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        return [.. Enum.GetValues<MasterDataTab>().Where(tab => ViewRights(tab).Any(user.Has) || CanManage(user, tab))];
+    }
+
+    /// <summary>
+    /// The blockers of <see cref="Blockers"/> that concern a tab the user is shown: a list they may
+    /// not read is empty for them, not for the laboratory.
+    /// </summary>
+    public static IReadOnlyList<string> VisibleBlockers(IReadOnlyList<string> blockers, IReadOnlyCollection<MasterDataTab> visible)
+    {
+        ArgumentNullException.ThrowIfNull(blockers);
+        ArgumentNullException.ThrowIfNull(visible);
+
+        return [.. blockers.Where(key => key switch
+        {
+            "Nav.Equipment" => visible.Contains(MasterDataTab.Instruments),
+            "Nav.QualityControl" => visible.Contains(MasterDataTab.QualityControl),
+            "Nav.Inventory" => visible.Contains(MasterDataTab.Stock),
+            "Order.Prescribers" => visible.Contains(MasterDataTab.Prescribers),
+            "Coverage.Payers" => visible.Contains(MasterDataTab.Payers),
+            _ => true
+        })];
+    }
+
     public static bool CanManage(ICurrentUser user, MasterDataTab tab)
     {
         ArgumentNullException.ThrowIfNull(user);

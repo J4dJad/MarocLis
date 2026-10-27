@@ -19,7 +19,7 @@
 *@
 <div class="screen masterdata" data-screen="masterdata">
     <div class="tabs" role="tablist">
-        @foreach (var tab in Enum.GetValues<MasterDataTab>())
+        @foreach (var tab in _visibleTabs)
         {
             <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
                     data-tab="@tab" @onclick="() => SelectTab(tab)">@TabCaption(tab)</button>
@@ -387,6 +387,9 @@
     private enum Dialog { None, Instrument, Material, Target, Stock, Supplier, Prescriber, Payer }
 
     private MasterDataTab _tab = MasterDataTab.Instruments;
+
+    /// <summary>The tabs this operator may read or manage; the screen opens on the first (shared with the workstation).</summary>
+    private IReadOnlyList<MasterDataTab> _visibleTabs = [];
     private bool _includeInactive;
     private string _prescriberSearch = string.Empty;
 
@@ -450,7 +453,12 @@
         _ => Texts["Nav.Instruments"]
     };
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override Task OnInitializedAsync()
+    {
+        _visibleTabs = MasterDataScreenRules.VisibleTabs(Context.User);
+        if (_visibleTabs.Count > 0) _tab = _visibleTabs[0];
+        return LoadAsync();
+    }
 
     private void SelectTab(MasterDataTab tab) => _tab = tab;
 
@@ -518,8 +526,10 @@
     /// <summary>Which screens are still unusable: not obvious from six lists, and what an installation needs to know.</summary>
     private void ShowCompleteness()
     {
-        var blockers = MasterDataScreenRules.Blockers(_instruments.Count, _materials.Count, _targets.Count,
-                                                      _stock.Count, _prescribers.Count, _payers);
+        var blockers = MasterDataScreenRules.VisibleBlockers(
+            MasterDataScreenRules.Blockers(_instruments.Count, _materials.Count, _targets.Count,
+                                           _stock.Count, _prescribers.Count, _payers),
+            _visibleTabs.ToList());
         _status = (MasterDataScreenRules.Completeness(blockers, Texts.T), blockers.Count == 0 ? "normal" : "warning");
     }
 
