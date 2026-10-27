@@ -321,6 +321,9 @@
             var result = await Scopes.RunAsync<TreasuryService, Result<ReconciliationData>>(s => s.GetReconciliationAsync(accountId, from, to));
             if (result.IsFailure)
             {
+                _data = BankReconciliationScreenRules.AfterLoad(result);
+                _lineId = null;
+                _ticked.Clear();
                 if (result.FirstError.ResourceKey == "Treasury_PeriodInvalid") _periodRefusal = FieldRefusal.Of("recon-to", result.FirstError);
                 else _status = (Texts.Describe(result.Errors), "critical");
                 return;

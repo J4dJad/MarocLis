@@ -285,10 +285,9 @@ public sealed class BankReconciliationView : LocalizedView
 
         var result = await _treasury.GetReconciliationAsync(account.Id, DateOnly.FromDateTime(_from.Value.Date),
                                                             DateOnly.FromDateTime(_to.Value.Date), ct);
-        if (result.IsFailure) { _dialogs.ShowFailure(result); return; }
-
-        _data = result.Value;
+        _data = BankReconciliationScreenRules.AfterLoad(result);
         Render();
+        if (result.IsFailure) _dialogs.ShowFailure(result);
     }
 
     private string Amount(decimal value) => Money.Of(value).Format(Localizer.CurrentLanguage);

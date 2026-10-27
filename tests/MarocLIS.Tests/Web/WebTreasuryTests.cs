@@ -101,6 +101,21 @@ public sealed class WebTreasuryTests : WebScreenContext
     }
 
     [Fact]
+    public void AReversedPeriod_ClearsTheLinesAndBalancesOfThePreviousOne_RatherThanShowingThemUnderTheNewDates()
+    {
+        SignIn(AppLanguage.French, Manager);
+        var page = Render<BankReconciliation>();
+        page.FindAll("[data-grid=lines] tbody tr").Should().HaveCount(3);
+
+        page.Find("[data-field=recon-to]").Change("2000-01-01");
+
+        page.Find("[data-refusal=recon-to]").TextContent.Should().NotBeEmpty();
+        page.FindAll("[data-grid=lines] tbody tr[data-row]").Should().BeEmpty("those lines belong to the period no longer asked for");
+        page.FindAll(Tick(_cardBatch)).Should().BeEmpty();
+        page.FindAll("[data-card=balances]").Should().BeEmpty("the balances were those of the previous period");
+    }
+
+    [Fact]
     public void ACardBatchPaidNetOfItsCommission_IsMatched_WithTheReasonForTheDifference()
     {
         SignIn(AppLanguage.French, Manager);

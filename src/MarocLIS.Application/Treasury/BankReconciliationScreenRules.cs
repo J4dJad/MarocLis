@@ -130,6 +130,17 @@ public static class BankReconciliationScreenRules
         return accounts.FirstOrDefault(a => a.Id == kept) ?? accounts.FirstOrDefault();
     }
 
+    /// <summary>
+    /// What the screen shows once a reload answers: the reconciliation read, or nothing when it was
+    /// refused — a reversed period kept the previous period's lines and balances under the new
+    /// dates, and a line could still be matched from them.
+    /// </summary>
+    public static ReconciliationData? AfterLoad(Result<ReconciliationData> loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        return loaded.IsSuccess ? loaded.Value : null;
+    }
+
     /// <summary>The statement's lines shown: all of them, or only those still open.</summary>
     public static IReadOnlyList<StatementLineRow> Visible(ReconciliationData? data, bool openOnly) =>
         data is null ? [] : [.. data.Lines.Where(l => !openOnly || !l.IsReconciled)];
