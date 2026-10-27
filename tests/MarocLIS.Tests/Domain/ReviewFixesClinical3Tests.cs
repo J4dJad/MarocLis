@@ -246,6 +246,42 @@ public sealed class ReviewFixesClinical3Tests
         k.NumericValue.Should().Be(6.8m);
     }
 
+    // ---- The frame tester answers as the import does ------------------------------------------
+
+    [Fact]
+    public async Task FrameTester_RefusesAValueOnATubeThatDoesNotCarryTheAnalysis_AndOnACancelledAnalysis()
+    {
+        var bench = new SinkBench();
+        var serum = bench.Tube;
+        var fluoride = bench.AddTube("T-0002");
+        var glucose = bench.AddAnalysis(fluoride, Numeric("GLU"))[0];
+        bench.AddAnalysis(serum, Numeric("CHOL"));
+
+        async Task<PreviewOutcome> TestAsync(Sample tube, string code, string value)
+        {
+            string raw = string.Join("\r", @"H|\^&|||AU480^1|||||||P|1", "P|1",
+                                     $"O|1|{tube.Barcode}||^^^{code}|R", $"R|1|^^^{code}|{value}|||N||F", "L|1|N");
+            var preview = await bench.Previewer.PreviewAsync(bench.Link.Id, InstrumentProtocol.AstmE1394,
+                                                             bench.Link.MessageFormat,
+                                                             UnmappedNonNumericHandling.Report, raw);
+            preview.IsSuccess.Should().BeTrue();
+            return preview.Value.Lines.Single().Outcome;
+        }
+
+        (await TestAsync(fluoride, "GLU", "1.02")).Should().Be(PreviewOutcome.WouldStore);
+        (await TestAsync(serum, "CHOL", "2.31")).Should().Be(PreviewOutcome.WouldStore);
+
+        // Glucose was ordered on the fluoride tube: the serum tube does not carry it.
+        (await TestAsync(serum, "GLU", "0.99")).Should().Be(PreviewOutcome.NotOrdered);
+        (await bench.SendAsync(serum, ("GLU", "0.99"))).Should().BeFalse("the import refuses it too");
+        glucose.NumericValue.Should().BeNull();
+
+        // A cancelled analysis takes no value either.
+        bench.Order.CancelItem(bench.Order.Items.Single(i => i.Id == glucose.LabOrderItemId).Id,
+                               Now, Guid.NewGuid(), "Erreur de saisie").IsSuccess.Should().BeTrue();
+        (await TestAsync(fluoride, "GLU", "1.02")).Should().Be(PreviewOutcome.NotOrdered);
+    }
+
     // ---- K2: "not done" is printed once a biologist validated its analysis ---------------------
 
     [Fact]
@@ -538,6 +574,10 @@ public sealed class ReviewFixesClinical3Tests
 
         private readonly InstrumentInterface _link;
         private readonly InstrumentMessageSink _sink;
+
+        /// <summary>The frame tester of the same link, over the same tubes, order and rows.</summary>
+        public InstrumentMessagePreviewer Previewer { get; }
+
         private readonly List<Sample> _tubes = [];
         private readonly List<TestResult> _results = [];
         private readonly Dictionary<Guid, AnalysisTest> _analyses = [];
@@ -584,6 +624,28 @@ public sealed class ReviewFixesClinical3Tests
                         ? ((IReadOnlyCollection<Guid>)args![1]!).ToDictionary(id => id, _ => previous)
                         : new Dictionary<Guid, PreviousValue>())
             });
+
+            Previewer = new InstrumentMessagePreviewer(
+                Stub.Of<IRepository<InstrumentInterface>>(new()
+                {
+                    ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<InstrumentInterface?>(self._link)
+                }),
+                samples,
+                Stub.Of<IRepository<LabOrder>>(new()
+                {
+                    ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<LabOrder?>(self.Order)
+                }),
+                analyses,
+                Stub.Of<IRepository<TestResult>>(new()
+                {
+                    ["ListAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>(self._results.ToList())
+                }),
+                patients,
+                Stub.Of<IRepository<Instrument>>(new()
+                {
+                    ["GetByIdAsync"] = _ => Task.FromResult<Instrument?>(instrument)
+                }),
+                clock);
 
             _sink = new InstrumentMessageSink(
                 Stub.Of<IRepository<InstrumentInterface>>(new()

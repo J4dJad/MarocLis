@@ -156,7 +156,9 @@ public sealed partial class InstrumentMessagePreviewer(
                 continue;
             }
 
-            var target = stored.FirstOrDefault(r => r.TestParameterId == mapping!.TestParameterId);
+            // The sink's own rule: a row of a live analysis bound to this tube, or to no tube. A
+            // value for an analysis carried by another tube, or for a cancelled one, is refused.
+            var target = InstrumentMessageSink.TargetFor(order!, stored, matches[0].Id, mapping!.TestParameterId);
 
             if (target is null)
             {
