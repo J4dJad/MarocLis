@@ -639,11 +639,14 @@ public sealed class InstrumentMessageSink(
     /// unit strings the analyser happens to send.
     /// </para>
     /// </summary>
-    private Result ApplyNumeric(TestParameter parameter, InstrumentTestMapping mapping, string raw,
-                                 DateTimeOffset at, TestResult target, List<string> issues)
+    /// <summary>
+    /// A number as analysers send it, for a patient value and a control alike: a point or a comma
+    /// for the decimals, and « &lt; » or « &gt; » before a value outside the measuring range.
+    /// </summary>
+    public static bool TryReadNumber(string? raw, out decimal value, out string? censoring)
     {
-        var text = raw;
-        string? censoring = null;
+        var text = raw?.Trim() ?? string.Empty;
+        censoring = null;
 
         if (text.StartsWith('<') || text.StartsWith('>'))
         {
@@ -651,9 +654,14 @@ public sealed class InstrumentMessageSink(
             text = text[1..].Trim();
         }
 
-        if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            && !decimal.TryParse(text, NumberStyles.Float, CultureInfo.GetCultureInfo("fr-FR"),
-                                  out value))
+        return decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+               || decimal.TryParse(text, NumberStyles.Float, CultureInfo.GetCultureInfo("fr-FR"), out value);
+    }
+
+    private Result ApplyNumeric(TestParameter parameter, InstrumentTestMapping mapping, string raw,
+                                 DateTimeOffset at, TestResult target, List<string> issues)
+    {
+        if (!TryReadNumber(raw, out var value, out var censoring))
         {
             // Not a number at all. Some analysers send "SEE COMMENT" or "ERROR" in a numeric field,
             // and storing that as text under a numeric parameter would make the column unreadable.
@@ -728,8 +736,8 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
-            if (!decimal.TryParse(incoming.Value?.TrimStart('<', '>').Trim(), NumberStyles.Float,
-                                   CultureInfo.InvariantCulture, out var value))
+            // Read as a patient value is: « 5,2 » from an analyser set to French is 5.2 here too.
+            if (!TryReadNumber(incoming.Value, out var value, out _))
             {
                 issues.Add(Describe("Interface_NonNumericValue", incoming.InstrumentTestCode));
                 continue;

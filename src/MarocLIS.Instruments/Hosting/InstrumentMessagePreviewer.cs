@@ -260,14 +260,9 @@ public sealed partial class InstrumentMessagePreviewer(
         return analysis?.Parameters.FirstOrDefault(p => p.Id == parameterId);
     }
 
-    private static bool TryNumber(string? raw, out decimal value)
-    {
-        var text = raw?.TrimStart('<', '>').Trim();
-
-        return decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-               || decimal.TryParse(text, NumberStyles.Float, CultureInfo.GetCultureInfo("fr-FR"),
-                                   out value);
-    }
+    /// <summary>The sink's own reading of a number, so the window and the link agree.</summary>
+    private static bool TryNumber(string? raw, out decimal value) =>
+        InstrumentMessageSink.TryReadNumber(raw, out value, out _);
 
     private static string Format(decimal value) =>
         value.ToString("0.######", CultureInfo.InvariantCulture);

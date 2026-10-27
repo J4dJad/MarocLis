@@ -230,6 +230,21 @@ public sealed class ReviewFixesCycle3ClinicalTests
         bench.FlagCalls.Should().HaveCount(1);
     }
 
+    [Fact]
+    public async Task AnAnalyserControl_WithADecimalComma_IsReadAsAPatientValueIs()
+    {
+        var bench = new ControlBench(("881", QcLevel.Low));
+        var target = bench.Targets[0];
+        target.LaboratoryMean = 1.10m;
+        target.LaboratorySd = 0.02m;
+        target.LaboratoryPointCount = 25;
+
+        await bench.SendAsync(Control("881", "1,10"));
+
+        bench.Stored.Should().ContainSingle().Which.Value.Should().Be(1.10m);
+        bench.Issues.Should().NotContain("Interface_NonNumericValue");
+    }
+
     // ---- K15: a named lot applies to one analyser's rows -----------------------------------------
 
     [Fact]
