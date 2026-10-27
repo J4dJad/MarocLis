@@ -568,7 +568,10 @@ public sealed partial class MainShellForm : LocalizedForm
                 ForeColor = UiTheme.TextPrimary,
                 Font = NavigationFont,
                 Cursor = Cursors.Hand,
-                UseVisualStyleBackColor = false
+                UseVisualStyleBackColor = false,
+                // A caption longer than the menu ends in « … » and shows whole in a tooltip: the
+                // Arabic « القيادة والتسيير » was cut to « القيادة والتسي » with nothing to say so.
+                AutoEllipsis = true
             };
 
             button.FlatAppearance.BorderSize = 0;

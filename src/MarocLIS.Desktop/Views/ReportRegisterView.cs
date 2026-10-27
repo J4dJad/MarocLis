@@ -388,6 +388,7 @@ public sealed class ReportRegisterView : LocalizedView
             value.Margin = new Padding(0, 0, 0, 6);
             value.MaximumSize = new Size(AsideWidth - 36 - 118, 0);
             value.UseMnemonic = false;
+            LabelWrap.Attach(value);
 
             _facts.Controls.Add(caption, 0, i);
             _facts.Controls.Add(value, 1, i);
