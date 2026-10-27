@@ -95,7 +95,7 @@ public static class RtlLayout
         (_, e) =>
         {
             if (e.Value is string text && BidiText.NeedsIsolation(text))
-                e.Value = BidiText.Isolate(text);
+                e.Value = BidiText.Isolate(text, BidiStyle.Marks);
         };
 
     private static void MirrorColumns(DataGridView grid, bool rtl)

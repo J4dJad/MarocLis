@@ -153,7 +153,9 @@ internal static class Program
             ? parsed
             : AppLanguage.French;
 
-        builder.Services.AddMarocLisLocalization(language);
+        // Marks rather than isolates around a Latin value in Arabic: the Windows controls draw an
+        // isolate as a box (BidiStyle).
+        builder.Services.AddMarocLisLocalization(language, options => options.BidiStyle = BidiStyle.Marks);
         builder.Services.AddMarocLisInfrastructure(builder.Configuration);
         builder.Services.AddMarocLisApplication(builder.Configuration);
         builder.Services.AddInstrumentInterfacing(builder.Configuration);

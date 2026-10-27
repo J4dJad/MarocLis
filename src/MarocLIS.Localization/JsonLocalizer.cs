@@ -28,6 +28,12 @@ public sealed class LocalizationOptions
 
     /// <summary>Records every key that could not be resolved, for the translation-gap report.</summary>
     public bool TrackMissingKeys { get; set; } = true;
+
+    /// <summary>
+    /// How a Latin value is kept apart in an Arabic sentence: isolates, except on the Windows
+    /// workstation, which draws them as boxes and uses marks (<see cref="BidiStyle"/>).
+    /// </summary>
+    public BidiStyle BidiStyle { get; set; } = BidiStyle.Isolates;
 }
 
 /// <summary>
@@ -170,7 +176,7 @@ public sealed class JsonLocalizer : ILocalizer
     /// French and English strings are byte-identical to what they were.
     /// </para>
     /// </summary>
-    private static object?[] Isolate(object?[] args, AppLanguage language)
+    private object?[] Isolate(object?[] args, AppLanguage language)
     {
         if (!language.IsRightToLeft() || args.Length == 0) return args;
 
@@ -192,7 +198,7 @@ public sealed class JsonLocalizer : ILocalizer
             if (!BidiText.NeedsIsolation(text)) continue;
 
             isolated ??= (object?[])args.Clone();
-            isolated[i] = BidiText.Isolate(text!);
+            isolated[i] = BidiText.Isolate(text!, _options.BidiStyle);
         }
 
         return isolated ?? args;

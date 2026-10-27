@@ -26,6 +26,24 @@ namespace MarocLIS.Localization;
 /// sentence.
 /// </para>
 /// </summary>
+/// <summary>How a Latin value is kept apart inside right-to-left text.</summary>
+public enum BidiStyle
+{
+    /// <summary>
+    /// A first-strong isolate (LRI … PDI): the exact remedy, for the browsers, the phone and the
+    /// PDF documents, which draw nothing for the two characters.
+    /// </summary>
+    Isolates,
+
+    /// <summary>
+    /// A left-to-right mark (LRM) at each end: for the Windows workstation, whose controls draw an
+    /// isolate as a visible box around every name, number, date and counter of the Arabic
+    /// interface. The mark has been invisible there since Windows 2000 and gives the same order to
+    /// a value standing on its own in a label or a cell.
+    /// </summary>
+    Marks
+}
+
 public static class BidiText
 {
     /// <summary>LEFT-TO-RIGHT ISOLATE.</summary>
@@ -33,6 +51,9 @@ public static class BidiText
 
     /// <summary>POP DIRECTIONAL ISOLATE.</summary>
     public const char Pdi = '⁩';
+
+    /// <summary>LEFT-TO-RIGHT MARK.</summary>
+    public const char Lrm = '\u200E';
 
     /// <summary>
     /// Whether a string would be re-ordered by a right-to-left paragraph.
@@ -48,7 +69,7 @@ public static class BidiText
         if (string.IsNullOrEmpty(value)) return false;
 
         // Already isolated, by this method or by a caller that did it deliberately.
-        if (value[0] == Lri) return false;
+        if (value[0] is Lri or Lrm) return false;
 
         var hasLatin = false;
 
@@ -65,6 +86,10 @@ public static class BidiText
     }
 
     public static string Isolate(string value) => $"{Lri}{value}{Pdi}";
+
+    /// <summary>Keeps <paramref name="value"/> apart in the given <paramref name="style"/>.</summary>
+    public static string Isolate(string value, BidiStyle style) =>
+        style == BidiStyle.Marks ? $"{Lrm}{value}{Lrm}" : Isolate(value);
 
     /// <summary>Isolates when it is needed and the language is right-to-left; otherwise passes through.</summary>
     public static string ForLanguage(string? value, AppLanguage language) =>
