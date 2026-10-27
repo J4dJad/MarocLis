@@ -923,7 +923,7 @@ public sealed partial class SettingsView : LocalizedView
 
         _editSetting.Text = T("Action.Edit");
         _addSetting.Text = T("Action.New");
-        _settingsNotice.Text = T("Admin.SettingsNotice");
+        ShowSettingsNotice();
 
         foreach (var key in new[]
                  {
@@ -1480,7 +1480,13 @@ public sealed partial class SettingsView : LocalizedView
         });
 
         RefreshSettingActions();
+        ShowSettingsNotice();
     }
+
+    // An empty list says why: every setting of a laboratory has its own tab, and the list only holds
+    // the advanced ones added by hand. Empty without a word, it looked broken.
+    private void ShowSettingsNotice() =>
+        _settingsNotice.Text = _settingRows.Count == 0 ? T("Admin.SettingsEmpty") : T("Admin.SettingsNotice");
 
     private void RefreshSettingActions() =>
         _editSetting.Enabled = _settings.CurrentRow?.Tag is SettingRow;

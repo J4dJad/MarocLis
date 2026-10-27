@@ -45,6 +45,7 @@ public static class GridColumns
                 grid.RowsAdded += (_, _) => QueueFitCodes(grid);
                 grid.DataBindingComplete += (_, _) => Fit(grid);
                 grid.ColumnAdded += (_, _) => Fit(grid);
+                grid.CellPainting += PaintHeader;
             }
 
             Fit(grid);
@@ -68,6 +69,80 @@ public static class GridColumns
 
         FitCodes(grid);
     }
+
+    /// <summary>
+    /// Draws a column header's caption on lines broken at its spaces only (<see cref="TextWrap"/>):
+    /// Windows broke « Prélèvement pédiatrique » into « Prélèvement pé | diatrique ».
+    /// </summary>
+    private static void PaintHeader(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.Handled || e.RowIndex != -1 || e.ColumnIndex < 0 || e.Graphics is null) return;
+        if (sender is not DataGridView grid || e.FormattedValue is not string { Length: > 0 } text) return;
+
+        var style = e.CellStyle ?? grid.ColumnHeadersDefaultCellStyle;
+        if (style.WrapMode == DataGridViewTriState.False) return;
+
+        var font = style.Font ?? grid.Font;
+        var column = grid.Columns[e.ColumnIndex];
+        var glyph = column.SortMode == DataGridViewColumnSortMode.NotSortable ? 0 : 14;
+        var inner = new Rectangle(e.CellBounds.X + style.Padding.Left + 4, e.CellBounds.Y + style.Padding.Top + 2,
+                                  e.CellBounds.Width - style.Padding.Horizontal - 8 - glyph,
+                                  e.CellBounds.Height - style.Padding.Vertical - 4);
+        if (inner.Width <= 0 || inner.Height <= 0) return;
+
+        const TextFormatFlags measureFlags = TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+        var lines = TextWrap.Lines(text, w => TextRenderer.MeasureText(e.Graphics, w, font, Size.Empty, measureFlags).Width,
+                                   inner.Width);
+
+        e.Paint(e.CellBounds, e.PaintParts & ~DataGridViewPaintParts.ContentForeground);
+
+        var rtl = grid.RightToLeft == RightToLeft.Yes;
+        var flags = measureFlags | TextFormatFlags.EndEllipsis;
+        flags |= HorizontalOf(style.Alignment, rtl);
+        if (rtl) flags |= TextFormatFlags.RightToLeft;
+
+        var lineHeight = font.Height;
+        var visible = Math.Max(1, Math.Min(lines.Count, inner.Height / lineHeight));
+        var top = VerticalOf(style.Alignment) switch
+        {
+            0 => inner.Top,
+            2 => inner.Bottom - visible * lineHeight,
+            _ => inner.Top + (inner.Height - visible * lineHeight) / 2
+        };
+
+        var color = style.ForeColor.IsEmpty ? grid.ForeColor : style.ForeColor;
+        for (var i = 0; i < visible; i++)
+        {
+            // The last line that fits takes what is left, cut with an ellipsis.
+            var line = i == visible - 1 ? string.Join(" ", lines.Skip(i)) : lines[i];
+            TextRenderer.DrawText(e.Graphics, line, font, new Rectangle(inner.X, top + i * lineHeight, inner.Width, lineHeight),
+                                  color, flags);
+        }
+
+        e.Handled = true;
+    }
+
+    private static TextFormatFlags HorizontalOf(DataGridViewContentAlignment alignment, bool rtl)
+    {
+        var left = alignment is DataGridViewContentAlignment.TopLeft or DataGridViewContentAlignment.MiddleLeft
+                       or DataGridViewContentAlignment.BottomLeft or DataGridViewContentAlignment.NotSet;
+        var right = alignment is DataGridViewContentAlignment.TopRight or DataGridViewContentAlignment.MiddleRight
+                        or DataGridViewContentAlignment.BottomRight;
+
+        // A mirrored grid puts the start of a caption on the right.
+        if (rtl) (left, right) = (right, left);
+        return left ? TextFormatFlags.Left : right ? TextFormatFlags.Right : TextFormatFlags.HorizontalCenter;
+    }
+
+    // 0 top, 1 middle, 2 bottom.
+    private static int VerticalOf(DataGridViewContentAlignment alignment) => alignment switch
+    {
+        DataGridViewContentAlignment.TopLeft or DataGridViewContentAlignment.TopCenter
+            or DataGridViewContentAlignment.TopRight => 0,
+        DataGridViewContentAlignment.BottomLeft or DataGridViewContentAlignment.BottomCenter
+            or DataGridViewContentAlignment.BottomRight => 2,
+        _ => 1
+    };
 
     // Rows are often added one at a time; the codes are measured once the batch is in.
     private static readonly HashSet<DataGridView> Queued = [];

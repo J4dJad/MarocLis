@@ -4929,6 +4929,7 @@
   },
 
   "Admin": {
+    "SettingsEmpty": "No other setting: the site, numbering, invoice, languages, storage, printers, backups and licence are set in their own tabs. « New » creates an advanced setting, kept in the database for every workstation.",
     "UserCount": "{0} {0:plural:account|accounts} · {1} active",
     "SiteAccessButton": "Accessible sites",
     "RolesButton": "Roles and rights",

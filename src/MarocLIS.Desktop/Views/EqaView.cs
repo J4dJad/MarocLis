@@ -112,6 +112,10 @@ public sealed class EqaView : LocalizedView
         Add("bias", 7, UiTheme.Monospace, right);
         Add("outcome", 10, UiTheme.SmallBold);
         Add("nc", 9, UiTheme.Monospace);
+
+        // The rows grow to the wrapped scheme and parameter: at a fixed height « Programme
+        // national d'évaluation externe » lost the bottom of its second line.
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCellsExceptHeaders;
     }
 
     private void WireBehaviour()

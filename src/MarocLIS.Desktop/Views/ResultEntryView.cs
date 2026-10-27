@@ -1506,7 +1506,16 @@ public sealed class ResultEntryView : LocalizedView
         // it narrowed shows every dossier again and the next tube goes into an empty box.
         if (_scan.Text.Trim() == term.Trim()) _scan.Clear();
 
-        await LoadOrderAsync(resolved.Value, CancellationToken.None);
+        try
+        {
+            await LoadOrderAsync(resolved.Value, CancellationToken.None);
+        }
+        finally
+        {
+            // A load abandoned on the way (the screen reloaded, the file left) does not leave
+            // « Chargement… » above a screen with no file open.
+            if (!IsDisposed && _status.Text == T("App.Loading")) _status.Text = string.Empty;
+        }
     }
 
     private async Task LoadOrderAsync(Guid orderId, CancellationToken ct)

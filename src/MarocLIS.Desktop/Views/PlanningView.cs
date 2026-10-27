@@ -253,6 +253,12 @@ public sealed class PlanningView : LocalizedView
             for (var d = 0; d < days; d++) _grid.Rows[index].Cells[FixedColumns + d].Tag = line.Days[d];
         }
 
+        // As wide as the longest name, within reason: « ALAOUI BELGHITI Yasmine » was cut at 165.
+        var widest = _grid.Rows.Cast<DataGridViewRow>()
+            .Select(r => TextRenderer.MeasureText(r.Cells[0].Value as string ?? string.Empty, UiTheme.Body).Width)
+            .DefaultIfEmpty(0).Max();
+        _grid.Columns[0].Width = Math.Clamp(widest + 20, 165, 280);
+
         _grid.ResumeLayout(performLayout: true);
 
         if (selected.Item1 >= 0 && selected.Item1 < _grid.RowCount && selected.Item2 < _grid.ColumnCount)

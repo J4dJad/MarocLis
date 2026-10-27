@@ -4930,6 +4930,7 @@
   },
 
   "Admin": {
+    "SettingsEmpty": "Aucun autre paramètre : le site, les numérotations, la facture, les langues, le stockage, les imprimantes, les sauvegardes et la licence se règlent dans leur propre onglet. « Nouveau » crée un paramètre avancé, conservé en base pour tous les postes.",
     "UserCount": "{0} {0:plural:compte|comptes} · {1} {1:plural:actif|actifs}",
     "SiteAccessButton": "Sites accessibles",
     "RolesButton": "Rôles et droits",

@@ -234,7 +234,12 @@ public sealed class SampleStorageView : LocalizedView
             _grid.Column("days").HeaderText = T("Sample.DaysLeft");
             _grid.Column("volume").HeaderText = T("Sample.Volume");
             _grid.Column("aliquots").HeaderText = T("Sample.Aliquots");
-            _grid.Column("flags").HeaderText = string.Empty;
+            // Named, and its signs explained on the header: a column headed by nothing but « ? »
+            // in its cells read as a value nobody knew.
+            _grid.Column("flags").HeaderText = T("Web.SampleFlags");
+            _grid.Column("flags").ToolTipText = string.Join(" · ", $"? {T("Sample.NotShelved")}",
+                                                            $"! {T("Sample.HasDefects")}",
+                                                            $"R {T("Sample.WithReservation")}");
         }
 
         Render();

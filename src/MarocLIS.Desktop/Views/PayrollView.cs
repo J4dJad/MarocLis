@@ -156,7 +156,7 @@ public sealed class PayrollView : LocalizedView
             if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not PayslipRow row) return;
             if (e.ColumnIndex == _grid.Column("alert").Index && PayrollScreenRules.WarningTone(row) is { } tone)
                 e.CellStyle!.ForeColor = tone == "critical" ? UiTheme.Critical : UiTheme.Abnormal;
-            if (e.ColumnIndex == _grid.Column("net").Index) e.CellStyle!.Font = UiTheme.SmallBold;
+            if (e.ColumnIndex == _grid.Column("net").Index) e.CellStyle!.Font = UiTheme.MonospaceBold;   // the amounts' face, in bold
         };
     }
 
