@@ -78,7 +78,9 @@ public sealed record AccountingProblem(
 /// 5111 otherwise) in debit, the patient in credit. Payer settlement: the bank in debit, the payer in
 /// credit. A bounced cheque or a refund reverses the receipt on the day it happened.</item>
 /// <item>Deposit: the treasury in debit, 4421 in credit when taken; 4421 to the patient when it
-/// settles the invoice; 4421 to the treasury for what is handed back.</item>
+/// settles the invoice; 4421 to the treasury for what is handed back. A deposit carried over from a
+/// credited invoice brought no money: the patient's account, left in credit by the credit note,
+/// is debited instead of the treasury, in the adjustments.</item>
 /// <item>Write-off of a payer's refused share: 6585 in debit, the payer in credit; the share left
 /// to the patient instead moves from the payer's account to the patient's on the day of the
 /// answer, and back on the day the claim is reopened.</item>
@@ -186,6 +188,19 @@ public static class SalesAccountingJournal
             }
         }
 
+        if (journals.HasFlag(AccountingJournals.Adjustments))
+        {
+            foreach (var deposit in sources.Deposits.Where(d => d.CarriedFromInvoiceNumber is not null && In(d.ReceivedOn)))
+            {
+                var (patient, third) = Patient(deposit.Customer, settings);
+                entries.Add(Entry(deposit.ReceivedOn, settings.MiscJournal, deposit.Number,
+                                  $"Report règl. fact. {deposit.CarriedFromInvoiceNumber} en acompte {deposit.Number} {deposit.Customer.PatientName}",
+                                  AccountingJournals.Adjustments, deposit.SiteCode,
+                                  Line(patient, third, deposit.Amount, 0m),
+                                  Line(settings.CustomerAdvances, third, 0m, deposit.Amount)));
+            }
+        }
+
         if (journals.HasFlag(AccountingJournals.Receipts))
         {
             foreach (var deposit in sources.Deposits)
@@ -194,7 +209,7 @@ public static class SalesAccountingJournal
                 var journal = settings.ReceiptJournalFor(deposit.Method);
                 var (_, third) = Patient(deposit.Customer, settings);
 
-                if (In(deposit.ReceivedOn))
+                if (In(deposit.ReceivedOn) && deposit.CarriedFromInvoiceNumber is null)
                     entries.Add(Entry(deposit.ReceivedOn, journal, deposit.Number,
                                       $"Acompte {MethodLabel(deposit.Method)} {deposit.Number} {deposit.Customer.PatientName}",
                                       AccountingJournals.Receipts, deposit.SiteCode,

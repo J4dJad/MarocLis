@@ -3910,6 +3910,7 @@
     "ConfirmIssue": "Émettre une facture pour {0} {0:plural:dossier|dossiers}, d'un montant de {1} ? Une facture émise ne peut plus être modifiée.",
     "SelectOneInvoice": "Sélectionnez une seule facture.",
     "CreditNoteReasonPrompt": "Motif de l'avoir sur la facture {0}. Une facture émise ne s'annule pas : l'avoir est la seule correction possible.",
+    "CreditNoteCarriesPayments": "{0} déjà réglés par le patient seront reportés en acompte sur le dossier et déduits de la facture qui le reprendra.",
     "NoClaimableInvoices": "Aucune facture transmissible parmi la sélection.",
     "ClaimOutcome": "Retour de l'organisme",
     "ClaimRejectionReason": "Motif communiqué par l'organisme",
@@ -3973,6 +3974,7 @@
     "PartiallyPaid": "Partiellement réglée",
     "Paid": "Réglée",
     "WrittenOff": "Créance abandonnée",
+    "Credited": "Annulée par avoir",
     "Cancelled": "Annulée"
   },
 
@@ -5978,6 +5980,7 @@
   "Payment_KindNotPayable": "Un règlement ne s'enregistre que sur une facture : un avoir ou un devis ne se règle pas.",
   "Payment_ExceedsPatientShare": "Le patient ne doit plus que {0} sur cette facture : le reste est la part de l'organisme, réglée par le tiers payant.",
   "Payment_OnlyPatientPaymentsRefundable": "Seul un règlement du patient peut être remboursé : ni un abandon de créance ni un règlement de l'organisme.",
+  "Payment_CarriedToDeposit": "Ce règlement de la facture {0} a été reporté en acompte sur le dossier par l'avoir : c'est cet acompte qui se rembourse, depuis le dossier.",
 
   "CashSession_NotOpen": "Cette session de caisse n'est pas ouverte.",
   "CashSession_VarianceExplanationRequired": "Un écart de caisse de {0} DH doit être expliqué avant la clôture.",

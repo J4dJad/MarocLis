@@ -92,6 +92,10 @@ public sealed record PayerShortfallSource(
     bool Reversal = false);
 
 /// <summary>A deposit (acompte) taken before the invoice, and what was handed back of it.</summary>
+/// <param name="CarriedFromInvoiceNumber">
+/// Set when the deposit is what the patient had paid on an invoice a credit note reversed in full,
+/// carried over to the order: it moves from the patient's account to 4421, not from the treasury.
+/// </param>
 public sealed record DepositSource(
     Guid SiteId,
     string SiteCode,
@@ -104,7 +108,8 @@ public sealed record DepositSource(
     DateOnly? RefundedOn,
     Guid? CashSessionId,
     string? Reference,
-    string? RefundSiteCode = null);
+    string? RefundSiteCode = null,
+    string? CarriedFromInvoiceNumber = null);
 
 /// <summary>A closed till shift: the cash it sent to the bank and the difference found at the count.</summary>
 /// <param name="Variance">Counted minus expected: negative is a shortfall.</param>

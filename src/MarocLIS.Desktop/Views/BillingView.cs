@@ -374,6 +374,7 @@ public sealed class BillingView : LocalizedView
                 InvoiceStatus.PartiallyPaid => FinanceUi.PillWarning,
                 InvoiceStatus.Paid => FinanceUi.PillDone,
                 InvoiceStatus.WrittenOff => FinanceUi.PillWaiting,
+                InvoiceStatus.Credited => FinanceUi.PillWaiting,
                 _ => null
             }
             : null);
@@ -409,7 +410,7 @@ public sealed class BillingView : LocalizedView
             e.CellStyle!.BackColor = UiTheme.AbnormalBackground;
             e.CellStyle.ForeColor = UiTheme.Abnormal;
         }
-        else if (row.Status == InvoiceStatus.Paid)
+        else if (row.Status is InvoiceStatus.Paid or InvoiceStatus.Credited)
         {
             e.CellStyle!.ForeColor = UiTheme.TextMuted;
         }
@@ -1178,8 +1179,11 @@ public sealed class BillingView : LocalizedView
             return;
         }
 
+        // What the patient already paid is carried over to the order: said before the reason.
+        var carried = BillingScreenRules.CreditNoteCarriesOver(invoice);
         var reason = _dialogs.PromptForReason(
-            T("Billing.CreditNoteReasonPrompt", invoice.Number),
+            T("Billing.CreditNoteReasonPrompt", invoice.Number)
+            + (carried > 0m ? " " + T("Billing.CreditNoteCarriesPayments", Money.Of(carried).Format(Localizer.CurrentLanguage)) : string.Empty),
             T("Billing.CreditNote"), minimumLength: BillingScreenRules.CreditNoteReasonMinimumLength,
             maxLength: BillingScreenRules.CorrectionReasonMaxLength);
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MarocLIS.Application;
+using MarocLIS.Application.Accounting;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Orders;
@@ -13,6 +14,7 @@ using MarocLIS.Domain.Organization;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Infrastructure;
 using MarocLIS.Infrastructure.Persistence;
+using MarocLIS.Infrastructure.Queries;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -233,34 +235,47 @@ public sealed class Cycle4ReceptionBillingDatabaseTests(OrderEntryScratchDatabas
             .FirstError.ResourceKey.Should().Be("Message.PermissionDenied");
         (await On<BillingService, Result<Guid>>(accounts, s => s.IssueCreditNoteAsync(first, "Facture adressée par erreur")))
             .IsSuccess.Should().BeTrue();
+        (await ReadInvoiceAsync(first)).Status.Should().Be(InvoiceStatus.Credited);
+
+        // The 30 already paid are carried over to the request as a deposit (lot fix84b): held for
+        // the next invoice, not counted again in any till.
         (await On<BillingService, Result<IReadOnlyList<BillableOrderRow>>>(reception, s => s.GetUninvoicedOrdersAsync()))
             .Value.Should().ContainSingle(o => o.LabOrderId == order.OrderId)
-            .Which.DepositHeld.Should().Be(0m);
+            .Which.DepositHeld.Should().Be(30m);
+        (await TillAsync(reception)).ExpectedClosingCash.Should().Be(30m);
 
-        // Invoiced again: the deposit, already applied to the reversed invoice, is not applied a second time.
+        // Invoiced again: the carried 30 settle part of it, and the patient is asked for the 20 left.
         var second = await InvoiceAsync(reception, order.OrderId);
         second.Should().NotBe(first);
         invoice = await ReadInvoiceAsync(second);
         invoice.TotalAmount.Should().Be(50m);
-        invoice.PaidAmount.Should().Be(0m);
-        invoice.OutstandingAmount.Should().Be(50m);
+        invoice.PaidAmount.Should().Be(30m);
+        invoice.OutstandingAmount.Should().Be(20m);
 
-        // The 30 sit on the reversed invoice and go back to the patient from the refunder's till.
+        // The 30 live on as the new invoice's settlement: refunded from the reversed invoice as
+        // well, they would leave twice.
         var payment = (await On<BillingService, Result<IReadOnlyList<PaymentRow>>>(accounts, s => s.GetPaymentsAsync(first)))
             .Value.Single();
-        payment.IsCorrectable.Should().BeTrue();
-        (await On<BillingService, Result<Guid>>(accounts, s => s.OpenCashSessionAsync(100m))).IsSuccess.Should().BeTrue();
         (await On<BillingService, Result>(accounts, s => s.RefundPaymentAsync(first, payment.PaymentId, "Avoir total, patient remboursé")))
-            .IsSuccess.Should().BeTrue();
+            .FirstError.ResourceKey.Should().Be("Payment_CarriedToDeposit");
+        (await ReadInvoiceAsync(first)).PaidAmount.Should().Be(30m);
 
-        (await TillAsync(accounts)).ExpectedClosingCash.Should().Be(70m);
-        (await TillAsync(reception)).ExpectedClosingCash.Should().Be(30m);
-        (await ReadInvoiceAsync(first)).PaidAmount.Should().Be(0m);
-
-        // The patient pays the new invoice in full at the counter.
-        (await PayAsync(reception, second, 50m)).IsSuccess.Should().BeTrue();
+        // The patient pays the rest at the counter.
+        (await PayAsync(reception, second, 20m)).IsSuccess.Should().BeTrue();
         (await ReadInvoiceAsync(second)).Status.Should().Be(InvoiceStatus.Paid);
-        (await TillAsync(reception)).ExpectedClosingCash.Should().Be(80m);
+        (await TillAsync(reception)).ExpectedClosingCash.Should().Be(50m);
+
+        // The books balance, and the patient's account and the advances account are both settled.
+        await using var read = database.Context();
+        var sources = await new AccountingQueries(read).GetSalesSourcesAsync([lab.SiteId], new DateOnly(2000, 1, 1),
+                                                                              new DateOnly(2100, 12, 31));
+        var entries = SalesAccountingJournal.Build(sources, AccountingSettings.Default, new DateOnly(2000, 1, 1),
+                                                   new DateOnly(2100, 12, 31), AccountingJournals.All);
+        entries.Should().OnlyContain(e => e.IsBalanced);
+        decimal Balance(string account) =>
+            entries.SelectMany(e => e.Lines).Where(l => l.Account == account).Sum(l => l.Debit - l.Credit);
+        Balance(AccountingSettings.Default.PatientReceivable).Should().Be(0m);
+        Balance(AccountingSettings.Default.CustomerAdvances).Should().Be(0m);
     }
 
     [SqlServerFact]

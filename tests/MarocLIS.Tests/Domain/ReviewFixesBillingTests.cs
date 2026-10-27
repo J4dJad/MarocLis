@@ -72,7 +72,7 @@ public sealed class ReviewFixesBillingTests
         invoice.OutstandingAmount.Should().Be(0m);
         invoice.IsFullyCredited.Should().BeTrue();
         invoice.HasCreditNote.Should().BeTrue();
-        invoice.Status.Should().Be(InvoiceStatus.Paid);
+        invoice.Status.Should().Be(InvoiceStatus.Credited);
     }
 
     [Fact]

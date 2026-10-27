@@ -146,7 +146,7 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
             .Select(d => new
             {
                 d.SiteId, d.Number, d.PatientId, d.Method, d.Amount, d.ReceivedAt, d.RefundedAmount, d.RefundedAt,
-                d.CashSessionId, d.Reference, d.RefundSiteId
+                d.CashSessionId, d.Reference, d.RefundSiteId, d.CarriedFromInvoiceNumber
             })
             .ToListAsync(ct);
 
@@ -245,7 +245,7 @@ public sealed class AccountingQueries(LisDbContext db) : IAccountingQueries
                 .. deposits.Select(d => new DepositSource(
                     d.SiteId, SiteCode(d.SiteId), d.Number, Customer(d.PatientId, null, null), d.Method, d.Amount,
                     Day(d.ReceivedAt), d.RefundedAmount, d.RefundedAt is { } r ? Day(r) : null, d.CashSessionId,
-                    d.Reference, RefundSite(d.RefundSiteId)))
+                    d.Reference, RefundSite(d.RefundSiteId), d.CarriedFromInvoiceNumber))
             ],
             [
                 .. sessions.Select(s => new CashSessionSource(

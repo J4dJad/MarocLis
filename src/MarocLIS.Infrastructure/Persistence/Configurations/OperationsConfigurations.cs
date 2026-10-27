@@ -151,7 +151,9 @@ public sealed class DepositConfiguration : IEntityTypeConfiguration<Deposit>
         builder.Property(e => e.Reference).HasMaxLength(60);
         builder.Property(e => e.BankName).HasMaxLength(120);
         builder.Property(e => e.RefundReason).HasMaxLength(500);
+        builder.Property(e => e.CarriedFromInvoiceNumber).HasMaxLength(40);
         builder.Ignore(e => e.Remaining);
+        builder.Ignore(e => e.IsCarriedOver);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UX_Deposits_Number");
         builder.HasIndex(e => new { e.LabOrderId, e.Status }).HasDatabaseName("IX_Deposits_Order_Status");

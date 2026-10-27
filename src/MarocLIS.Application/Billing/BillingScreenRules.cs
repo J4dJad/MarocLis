@@ -50,7 +50,8 @@ public static class BillingScreenRules
 {
     /// <summary>The ledger's status chips, in order; « Tous » before them.</summary>
     public static readonly IReadOnlyList<InvoiceStatus> LedgerStatuses =
-        [InvoiceStatus.Issued, InvoiceStatus.PartiallyPaid, InvoiceStatus.Paid, InvoiceStatus.WrittenOff];
+        [InvoiceStatus.Issued, InvoiceStatus.PartiallyPaid, InvoiceStatus.Paid, InvoiceStatus.WrittenOff,
+         InvoiceStatus.Credited];
 
     /// <summary>The methods taken at the counter, in the order the form lists them.</summary>
     public static readonly IReadOnlyList<PaymentMethod> CounterMethods =
@@ -284,6 +285,21 @@ public static class BillingScreenRules
         if (Invoice.ClaimBlocksCreditNote(invoice.ClaimStatus))
             return new BillingRefusal("Invoice_CreditNoteClaimSent", false, invoice.Number);
         return null;
+    }
+
+    /// <summary>
+    /// What the patient already paid on an invoice credited in full from the desk, and which the
+    /// credit note carries over to its orders as deposits: said in the reason's prompt, so the
+    /// operator knows the money is not lost and the next invoice will ask only for the rest. Zero
+    /// when nothing was paid or no order comes back to be invoiced.
+    /// </summary>
+    public static decimal CreditNoteCarriesOver(InvoiceRow invoice)
+    {
+        ArgumentNullException.ThrowIfNull(invoice);
+
+        return invoice.Kind == InvoiceKind.Invoice && !string.IsNullOrWhiteSpace(invoice.CoveredOrders)
+            ? Math.Max(0m, invoice.Paid)
+            : 0m;
     }
 
     // ---- Third-party payer -------------------------------------------------------------------------

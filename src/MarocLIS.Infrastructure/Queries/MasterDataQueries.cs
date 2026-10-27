@@ -260,6 +260,7 @@ public sealed class MasterDataQueries(LisDbContext db) : IMasterDataQueries
                     i => i.PayerId == p.Id
                          && i.Status != InvoiceStatus.Paid
                          && i.Status != InvoiceStatus.WrittenOff
+                         && i.Status != InvoiceStatus.Credited
                          && i.Status != InvoiceStatus.Cancelled)
             })
             .ToListAsync(ct);

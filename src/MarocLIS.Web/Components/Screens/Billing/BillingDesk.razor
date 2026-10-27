@@ -199,7 +199,7 @@
 
     case BillingDialog.CreditNote when _invoice is { } invoice:
         <ReasonPrompt Title="@Texts["Billing.CreditNote"]" MinimumLength="BillingScreenRules.CreditNoteReasonMinimumLength" MaxLength="BillingScreenRules.CorrectionReasonMaxLength"
-                      Prompt="@Texts.T("Billing.CreditNoteReasonPrompt", invoice.Number)" OnConfirm="IssueCreditNoteAsync" OnCancel="CloseDialog" />
+                      Prompt="@CreditNotePrompt(invoice)" OnConfirm="IssueCreditNoteAsync" OnCancel="CloseDialog" />
         break;
 
     case BillingDialog.PickPayment when _invoice is { } invoice:
@@ -390,8 +390,15 @@
 
     /// <summary>The ageing bands, a settled invoice muted, a credit note set apart from the invoices it reverses.</summary>
     private static string LedgerClass(InvoiceRow row) =>
-        (row.DaysOverdue > 60 ? "is-critical-row" : row.DaysOverdue > 0 ? "is-abnormal" : row.Status == InvoiceStatus.Paid ? "is-muted" : string.Empty)
+        (row.DaysOverdue > 60 ? "is-critical-row" : row.DaysOverdue > 0 ? "is-abnormal" : row.Status is InvoiceStatus.Paid or InvoiceStatus.Credited ? "is-muted" : string.Empty)
         + (row.Kind == InvoiceKind.CreditNote ? " is-credit" : string.Empty);
+
+    /// <summary>The reason's prompt, and what the patient already paid carried over to the order.</summary>
+    private string CreditNotePrompt(InvoiceRow invoice) =>
+        Texts.T("Billing.CreditNoteReasonPrompt", invoice.Number)
+        + (BillingScreenRules.CreditNoteCarriesOver(invoice) is > 0m and var carried
+            ? " " + Texts.T("Billing.CreditNoteCarriesPayments", Money.Of(carried).Format(Texts.Language, Texts.Culture))
+            : string.Empty);
 
     private static string StatusTone(InvoiceStatus status) => status switch
     {

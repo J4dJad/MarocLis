@@ -697,9 +697,12 @@ public sealed class BillingService(
         // back to the billing desk and the correct invoice can be issued — to the patient, or to
         // the payer when the first one was addressed wrongly. Left attached to the reversed
         // invoice, they were refused as already invoiced and their acts stayed on no valid invoice.
-        // Deposits still held follow the order and are applied to the new invoice; those already
-        // applied are settlements on the reversed invoice, refunded from it.
+        // Deposits still held follow the order and are applied to the new invoice. What the
+        // patient had paid on the reversed invoice follows it too, carried over as deposits (see
+        // CarryPaymentsOverAsync).
         var released = new List<string>();
+        var releasedOrders = new List<LabOrder>();
+        var carried = 0m;
 
         if (original.IsFullyCredited)
         {
@@ -714,17 +717,100 @@ public sealed class BillingService(
                 order.InvoiceId = null;
                 orders.Update(order);
                 released.Add(order.AccessionNumber);
+                releasedOrders.Add(order);
             }
+
+            var carriedOver = await CarryPaymentsOverAsync(original, releasedOrders, ct);
+            if (carriedOver.IsFailure) return Result.Failure<Guid>(carriedOver.Errors);
+            carried = carriedOver.Value;
         }
 
         unitOfWork.AuditReason =
             $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}"
-            + (released.Count > 0 ? PluralText.French(" — {0:plural:dossier|dossiers} à refacturer : {1}", released.Count, string.Join(", ", released)) : string.Empty);
+            + (released.Count > 0 ? PluralText.French(" — {0:plural:dossier|dossiers} à refacturer : {1}", released.Count, string.Join(", ", released)) : string.Empty)
+            + (carried > 0m ? $" — {carried:N2} DH déjà réglés reportés en acompte" : string.Empty);
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 
         return Result.Success(creditNote.Id);
+    }
+
+    /// <summary>
+    /// Carries what the patient had paid on a wholly credited invoice over to the orders it billed,
+    /// as deposits held on them, and returns the amount carried.
+    /// <para>
+    /// Left on the reversed invoice, the money was accounted for nowhere: the invoice read « Réglée »
+    /// with nothing owed, no refund was asked for, and the invoice that replaced it asked the
+    /// patient for their whole share again. As deposits, the next invoice of the order takes them
+    /// as settlements, so it asks only for the remainder; an order not invoiced again has its
+    /// deposit refunded like any other. Each payment keeps its method, so a refund goes back the
+    /// way the money came. Spread over the orders up to what each owes the patient, the last one
+    /// taking any remainder.
+    /// </para>
+    /// <para>
+    /// The payments stay on the reversed invoice as they were made: the receipts and the till are
+    /// unchanged. The deposit is no new money: it is not counted in a till, and the accounts move
+    /// it from the patient's account to 4421, which leaves that account balanced.
+    /// </para>
+    /// </summary>
+    private async Task<Result<decimal>> CarryPaymentsOverAsync(Invoice original, IReadOnlyList<LabOrder> released,
+                                                               CancellationToken ct)
+    {
+        var paid = original.StandingPatientPayments().OrderBy(p => p.PaymentDate).ToList();
+        if (paid.Count == 0 || released.Count == 0) return Result.Success(0m);
+
+        // What each order would ask the patient on its next invoice: the patient's share when the
+        // payer is billed directly, the whole order otherwise.
+        var room = released
+            .Select(o => Money.Round(o.Items.Where(i => !i.IsCancelled)
+                                     .Sum(i => o.PayerId is not null && o.DirectBillingAtRegistration
+                                                   ? i.PatientShare
+                                                   : i.PatientShare + i.PayerShare)))
+            .ToArray();
+
+        var carried = 0m;
+
+        foreach (var payment in paid)
+        {
+            var left = payment.Amount;
+
+            for (var k = 0; k < released.Count && left > 0m; k++)
+            {
+                var take = k == released.Count - 1 ? left : Math.Min(left, Math.Max(0m, room[k]));
+                if (take <= 0m) continue;
+
+                var number = await sequences.NextAsync(SequencePurpose.Receipt, original.SiteId,
+                                                       clock.Today.Year, ct);
+                if (number.IsFailure) return Result.Failure<decimal>(number.FirstError);
+
+                var order = released[k];
+                var deposit = Deposit.CarriedOver(number.Value, original.SiteId, order.Id, order.PatientId, payment,
+                                                  take, original.Id, original.Number, clock.Now, currentUser.UserId);
+                await deposits.AddAsync(deposit, ct);
+
+                room[k] = Money.Round(room[k] - take);
+                left = Money.Round(left - take);
+                carried = Money.Round(carried + take);
+            }
+        }
+
+        return Result.Success(carried);
+    }
+
+    /// <summary>
+    /// Whether a payment of <paramref name="invoice"/> was carried over to its orders by a credit
+    /// note: it then lives on as their deposit, and is refunded from there — refunded here as well,
+    /// or declared unpaid here, the money would leave twice.
+    /// </summary>
+    private async Task<Result> RefuseIfCarriedOverAsync(Invoice invoice, Payment payment, CancellationToken ct)
+    {
+        if (!invoice.IsFullyCredited || !PaymentRow.IsPatientPayment(payment.Method)) return Result.Success();
+
+        var carried = await deposits.ListAsync(d => d.CarriedFromInvoiceId == invoice.Id, ct);
+        return carried.Count > 0
+            ? Result.Failure(Error.Conflict("Payment_CarriedToDeposit", invoice.Number))
+            : Result.Success();
     }
 
     /// <summary>
@@ -1042,6 +1128,9 @@ public sealed class BillingService(
         var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
         if (payment is null) return Result.Failure(Error.NotFound("Payment_NotFound"));
 
+        var notCarried = await RefuseIfCarriedOverAsync(invoice, payment, ct);
+        if (notCarried.IsFailure) return notCarried;
+
         var bounced = payment.MarkBounced(clock.Now, reason);
         if (bounced.IsFailure) return bounced;
 
@@ -1088,6 +1177,9 @@ public sealed class BillingService(
 
         if (!PaymentRow.IsPatientPayment(payment.Method))
             return Result.Failure(Error.Validation("Payment_OnlyPatientPaymentsRefundable"));
+
+        var notCarried = await RefuseIfCarriedOverAsync(invoice, payment, ct);
+        if (notCarried.IsFailure) return notCarried;
 
         // The till is checked before the payment is touched. The refund used to be applied first,
         // so a refusal here left the tracked payment Refunded in a long-lived context, and the next

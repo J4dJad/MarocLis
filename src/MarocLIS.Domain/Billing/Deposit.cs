@@ -66,6 +66,34 @@ public sealed class Deposit : AuditableAggregateRoot, ISiteScoped
     /// </summary>
     public Guid? RefundSiteId { get; set; }
 
+    /// <summary>
+    /// Set when the deposit was not taken at the counter but carried over from an invoice a credit
+    /// note reversed in full: what the patient had already paid on it, held for the invoice that
+    /// replaces it. No money came in with it — it is already in the till or the bank from the
+    /// original payment — so it is neither takings nor a treasury movement, and the accounts move
+    /// it from the patient's account to 4421 instead of from the treasury.
+    /// </summary>
+    public Guid? CarriedFromInvoiceId { get; private set; }
+    public string? CarriedFromInvoiceNumber { get; private set; }
+
+    public bool IsCarriedOver => CarriedFromInvoiceId is not null;
+
+    /// <summary>
+    /// What a payment on a wholly credited invoice becomes: a deposit on the order, in the method it
+    /// was paid by, applied to the next invoice of that order as any deposit is, or refunded.
+    /// </summary>
+    public static Deposit CarriedOver(string number, Guid siteId, Guid labOrderId, Guid patientId,
+                                      Payment payment, decimal amount, Guid fromInvoiceId,
+                                      string fromInvoiceNumber, DateTimeOffset at, Guid byUserId) =>
+        new(number, siteId, labOrderId, patientId, amount, payment.Method, at, byUserId)
+        {
+            Reference = payment.Reference,
+            BankName = payment.BankName,
+            MaturityDate = payment.MaturityDate,
+            CarriedFromInvoiceId = fromInvoiceId,
+            CarriedFromInvoiceNumber = fromInvoiceNumber
+        };
+
     /// <summary>What is still held: neither applied to an invoice nor handed back.</summary>
     public decimal Remaining => Money.Round(Amount - AppliedAmount - RefundedAmount);
 
@@ -82,7 +110,7 @@ public sealed class Deposit : AuditableAggregateRoot, ISiteScoped
             errors.Add(Error.Validation("Payment_ReferenceRequired"));
         if (Method is PaymentMethod.BankTransfer && string.IsNullOrWhiteSpace(Reference))
             errors.Add(Error.Validation("Payment_TransferReferenceRequired"));
-        if (Method == PaymentMethod.Cash && CashSessionId is null)
+        if (Method == PaymentMethod.Cash && CashSessionId is null && !IsCarriedOver)
             errors.Add(Error.Validation("Payment_CashRequiresOpenSession"));
 
         return errors.Count == 0 ? Result.Success() : Result.Failure(errors);

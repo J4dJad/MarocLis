@@ -202,6 +202,9 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
             {
                 d.Id, d.Number, d.Method, d.Amount, d.ReceivedAt, d.MaturityDate, d.Reference, d.RefundedAmount,
                 d.RefundedAt,
+                // Carried over from a credited invoice: the money reached the bank with the original
+                // payment, so only a refund of it is a movement.
+                Carried = d.CarriedFromInvoiceId != null,
                 ReturnedInShift = d.RefundedAt != null
                                   && db.CashSessions.Any(s => s.Id == d.CashSessionId
                                                               && (s.ClosedAt == null || s.ClosedAt >= d.RefundedAt))
@@ -216,7 +219,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
             var banked = returned ? Money.Round(d.Amount - d.RefundedAmount) : Money.Round(d.Amount);
 
             var date = d.MaturityDate ?? DayOf(d.ReceivedAt);
-            if (InPeriod(date) && banked > 0m)
+            if (InPeriod(date) && banked > 0m && !d.Carried)
             {
                 movements.Add(new TreasuryMovement(TreasuryMovementKind.PatientDeposit, d.Id.ToString("N"), date,
                                                    banked, d.Number, d.Reference, ClearsLate: false));
@@ -239,7 +242,7 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
                             .Concat(payments.Where(p => p.Method == PaymentMethod.Card && p.Status == PaymentStatus.Refunded
                                                         && p.RefundedAt != null)
                                             .Select(p => (Date: DayOf(p.RefundedAt!.Value), Amount: -p.Amount)))
-                            .Concat(deposits.Where(d => d.Method == PaymentMethod.Card)
+                            .Concat(deposits.Where(d => d.Method == PaymentMethod.Card && !d.Carried)
                                             .Select(d => (Date: DayOf(d.ReceivedAt), d.Amount)))
                             .Concat(deposits.Where(d => d.Method == PaymentMethod.Card && d.RefundedAt != null
                                                         && d.RefundedAmount > 0m)
@@ -524,7 +527,8 @@ public sealed class TreasuryQueries(LisDbContext db) : ITreasuryQueries
             .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
 
         var deposited = await db.Deposits.AsNoTracking()
-            .Where(d => d.SiteId == siteId && d.ReceivedAt >= fromInstant && d.ReceivedAt < toInstant)
+            .Where(d => d.SiteId == siteId && d.ReceivedAt >= fromInstant && d.ReceivedAt < toInstant
+                        && d.CarriedFromInvoiceId == null)
             .SumAsync(d => (decimal?)d.Amount, ct) ?? 0m;
 
         return new CashForecastSource(

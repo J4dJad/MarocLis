@@ -3909,6 +3909,7 @@
     "ConfirmIssue": "Issue an invoice for {0} {0:plural:order|orders}, totalling {1}? An issued invoice cannot be changed.",
     "SelectOneInvoice": "Select exactly one invoice.",
     "CreditNoteReasonPrompt": "Reason for the credit note against invoice {0}. An issued invoice is not cancelled: a credit note is the only correction available.",
+    "CreditNoteCarriesPayments": "{0} already paid by the patient will be carried over as a deposit on the request and deducted from the invoice that replaces this one.",
     "NoClaimableInvoices": "No submittable invoice in the selection.",
     "ClaimOutcome": "Payer response",
     "ClaimRejectionReason": "Reason given by the payer",
@@ -3972,6 +3973,7 @@
     "PartiallyPaid": "Partially paid",
     "Paid": "Paid",
     "WrittenOff": "Written off",
+    "Credited": "Cancelled by credit note",
     "Cancelled": "Cancelled"
   },
 
@@ -5977,6 +5979,7 @@
   "Payment_KindNotPayable": "Payments can only be recorded against an invoice: a credit note or a quotation is not settled.",
   "Payment_ExceedsPatientShare": "The patient owes only {0} on this invoice: the rest is the payer's share, settled through the third-party claim.",
   "Payment_OnlyPatientPaymentsRefundable": "Only a payment made by the patient can be refunded: not a write-off or a payer's settlement.",
+  "Payment_CarriedToDeposit": "This payment on invoice {0} was carried over to the request as a deposit by the credit note: refund that deposit, from the request.",
 
   "CashSession_NotOpen": "This cash session is not open.",
   "CashSession_VarianceExplanationRequired": "A till variance of {0} MAD must be explained before closing.",

@@ -621,6 +621,13 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
 
+                    b.Property<Guid?>("CarriedFromInvoiceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CarriedFromInvoiceNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<Guid?>("CashSessionId")
                         .HasColumnType("uniqueidentifier");
 

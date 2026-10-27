@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using FluentAssertions;
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Accounting;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Input;
@@ -107,7 +108,151 @@ public sealed class Fix84bBillingTests
         CatalogEditorRules.FormOf(analysis, [stored], Today, stored, null).VatRate.Should().Be("20");
     }
 
+    // ---- Credit note on a partly paid invoice -------------------------------------------------------
+
+    /// <summary>
+    /// The audit's case: 155 billed, CNSS 108,50 under direct billing, the patient's 46,50 of which
+    /// 30 paid in cash, then a full credit note. The credited invoice reads « Annulée par avoir »,
+    /// the 30 waits on the order as a deposit, and the invoice issued again asks for 16,50.
+    /// </summary>
+    [Fact]
+    public async Task A_full_credit_note_carries_the_patients_payment_over_to_the_next_invoice()
+    {
+        var cnss = Payer("CNSS");
+        var order = CoveredOrder(cnss, price: 155m, payerShare: 108.50m);
+        var harness = new Harness(orders: [order], patients: [PatientOf(order)], payers: [cnss]);
+
+        (await harness.Service.IssueInvoiceAsync([order.Id])).IsSuccess.Should().BeTrue();
+        var original = harness.Invoices.Single();
+        original.PatientPayableAmount.Should().Be(46.50m);
+
+        var cash = new Payment(30m, PaymentMethod.Cash, Today, Guid.NewGuid(), original.SiteId) { CashSessionId = Guid.NewGuid() };
+        original.RecordPayment(cash).IsSuccess.Should().BeTrue();
+
+        (await harness.Service.IssueCreditNoteAsync(original.Id, "Erreur de saisie du dossier")).IsSuccess.Should().BeTrue();
+
+        original.Status.Should().Be(InvoiceStatus.Credited, "a credited invoice is not « Réglée »");
+        original.Payments.Single().Status.Should().Be(PaymentStatus.Settled, "the receipt stands as it was made");
+
+        var deposit = harness.Deposits.Single();
+        deposit.LabOrderId.Should().Be(order.Id);
+        deposit.Amount.Should().Be(30m);
+        deposit.Remaining.Should().Be(30m);
+        deposit.Method.Should().Be(PaymentMethod.Cash);
+        deposit.CashSessionId.Should().BeNull("no money came in with it: it is not the till's");
+        deposit.CarriedFromInvoiceId.Should().Be(original.Id);
+        deposit.CarriedFromInvoiceNumber.Should().Be(original.Number);
+
+        var reissued = await harness.Service.IssueInvoiceAsync([order.Id]);
+        reissued.IsSuccess.Should().BeTrue();
+
+        var replacement = harness.Invoices.Single(i => i.Id == reissued.Value);
+        replacement.TotalAmount.Should().Be(155m);
+        replacement.PaidAmount.Should().Be(30m);
+        replacement.PatientPayableAmount.Should().Be(16.50m);
+        deposit.Status.Should().Be(DepositStatus.Applied);
+    }
+
+    [Fact]
+    public async Task A_payment_carried_over_is_not_refunded_a_second_time_from_the_credited_invoice()
+    {
+        var order = SelfPayOrder(price: 80m, vatExempt: true, vatRate: 0m, patientShare: 80m);
+        var harness = new Harness(orders: [order], patients: [PatientOf(order)]);
+
+        (await harness.Service.IssueInvoiceAsync([order.Id])).IsSuccess.Should().BeTrue();
+        var original = harness.Invoices.Single();
+        var card = new Payment(50m, PaymentMethod.Card, Today, Guid.NewGuid(), original.SiteId);
+        original.RecordPayment(card).IsSuccess.Should().BeTrue();
+
+        (await harness.Service.IssueCreditNoteAsync(original.Id, "Analyses non réalisées")).IsSuccess.Should().BeTrue();
+        harness.Deposits.Single().Method.Should().Be(PaymentMethod.Card);
+
+        var refund = await harness.Service.RefundPaymentAsync(original.Id, card.Id, "Remboursement demandé");
+
+        refund.FirstError.ResourceKey.Should().Be("Payment_CarriedToDeposit");
+        card.Status.Should().Be(PaymentStatus.Settled);
+    }
+
+    [Fact]
+    public void A_fully_credited_invoice_reads_cancelled_by_credit_note_and_a_partial_one_does_not()
+    {
+        var invoice = new Invoice(string.Empty, Guid.NewGuid(), InvoiceKind.Invoice, Today, Guid.NewGuid())
+        {
+            BilledToName = "ALAOUI Fatima"
+        };
+        invoice.AddLine(new InvoiceLine("Glycémie", 100m)).IsSuccess.Should().BeTrue();
+        invoice.Issue("FAC/CASA/2026/000155", Now, null).IsSuccess.Should().BeTrue();
+
+        invoice.ApplyCreditNote(40m).IsSuccess.Should().BeTrue();
+        invoice.Status.Should().Be(InvoiceStatus.Issued);
+
+        invoice.ApplyCreditNote(60m).IsSuccess.Should().BeTrue();
+        invoice.Status.Should().Be(InvoiceStatus.Credited);
+
+        BillingScreenRules.LedgerStatuses.Should().Contain(InvoiceStatus.Credited);
+    }
+
+    [Fact]
+    public void The_credit_note_prompt_says_what_is_carried_over()
+    {
+        var paid = new InvoiceRow(Guid.NewGuid(), "FAC/CASA/2026/000006", InvoiceKind.Invoice, InvoiceStatus.PartiallyPaid,
+                                  Today, null, "ALAOUI Fatima", 155m, 30m, 125m, 0, ClaimStatus.Prepared, "2610-000014",
+                                  PayerShare: 108.50m);
+
+        BillingScreenRules.CreditNoteCarriesOver(paid).Should().Be(30m);
+        BillingScreenRules.CreditNoteCarriesOver(paid with { Paid = 0m }).Should().Be(0m);
+        BillingScreenRules.CreditNoteCarriesOver(paid with { CoveredOrders = null }).Should().Be(0m);
+    }
+
+    [Fact]
+    public void A_payment_carried_over_moves_from_the_patients_account_to_4421_and_is_no_receipt()
+    {
+        var settings = AccountingSettings.Default;
+        var customer = new AccountingCustomer("MR-000123", "ALAOUI Fatima", null, null);
+        var carried = new DepositSource(Guid.NewGuid(), "CASA", "REC/CASA/2026/000031", customer, PaymentMethod.Cash, 30m,
+                                        Today, 0m, null, null, null, CarriedFromInvoiceNumber: "FAC/CASA/2026/000006");
+
+        var entries = SalesAccountingJournal.Build(new SalesAccountingSources([], [], [], [carried], []), settings,
+                                                   Today.AddDays(-1), Today, AccountingJournals.All);
+
+        var entry = entries.Single();
+        entry.IsBalanced.Should().BeTrue();
+        entry.Kind.Should().Be(AccountingJournals.Adjustments);
+        entry.Lines.Single(l => l.Account == settings.PatientReceivable).Debit.Should().Be(30m);
+        entry.Lines.Single(l => l.Account == settings.CustomerAdvances).Credit.Should().Be(30m);
+        entry.Lines.Should().NotContain(l => l.Account.StartsWith("51"), "no money moved");
+    }
+
     // ---- Helpers -------------------------------------------------------------------------------------
+
+    private static Payer Payer(string code) =>
+        new(code, new MultilingualText(code), PayerKind.AmoCnss)
+        {
+            ThirdPartyPaymentAgreement = true,
+            RequiresPrescription = false
+        };
+
+    private static LabOrder CoveredOrder(Payer payer, decimal price, decimal payerShare)
+    {
+        var order = new LabOrder($"2026-{Random.Shared.Next(100_000, 999_999)}", Guid.NewGuid(),
+                                 Guid.NewGuid(), Now.AddDays(-1), Guid.NewGuid())
+        {
+            PayerId = payer.Id,
+            ReimbursementRateAtRegistration = 0.70m,
+            DirectBillingAtRegistration = true
+        };
+
+        order.AddItem(new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine)
+        {
+            ChargedPrice = price,
+            ReferenceTariffBase = price,
+            PayerShare = payerShare,
+            PatientShare = price - payerShare,
+            BilledActCode = "B155"
+        }).IsSuccess.Should().BeTrue();
+
+        return order;
+    }
 
     private static LabOrder SelfPayOrder(decimal price, bool vatExempt, decimal vatRate, decimal patientShare)
     {

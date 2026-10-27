@@ -226,6 +226,14 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     public string? ContentHash { get; set; }
 
     public IReadOnlyCollection<InvoiceLine> Lines => _lines.AsReadOnly();
+
+    /// <summary>The patient's payments that stand: settled, neither the payer's nor a write-off.</summary>
+    /// <remarks>A method, not a property: a collection property of payments would be mapped as a second relationship.</remarks>
+    public IReadOnlyList<Payment> StandingPatientPayments() =>
+    [
+        .. _payments.Where(p => p.Status == PaymentStatus.Settled
+                                && p.Method is not (PaymentMethod.ThirdPartyPayer or PaymentMethod.WriteOff))
+    ];
     public IReadOnlyCollection<Payment> Payments => _payments.AsReadOnly();
 
     /// <summary>The payer's refused shares left to the patient, each dated on the payer's answer.</summary>
@@ -344,6 +352,14 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
         if (Kind == InvoiceKind.CreditNote)
         {
             Status = InvoiceStatus.Paid;
+            return;
+        }
+
+        // Reversed in full by credit notes: the invoice no longer charges anything. Shown as paid,
+        // it told the counter the patient had settled it, whatever they had paid on it.
+        if (IsFullyCredited)
+        {
+            Status = InvoiceStatus.Credited;
             return;
         }
 
@@ -549,8 +565,9 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
 
     /// <summary>
     /// Records a credit note issued against this invoice. The amount reduces what is owed and the
-    /// status follows: a fully credited invoice with nothing paid is settled. Money already paid
-    /// beyond the reduced total is not touched here — handing it back is a refund.
+    /// status follows: a fully credited invoice is « Credited », whatever was paid on it. Money
+    /// already paid beyond the reduced total is not touched here: the billing service carries it
+    /// over to the orders as deposits, or it is handed back as a refund.
     /// </summary>
     public Result ApplyCreditNote(decimal amount)
     {
@@ -607,6 +624,11 @@ public enum InvoiceStatus
     Paid = 3,
     /// <summary>Written off as uncollectable, with an accounting entry behind it.</summary>
     WrittenOff = 4,
+    /// <summary>
+    /// Reversed in full by one or more credit notes (« Annulée par avoir »). What the patient had
+    /// paid on it is carried over to the orders it billed, as deposits.
+    /// </summary>
+    Credited = 5,
     /// <summary>Only reachable for a draft.</summary>
     Cancelled = 9
 }
