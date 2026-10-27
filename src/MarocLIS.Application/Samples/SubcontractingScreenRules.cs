@@ -232,7 +232,7 @@ public static class SubcontractingScreenRules
 
     // ---- Sending ------------------------------------------------------------------------------------
 
-    /// <summary>« 3 analyse(s) de 2 dossier(s) à envoyer : ».</summary>
+    /// <summary>« 3 analyses de 2 dossiers à envoyer : ».</summary>
     public static string SendSummary(IReadOnlyCollection<SubcontractRow> rows, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(rows);
@@ -266,7 +266,8 @@ public static class SubcontractingScreenRules
     {
         ArgumentNullException.ThrowIfNull(dispatches);
         ArgumentNullException.ThrowIfNull(text);
-        return text("Subcontract.Sent", string.Join(", ", dispatches.Select(d => d.Number)));
+        var numbers = dispatches.Select(d => d.Number).ToList();
+        return text("Subcontract.Sent", string.Join(", ", numbers), numbers.Count);
     }
 
     // ---- The slip -----------------------------------------------------------------------------------

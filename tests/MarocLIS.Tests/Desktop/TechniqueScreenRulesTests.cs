@@ -270,7 +270,7 @@ public sealed class TechniqueScreenRulesTests
                                                                 AppLanguage.French, Text);
         partners.Select(p => (p.Id, p.Display)).Should().Equal((null, "Subcontract.PartnerFromCatalogue"), (order, "BIOLAB  Biolab Rabat"));
         SubcontractingScreenRules.SentMessage([new SubcontractDispatch("ST/1", order, 2), new SubcontractDispatch("ST/2", order, 1)], Text)
-            .Should().Be("Subcontract.Sent(ST/1, ST/2)");
+            .Should().Be("Subcontract.Sent(ST/1, ST/2,2)");
 
         var slip = new SubcontractSlip("ST/2026/00001", new SubcontractPartner(order, "BIOLAB", new MultilingualText("Biolab Rabat", "بيولاب الرباط", "Biolab")),
                                        new DateTimeOffset(2026, 10, 17, 15, 40, 0, TimeSpan.Zero), "Karim Tahiri", rows);

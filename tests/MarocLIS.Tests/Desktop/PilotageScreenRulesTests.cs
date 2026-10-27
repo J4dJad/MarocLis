@@ -241,7 +241,7 @@ public sealed class PilotageScreenRulesTests
                                                           "Dashboard.StepValidation", "Dashboard.StepReports");
         board.Steps.Single(s => s.Highlighted).Metric.LabelKey.Should().Be(DashboardScreenRules.HighlightedStep);
         board.Steps.Should().OnlyContain(s => s.Opens == s.Metric.NavigationKey);
-        board.Summary.Should().ContainSingle().Which.Should().Be("Dashboard.OrdersRegisteredToday(42)", "no report issued today is not a line");
+        board.Summary.Should().ContainSingle().Which.Should().Be("Dashboard.OrdersRegisteredToday(42,42)", "no report issued today is not a line");
 
         board.Pending.Select(a => a.Metric.LabelKey).Should().Equal(
             "Dashboard.CriticalPending", "Equipment.NextCalibration", "SupplierInvoices.DashboardDueSoon", "Inventory.ToReorder",

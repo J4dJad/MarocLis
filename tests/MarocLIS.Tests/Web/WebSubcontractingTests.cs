@@ -101,7 +101,7 @@ public sealed class WebSubcontractingTests : WebBenchContext
 
         page.Find(".action-bar [data-action='Subcontract.Send']").Click();
         var dialog = page.Find("[data-modal=dispatch]");
-        dialog.TextContent.Should().Contain("2 analyse(s) de 2 dossier(s) à envoyer")
+        dialog.TextContent.Should().Contain("2 analyses de 2 dossiers à envoyer")
               .And.Contain("2610-000051  ·  VITD  ·  T-0051  →  BIOLAB");
         page.FindAll("[data-field=dispatch-partner] option").Select(o => o.TextContent)
             .Should().Equal("Laboratoire prévu au catalogue pour chaque analyse", "BIOLAB  Biolab Rabat");

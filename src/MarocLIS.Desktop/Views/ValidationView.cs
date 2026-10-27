@@ -1751,7 +1751,7 @@ public sealed class ValidationView : LocalizedView
         }
 
         _status.ForeColor = UiTheme.Abnormal;
-        _status.Text = $"{ids.Count} × {T("Validation.Unvalidated")}";
+        _status.Text = T("Validation.Unvalidated", ids.Count);
 
         await ActivateAsync();
     }

@@ -47,7 +47,7 @@ public sealed record DashboardBoard(IReadOnlyList<string> Summary, IReadOnlyList
     /// <summary>The flow's card is drawn when it has a step or a line to show.</summary>
     public bool ShowsFlow => Steps.Count > 0 || Summary.Count > 0;
 
-    /// <summary>« 3 sujet(s) » beside the alerts' heading.</summary>
+    /// <summary>« 3 sujets », « 1 sujet » beside the alerts' heading.</summary>
     public const string CountKey = "Dashboard.SubjectCount";
 
     /// <summary>The sentence under « Rien à signaler »: what the list is, or that nothing is at zero.</summary>
@@ -159,9 +159,9 @@ public static class DashboardScreenRules
         // Files registered and reports issued today, as the line beside the heading.
         var summary = new List<string>();
         if (byKey.TryGetValue("Dashboard.OrdersToday", out var orders) && MaySee(orders))
-            summary.Add(text("Dashboard.OrdersRegisteredToday", orders.Value.ToString("N0", culture)));
+            summary.Add(text("Dashboard.OrdersRegisteredToday", orders.Value.ToString("N0", culture), orders.Value));
         if (byKey.TryGetValue("Report.Plural", out var released) && MaySee(released) && released.Value > 0)
-            summary.Add(text("Dashboard.ReportsReleasedToday", released.Value.ToString("N0", culture)));
+            summary.Add(text("Dashboard.ReportsReleasedToday", released.Value.ToString("N0", culture), released.Value));
 
         var steps = FlowSteps
             .Where(s => byKey.TryGetValue(s.MetricKey, out var metric) && MaySee(metric))

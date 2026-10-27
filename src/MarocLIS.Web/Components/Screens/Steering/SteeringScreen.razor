@@ -70,7 +70,7 @@
     private IReadOnlyList<ReportRow> Rows(SteeringDashboard? result, SteeringTab tab) =>
         SteeringScreenRules.Rows(result, tab, Texts.T, Mad, Texts.Culture);
 
-    // « Pilotage — 01/10/2026 → 26/10/2026 · 2 site(s) », the workstation's title and the period beside it.
+    // « Pilotage — 01/10/2026 → 26/10/2026 · 2 sites », the workstation's title and the period beside it.
     private string Heading(SteeringDashboard? result) =>
         result is null ? Texts["Steering.Title"] : $"{Texts["Steering.Title"]} — {SteeringScreenRules.Subtitle(result, Texts.T)}";
 

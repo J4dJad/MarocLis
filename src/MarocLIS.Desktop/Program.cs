@@ -254,7 +254,7 @@ internal static class Program
             ? "Report_ArabicFontMissingWarning"
             : "Report_LatinFontMissingWarning";
 
-        MessageBox.Show(localizer.Format(key, string.Join(", ", missing)),
+        MessageBox.Show(localizer.Format(key, string.Join(", ", missing), missing.Count),
                         localizer["App.Title"], MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 

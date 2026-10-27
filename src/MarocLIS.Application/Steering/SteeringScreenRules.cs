@@ -161,7 +161,7 @@ public static class SteeringScreenRules
         return tiles;
     }
 
-    /// <summary>« 01/10/2026 → 26/10/2026 · 2 site(s) » beside the title; nothing before the first computation.</summary>
+    /// <summary>« 01/10/2026 → 26/10/2026 · 2 sites » beside the title; nothing before the first computation.</summary>
     public static string Subtitle(SteeringDashboard? result, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(text);

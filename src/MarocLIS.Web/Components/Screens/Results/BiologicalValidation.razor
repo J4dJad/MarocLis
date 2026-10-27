@@ -349,7 +349,7 @@
     private (string Text, string Tone)? _status;
     private bool _busy;
 
-    /// <summary>« 2 dossier(s) · 6 résultat(s) en attente », beside the message of the bar.</summary>
+    /// <summary>« 2 dossiers · 6 résultats en attente », beside the message of the bar.</summary>
     private string PendingSummary => Texts.T("Validation.PendingSummary", Visible.Count, Visible.Sum(e => e.AwaitingCount));
 
     private IReadOnlyList<ValidationWorklistEntry> Visible =>
@@ -782,7 +782,7 @@
                 return;
             }
 
-            _status = ($"{ids.Count} × {Texts["Validation.Unvalidated"]}", "abnormal");
+            _status = (Texts.T("Validation.Unvalidated", ids.Count), "abnormal");
             await ActivateAsync();
         }
         catch (Exception ex)
