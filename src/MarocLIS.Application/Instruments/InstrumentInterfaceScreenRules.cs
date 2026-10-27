@@ -616,7 +616,7 @@ public static class InstrumentInterfaceScreenRules
         };
     }
 
-    /// <summary>« 2 résultat(s) seraient enregistrés sur 3 lus », then the frame's issues.</summary>
+    /// <summary>« 2 résultats seraient enregistrés sur 3 », then the frame's issues.</summary>
     public static string Summary(MessagePreview preview, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(preview);

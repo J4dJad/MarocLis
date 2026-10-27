@@ -118,7 +118,7 @@ public sealed class WebSupplierInvoiceTests : WebScreenContext
         _invoices.On(nameof(IRepository<SupplierInvoice>.GetByIdWithDetailsAsync), _ => invoice);
         page = Render<SupplierInvoices>();
         page.Find("[data-action='SupplierInvoices.Unblock']").Click();
-        page.Find("[data-modal=reason]").TextContent.Should().Contain("présente 1 écart(s)");
+        page.Find("[data-modal=reason]").TextContent.Should().Contain("présente 1 écart.");
         page.Find("[data-field=reason]").Input("Hausse tarifaire notifiée");
         page.Find("[data-modal=reason] [data-action='Action.Ok']").Click();
 

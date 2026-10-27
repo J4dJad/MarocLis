@@ -220,7 +220,7 @@ public static class InstrumentContractScreenRules
         return row.Commitment.AtRisk ? StockInk.CriticalBold : StockInk.Plain;
     }
 
-    /// <summary>« 3 intervention(s), 12,5 h d'arrêt »; nothing without intervention.</summary>
+    /// <summary>« 3 interventions, 12,5 h d'arrêt »; nothing without intervention.</summary>
     public static string Maintenance(InstrumentContractRow row, ScreenText text, IFormatProvider? provider = null)
     {
         ArgumentNullException.ThrowIfNull(row);

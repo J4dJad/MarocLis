@@ -80,7 +80,7 @@ public sealed class WebStockScreensTests : WebScreenContext
         args[1].Should().Be(new DateOnly(2026, 9, 1), "the month before this one is the one reviewed");
         page.Find("[data-row='BIO-GLU']").ClassName.Should().Contain("stock-alarm");
         page.Find("[data-row='GANT-M']").ClassName.Should().Contain("is-tone-muted", "the activity cannot explain it");
-        page.Find("[data-state=notice]").TextContent.Should().Contain("dépassent le seuil");
+        page.Find("[data-state=notice]").TextContent.Should().Contain("1 article dépasse le seuil");
         page.FindAll("[data-action='Stock.Settings']").Should().BeEmpty("the thresholds are the administrator's");
 
         page.Find("[data-row='BIO-GLU']").DoubleClick();

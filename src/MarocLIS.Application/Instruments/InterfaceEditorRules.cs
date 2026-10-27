@@ -589,7 +589,7 @@ public static class InterfaceEditorRules
                && string.IsNullOrWhiteSpace(line.Factor);
     }
 
-    /// <summary>« 7 code(s) · 2 retiré(s) ».</summary>
+    /// <summary>« 7 correspondances. 2 codes retirés, conservés… ».</summary>
     public static string Summary(int total, int retired, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(text);

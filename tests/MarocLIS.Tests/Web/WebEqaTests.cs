@@ -156,7 +156,7 @@ public sealed class WebEqaTests : WebScreenContext
 
         _participations.CallsTo(nameof(IRepository<EqaParticipation>.AddAsync)).Should().Be(2);
         AuditReason.Should().Be("Enregistrement de la campagne EEQ ProBioQual Biochimie 2026-04");
-        page.Find("[data-state=eqa-message]").TextContent.Should().Contain("2 paramètre(s)");
+        page.Find("[data-state=eqa-message]").TextContent.Should().Contain("2 paramètres enregistrés");
     }
 
     [Fact]

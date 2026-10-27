@@ -134,7 +134,7 @@ public sealed class WebInstrumentInterfaceTests : WebReferenceContext
         _log.CallsTo(nameof(IInstrumentMessageLogStore.PurgeAsync)).Should().Be(1);
         _auditor.Events.Should().ContainSingle(e => e.Kind == SecurityEventKind.DataPurged)
                 .Which.Details.Should().Contain("40 frame(s)").And.Contain("Base proche de la limite Express");
-        page.Find("[data-state=status]").TextContent.Should().Contain("40 trame(s) supprimée(s)");
+        page.Find("[data-state=status]").TextContent.Should().Contain("40 trames supprimées");
     }
 
     [Fact]

@@ -55,7 +55,7 @@ public sealed class StockScreensRulesTests
         var lines = ConsumptionScreenRules.DetailLines(Consumption(), Text, CultureInfo.InvariantCulture);
         lines.Should().HaveCount(8);
         lines[0].Should().Be(new ConsumptionDetailLine("Consumption.Patients", "380", "3.8", false));
-        lines[4].Label.Should().Be("Consumption.DeadVolume(3)");
+        lines[4].Label.Should().Be("Consumption.DeadVolume(3,3)");
         lines[5].Should().Match<ConsumptionDetailLine>(l => l.Total && l.Tests == "450");
         lines[7].Units.Should().Contain("%");
         ConsumptionScreenRules.DetailNoticeKey(Consumption(computable: false)).Should().Be("Consumption.NotComputable");

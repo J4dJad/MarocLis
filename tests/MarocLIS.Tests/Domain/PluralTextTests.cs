@@ -97,4 +97,28 @@ public sealed class PluralTextTests
         Fr("InvoicePrint.Orders", "2610-1, 2610-2", 2).Should().Be("Demandes : 2610-1, 2610-2");
         En("InvoicePrint.Orders", "2610-1", 1).Should().Be("Order: 2610-1");
     }
+
+    /// <summary>Stock, purchasing, instruments, catalogue and quality: « 1 lot à compter », « 2 trames supprimées ».</summary>
+    [Fact]
+    public void The_counts_of_stock_instruments_catalogue_and_quality_agree()
+    {
+        Fr("InventoryCount.Started", 1).Should().Be("1 lot à compter.");
+        Fr("InventoryCount_LinesNotCounted", 1).Should().Be("1 lot n'est pas encore compté : comptez-le (0 s'il est absent) avant de clôturer.");
+        Fr("InventoryCount_LinesNotCounted", 3).Should().Be("3 lots ne sont pas encore comptés : comptez-les (0 s'ils sont absents) avant de clôturer.");
+        En("InventoryCount_LinesNotCounted", 1).Should().Be("1 lot is not counted yet: count it (0 if absent) before closing.");
+        Fr("Consumption.DeadVolume", "1", 1m).Should().Be("Volume mort (1 ouverture)");
+        En("Consumption.DeadVolume", "4", 4m).Should().Be("Dead volume (4 openings)");
+        Fr("SupplierInvoices.StillBlocked", 1).Should().Be("La facture reste bloquée : 1 écart.");
+        Fr("Quotes.AwardMissingItems", 2).Should().Contain("2 articles ; ils ne figureront pas");
+        Fr("Interface.PurgeLogScope", 1, "01/04/2026", 3).Should()
+            .Be("1 trame antérieure au 01/04/2026 sera supprimée. 3 trames sont conservées parce qu'elles restent réimportables.");
+        En("Interface.PurgeLogRetained", 1).Should().Be("1 frame kept despite its age: it is still replayable. Deal with it from the log.");
+        Fr("Interface.MappingSummary", 7, 1).Should().Be("7 correspondances. 1 code retiré, conservé pour relire les anciens messages.");
+        Fr("Catalog.NomenclatureInUseNotice", 1).Should().EndWith("tant qu'il s'y réfère.");
+        Fr("Test_HasOpenItemsCannotDeactivate", 2).Should().StartWith("2 analyses en cours attendent encore un résultat");
+        Fr("Qc_PatientResultsFlagged", 1).Should().StartWith("1 résultat patient non diffusé a été signalé : sa validation");
+        Fr("Quality.RuleCount", 1).Should().Be("1 règle active.");
+        Fr("StorageLocations.DeactivateConfirm", "Frigo", 1).Should().EndWith("1 tube rangé ici garde ce lieu.");
+        En("StorageLocations.DeactivateConfirm", "Fridge", 5).Should().EndWith("5 tubes stored there keep this location.");
+    }
 }

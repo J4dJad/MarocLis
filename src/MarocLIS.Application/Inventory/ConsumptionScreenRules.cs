@@ -145,7 +145,7 @@ public static class ConsumptionScreenRules
             new(text("Consumption.Qc"), N(b.QcTests), Units(b.QcTests), false),
             new(text("Consumption.Calibrations"), N(b.CalibrationTests), Units(b.CalibrationTests), false),
             new(text("Consumption.Reruns"), N(b.RerunTests), Units(b.RerunTests), false),
-            new(text("Consumption.DeadVolume", N(b.Openings)), N(b.DeadVolumeTests), Units(b.DeadVolumeTests), false),
+            new(text("Consumption.DeadVolume", N(b.Openings), b.Openings), N(b.DeadVolumeTests), Units(b.DeadVolumeTests), false),
             new(text("Consumption.Theoretical"), N(b.TotalTests), N(r.TheoreticalConsumption), true),
             new(text("Consumption.Real"), "—", N(r.RealConsumption), true),
             new(text("Consumption.Variance"), "—",

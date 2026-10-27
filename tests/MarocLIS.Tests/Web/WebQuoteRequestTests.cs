@@ -146,7 +146,7 @@ public sealed class WebQuoteRequestTests : WebScreenContext
         page.Find("[data-action='Quotes.Award']").Click();
 
         var question = Flat(page.Find("[data-modal=confirm]").TextContent);
-        question.Should().Contain("Biosystems Maroc (3 540,00 DH HT)").And.Contain("1 article(s)").And.NotContain("MAD");
+        question.Should().Contain("Biosystems Maroc (3 540,00 DH HT)").And.Contain("1 article ; il ne figurera pas").And.NotContain("MAD");
         page.Find("[data-modal=confirm] [data-action='Action.Yes']").Click();
 
         quote.Status.Should().Be(QuoteRequestStatus.Awarded);
