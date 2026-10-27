@@ -4012,7 +4012,8 @@
     "RefundPrompt": "سبب إرجاع {0} ({1}) :",
     "BouncePrompt": "سبب عدم استيفاء {0} ({1}) — السبب الذي أبلغه البنك :",
     "WithdrawalAmountPrompt": "المبلغ المسحوب من الصندوق والمودع بالبنك (درهم) :",
-    "WithdrawalReasonPrompt": "سبب سحب {0} درهم (إيداع بنكي، تحويل نقدي…) :"
+    "WithdrawalReasonPrompt": "سبب سحب {0} درهم (إيداع بنكي، تحويل نقدي…) :",
+    "SessionPaymentCount": "عدد عمليات الأداء: {0}"
   },
 
   "PaymentMethod": {

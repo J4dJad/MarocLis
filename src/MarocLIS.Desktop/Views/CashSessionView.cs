@@ -301,7 +301,7 @@ public sealed class CashSessionView : LocalizedView
 
         _sessionInfo.Text = $"{summary.OperatorName}   ·   " +
                             $"{T("Payment.CashSession")} {summary.OpenedAt:dd/MM/yyyy HH:mm}   ·   " +
-                            $"{summary.PaymentCount} {T("Payment.Plural").ToLowerInvariant()}";
+                            T("Payment.SessionPaymentCount", summary.PaymentCount);
 
         string Line(string labelKey, decimal amount) =>
             // A positive width right-aligns, a negative one left-aligns. The amounts line up in one

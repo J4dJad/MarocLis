@@ -25,6 +25,13 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
     }
 
     private static string A(decimal value) => value.ToString("N2", Fr);
+
+    /// <summary>
+    /// An amount taken off, written « −500,00 »; nothing taken off is « 0,00 », never « −0,00 »
+    /// (an employee with no dependants).
+    /// </summary>
+    public static string Deduction(decimal value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero) > 0 ? "−" + A(value) : A(0m);
     private static string P(decimal rate) => $"{rate.ToString("0.##", Fr)} %";
 
     public byte[] Render(IReadOnlyList<PayslipDocument> payslips)
@@ -218,7 +225,7 @@ public sealed class QuestPdfPayslipRenderer : IPayslipRenderer
                 {
                     c.Item().Text("Détail de l'impôt").FontSize(8).Bold();
                     c.Item().Text($"Brut imposable : {A(a.GrossTaxable)}   ·   Frais professionnels : {A(a.ProfessionalExpenses)}").FontSize(7.5f);
-                    c.Item().Text($"Net imposable : {A(a.NetTaxable)}   ·   IR brut : {A(a.IncomeTaxBeforeFamily)}   ·   Charges de famille : −{A(a.FamilyDeduction)}").FontSize(7.5f);
+                    c.Item().Text($"Net imposable : {A(a.NetTaxable)}   ·   IR brut : {A(a.IncomeTaxBeforeFamily)}   ·   Charges de famille : {Deduction(a.FamilyDeduction)}").FontSize(7.5f);
                     if (a.Exemption != PayrollExemption.None)
                         c.Item().Text(ExemptionLabel(a.Exemption)).FontSize(7.5f).Italic();
                 });

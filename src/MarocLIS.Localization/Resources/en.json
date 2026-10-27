@@ -4012,7 +4012,8 @@
     "RefundPrompt": "Reason for refunding {0} ({1}):",
     "BouncePrompt": "Reason {0} ({1}) was returned unpaid — the reason the bank gave:",
     "WithdrawalAmountPrompt": "Amount taken from the till and banked (MAD):",
-    "WithdrawalReasonPrompt": "Reason for withdrawing {0} MAD (banking, cash transfer…):"
+    "WithdrawalReasonPrompt": "Reason for withdrawing {0} MAD (banking, cash transfer…):",
+    "SessionPaymentCount": "{0} {0:plural:payment|payments}"
   },
 
   "PaymentMethod": {

@@ -4013,7 +4013,8 @@
     "RefundPrompt": "Motif du remboursement de {0} ({1}) :",
     "BouncePrompt": "Motif de l'impayé de {0} ({1}) — motif de rejet communiqué par la banque :",
     "WithdrawalAmountPrompt": "Montant prélevé de la caisse et déposé en banque (DH) :",
-    "WithdrawalReasonPrompt": "Motif du prélèvement de {0} DH (dépôt en banque, remise d'espèces…) :"
+    "WithdrawalReasonPrompt": "Motif du prélèvement de {0} DH (dépôt en banque, remise d'espèces…) :",
+    "SessionPaymentCount": "{0} {0:plural:règlement|règlements}"
   },
 
   "PaymentMethod": {

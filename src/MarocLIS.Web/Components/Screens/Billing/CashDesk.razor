@@ -18,7 +18,7 @@
     <div class="list-tools">
         @if (_summary is { } info)
         {
-            <span class="muted" data-state="session">@info.OperatorName · @Texts["Payment.CashSession"] @info.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) · @info.PaymentCount @Texts["Payment.Plural"].ToLower(Texts.Culture)</span>
+            <span class="muted" data-state="session">@info.OperatorName · @Texts["Payment.CashSession"] @info.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) · @Texts.T("Payment.SessionPaymentCount", info.PaymentCount)</span>
         }
         <span class="list-tools-end">
             <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="ActivateAsync" />
