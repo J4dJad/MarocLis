@@ -8,9 +8,13 @@
 #                                MarocLIS database and the logins the workstations and the API
 #                                service sign in with
 #   -Action InstallService       server type, first install: scripts/install-api-service.ps1
+#   -Action InstallWebService    server type: scripts/install-web-service.ps1 (MarocLIS Web: its HTTPS
+#                                certificate, the firewall for port 5443, the service); run at every
+#                                install and upgrade, it keeps what is already there
 #   -Action InstallBackupTask    server type: the backup folder, its rights for SQL Server, and the
 #                                scheduled task "MarocLIS - Sauvegarde" (scripts/maroclis-backup.ps1)
-#   -Action StopService          upgrade: stop MarocLIS.Api before its files are replaced
+#   -Action StopService          upgrade: stop -ServiceName (MarocLIS.Api, MarocLIS.Web) before its files
+#                                are replaced
 #   -Action StartService         upgrade: start it again afterwards
 #
 # Every run appends to -LogFile. Exit codes: 0 done, 1 failed, 3 done with a warning that the
@@ -22,7 +26,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('SetConnectionString', 'ConfigureServer', 'InstallService', 'StopService', 'StartService',
-                 'InstallBackupTask')]
+                 'InstallBackupTask', 'InstallWebService')]
     [string] $Action,
     [string] $File,
     [string] $Server,
@@ -30,6 +34,7 @@ param(
     [string] $Database = 'MarocLIS',
     [string] $UsersGroup = 'MarocLIS-Utilisateurs',
     [string] $ApiDirectory,
+    [string] $WebDirectory,
     [string] $ServiceName = 'MarocLIS.Api',
     [string] $BackupScript,
     [string] $BackupFolder = 'C:\MarocLIS\Sauvegardes',
@@ -315,6 +320,18 @@ function Install-ApiService {
     & $script -InstallDirectory $ApiDirectory -ServiceName $ServiceName *>&1 | ForEach-Object { Write-Log "$_" }
 }
 
+# --- MarocLIS Web service ---------------------------------------------------------------------
+
+function Install-WebService {
+    if (-not $WebDirectory) { throw '-WebDirectory is required.' }
+    $script = Join-Path $WebDirectory 'install-web-service.ps1'
+    if (-not (Test-Path $script)) { throw "$script not found." }
+    & $script -InstallDirectory $WebDirectory *>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.WarningRecord]) { Write-Warn "$($_.Message)" }
+        else { Write-Log "$_" }
+    }
+}
+
 function Stop-ApiService {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if (-not $service) { Write-Log "Service $ServiceName not installed."; return }
@@ -338,6 +355,7 @@ try {
         'StopService'         { Stop-ApiService }
         'StartService'        { Start-ApiService }
         'InstallBackupTask'   { Install-BackupTask }
+        'InstallWebService'   { Install-WebService }
     }
 }
 catch {

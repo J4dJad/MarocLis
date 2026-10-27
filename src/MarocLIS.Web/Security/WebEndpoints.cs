@@ -1,6 +1,7 @@
 using MarocLIS.Application.Administration;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
+using MarocLIS.Web.Hosting;
 using MarocLIS.Web.Session;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -22,6 +23,32 @@ public static class WebEndpoints
     {
         app.MapPost(WebPaths.SignOut, SignOutAsync).AllowAnonymous();
         app.MapPost(WebPaths.Language, ChooseLanguageAsync).AllowAnonymous();
+        app.MapGet(WebPaths.ServerCertificate, ServerCertificate).AllowAnonymous();
+        app.MapGet(WebPaths.ServerCertificatePem, ServerCertificatePem).AllowAnonymous();
+    }
+
+    /// <summary>
+    /// The server's public certificate, exported there by the installer (install-web-service.ps1).
+    /// A workstation's « Poste Web » setup fetches it before it trusts this server, and has its
+    /// SHA-256 fingerprint compared with the one the server's setup showed: the certificate is public
+    /// (every connection presents it), and the fingerprint is what makes it this server's.
+    /// </summary>
+    private static IResult ServerCertificate(IWebHostEnvironment environment, WebOptions options) =>
+        ServerCertificateBytes(environment, options) is { } der
+            ? Results.File(der, "application/pkix-cert", "certificat-serveur.cer")
+            : Results.NotFound();
+
+    /// <summary>The same, base64 between the PEM lines: the setup program reads text, not bytes.</summary>
+    private static IResult ServerCertificatePem(IWebHostEnvironment environment, WebOptions options) =>
+        ServerCertificateBytes(environment, options) is { } der
+            ? Results.Text("-----BEGIN CERTIFICATE-----\r\n" + Convert.ToBase64String(der, Base64FormattingOptions.InsertLineBreaks) +
+                           "\r\n-----END CERTIFICATE-----\r\n", "application/x-pem-file")
+            : Results.NotFound();
+
+    private static byte[]? ServerCertificateBytes(IWebHostEnvironment environment, WebOptions options)
+    {
+        var file = Path.Combine(environment.ContentRootPath, options.ServerCertificateFile);
+        return File.Exists(file) ? File.ReadAllBytes(file) : null;
     }
 
     /// <summary>

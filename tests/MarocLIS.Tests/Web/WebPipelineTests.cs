@@ -152,6 +152,44 @@ public sealed class WebPipelineTests
         LicenceStatus.Pending.RequireWebAccess().FirstError.ResourceKey.Should().Be("Licence_WebPending");
     }
 
+    /// <summary>
+    /// The server's public certificate, for the « Poste Web » setup of a workstation: served to the
+    /// local network whatever the licence (the setup comes before any sign-in), never outside it, and
+    /// a plain 404 while the installer has not exported it.
+    /// </summary>
+    [Fact]
+    public async Task TheServersCertificate_IsServedToTheLocalNetwork_BeforeAnyLicenceOrSignIn()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"maroclis-cert-{Guid.NewGuid():N}.cer");
+        byte[] der = [0x30, 0x82, 0x01, 0x0A, 0x02, 0x01, 0x01];
+        await File.WriteAllBytesAsync(file, der);
+        try
+        {
+            var missing = new LicenceStatus { State = LicenceState.Missing, Mode = LicenceMode.ReadOnly, Today = Today };
+            using var web = new WebFactory(missing, file);
+
+            using var lan = web.Client("192.168.1.20");
+            var response = await lan.GetAsync(WebPaths.ServerCertificate);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.Content.Headers.ContentType!.MediaType.Should().Be("application/pkix-cert");
+            (await response.Content.ReadAsByteArrayAsync()).Should().Equal(der);
+
+            var pem = await (await lan.GetAsync(WebPaths.ServerCertificatePem)).Content.ReadAsStringAsync();
+            pem.Should().Be("-----BEGIN CERTIFICATE-----\r\n" + Convert.ToBase64String(der) + "\r\n-----END CERTIFICATE-----\r\n");
+
+            using var outside = web.Client("8.8.8.8");
+            (await outside.GetAsync(WebPaths.ServerCertificate)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+
+        using var notExported = new WebFactory(FullStatus(), Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}.cer"));
+        using var client = notExported.Client("127.0.0.1");
+        (await client.GetAsync(WebPaths.ServerCertificate)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     private static string WebHtml(string text) => System.Text.Encodings.Web.HtmlEncoder.Default.Encode(text);
 
     /// <summary>
@@ -239,7 +277,7 @@ public sealed class WebPipelineTests
             scope.ServiceProvider.GetService(type).Should().NotBeNull(type.Name);
     }
 
-    internal sealed class WebFactory(LicenceStatus licence) : WebApplicationFactory<MarocLIS.Web.Program>
+    internal sealed class WebFactory(LicenceStatus licence, string? serverCertificateFile = null) : WebApplicationFactory<MarocLIS.Web.Program>
     {
         private const string PeerHeader = "X-Test-Peer";
 
@@ -253,6 +291,7 @@ public sealed class WebPipelineTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseSetting("Web:InitializeDatabase", "false");
+            if (serverCertificateFile is not null) builder.UseSetting("Web:ServerCertificateFile", serverCertificateFile);
             builder.UseSetting("Database:ConnectionString",
                                "Server=127.0.0.1,1;Database=Aucune;User Id=x;Password=x;Connect Timeout=1;TrustServerCertificate=true");
             builder.ConfigureTestServices(services =>

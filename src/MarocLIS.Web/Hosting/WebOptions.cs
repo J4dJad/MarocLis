@@ -21,6 +21,14 @@ public sealed class WebOptions
     /// </summary>
     public string? MigrationProfilesFolder { get; set; }
 
+    /// <summary>
+    /// The public part of the server's HTTPS certificate (DER), as the installer exports it next to
+    /// the executable: served at <see cref="Security.WebPaths.ServerCertificate"/> so the « Poste Web »
+    /// setup of a workstation can fetch it, its fingerprint confirmed by whoever installs. A relative
+    /// path is taken from the content root.
+    /// </summary>
+    public string ServerCertificateFile { get; set; } = "certificat-serveur.cer";
+
     /// <summary>The service account's own application data, under MarocLIS\Web\Reprise\Profils.</summary>
     public static string DefaultMigrationProfilesFolder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MarocLIS", "Web", "Reprise", "Profils");
