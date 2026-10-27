@@ -166,10 +166,6 @@ public sealed class QualityControlService(
                                                 clock.Today, ct));
     }
 
-    // The value and Z-score columns hold twelve integer digits; a real control is far inside both.
-    private const decimal MaximumQcValue = 10_000_000_000m;
-    private const decimal MaximumZScore = 1_000_000m;
-
     /// <summary>
     /// Records a batch of control values as one run and evaluates each against the active rules.
     /// <para>
@@ -209,8 +205,7 @@ public sealed class QualityControlService(
         // would still be charted. Refused before anything is stored, like an unreadable value.
         foreach (var entry in entries)
         {
-            if (Math.Abs(entry.Value) >= MaximumQcValue
-                || resolvedTargets[entry.QcTargetId]?.ZScore(entry.Value) is { } z && Math.Abs(z) >= MaximumZScore)
+            if (QcRunEvaluator.IsImplausible(resolvedTargets[entry.QcTargetId], entry.Value))
                 return Result.Failure<QcSubmissionOutcome>(Error.Validation("Result_TechnicallyImpossible", entry.Value));
         }
 
@@ -265,16 +260,14 @@ public sealed class QualityControlService(
             var result = new QcResult(target.Id, target.TestParameterId, target.InstrumentId,
                                        currentUser.SiteId, entry.Value, now, currentUser.UserId)
             {
-                QcRunId = runId,
-                // Frozen so the chart is reproducible even after the statistics are recomputed.
-                TargetMean = target.EffectiveMean,
-                TargetSd = target.EffectiveSd,
-                ZScore = target.ZScore(entry.Value),
                 ReagentLotId = lotsByParameter is null
                     ? entry.ReagentLotId
                     : lotsByParameter.TryGetValue(target.TestParameterId, out var lotId) ? lotId : null,
                 Comment = entry.Comment
             };
+
+            // Frozen so the chart is reproducible even after the statistics are recomputed.
+            QcRunEvaluator.Anchor(result, target, runId);
 
             if (evaluatedLot is not null && result.ReagentLotId == evaluatedLot.Id)
             {
@@ -289,85 +282,29 @@ public sealed class QualityControlService(
             created.Add((result, target, entry));
         }
 
-        // --- 2. Evaluate, with the run's other levels available as peers --------------------------
+        // --- 2. Evaluate, accumulate, and flag the patient results the rejected runs cover -------
+
+        // The same judgement as the analyser's controls get (QcRunEvaluator): the run's other
+        // levels of the same analyte as peers, each rejected control speaking for its own analyser.
+        var evaluated = await QcRunEvaluator.EvaluateAsync(
+            queries, [.. created.Select(x => (x.Result, x.Target))], runId, ct);
 
         var outcomes = new List<QcEntryResult>(created.Count);
 
         foreach (var (result, target, _) in created)
         {
-            if (result.ZScore is null)
-            {
-                // No target established: the point is stored but cannot be interpreted. Silently
-                // treating that as in control would be the worst of the options.
-                result.ApplyEvaluation(WestgardEvaluation.NotEvaluable);
+            var code = await queries.GetParameterCodeAsync(target.TestParameterId, ct) ?? "-";
 
-                outcomes.Add(new QcEntryResult(result.Id, target.Id,
-                    await queries.GetParameterCodeAsync(target.TestParameterId, ct) ?? "-",
-                    result.Value, null, QcOutcome.Pending, WestgardRule.None,
-                    ["Qc_NoTargetEstablished"]));
-
-                continue;
-            }
-
-            var history = await queries.GetZScoreHistoryAsync(
-                target.Id, 12, result.IsLotEvaluation ? result.ReagentLotId : null, ct);
-
-            // The point just stored is the newest element of the history the rules evaluate.
-            var series = new List<QcPoint>(history)
-            {
-                new(result.ZScore.Value, result.MeasuredAt, runId,
-                    await queries.GetMaterialLevelAsync(target.QcMaterialId, ct))
-            };
-
-            // The run's other levels of the same analyte on the same analyser, and only those: a
-            // glucose at +2.1 SD and a creatinine at -2.1 SD in the same submission are not one
-            // run's levels, and pairing them fired R4S or 2-2s across analytes that had nothing
-            // to do with each other.
-            var peers = created
-                .Where(x => x.Result.Id != result.Id && x.Result.ZScore is not null
-                            && x.Result.TestParameterId == result.TestParameterId
-                            && x.Result.InstrumentId == result.InstrumentId)
-                .Select(x => new QcPoint(x.Result.ZScore!.Value, x.Result.MeasuredAt, runId,
-                                          QcLevel.Normal))
-                .ToList();
-
-            var evaluation = WestgardEvaluator.Evaluate(target.ActiveRules, series, peers);
-
-            result.ApplyEvaluation(evaluation);
-
-            // Only accepted points shape the laboratory's own mean and SD. Folding in a rejected
-            // point would widen the limits to accommodate the very error that was detected. Nor
-            // does a new lot's acceptance point: the limits are those of the lot in use.
-            if ((evaluation.Outcome is QcOutcome.Accepted or QcOutcome.Warning) && !result.IsLotEvaluation)
-                target.AccumulatePoint(result.Value);
-
-            outcomes.Add(new QcEntryResult(result.Id, target.Id,
-                await queries.GetParameterCodeAsync(target.TestParameterId, ct) ?? "-",
-                result.Value, result.ZScore, evaluation.Outcome,
-                evaluation.ViolatedRules, evaluation.ViolationKeys));
+            outcomes.Add(result.ZScore is null
+                ? new QcEntryResult(result.Id, target.Id, code, result.Value, null, QcOutcome.Pending,
+                                    WestgardRule.None, ["Qc_NoTargetEstablished"])
+                : new QcEntryResult(result.Id, target.Id, code, result.Value, result.ZScore,
+                                    evaluated.Evaluations[result.Id].Outcome,
+                                    evaluated.Evaluations[result.Id].ViolatedRules,
+                                    evaluated.Evaluations[result.Id].ViolationKeys));
         }
 
-        // --- 3. Flag the patient results the rejected runs cover -----------------------------------
-
-        // Grouped by analyser: a submission may cover several, and each rejected control speaks
-        // for its own instrument only. Flagging every parameter against the first entry's
-        // analyser left the results of the instrument actually out of control unflagged. A new
-        // lot's rejected acceptance run flags nothing: no patient result was produced with it.
-        var rejectedByInstrument = created
-            .Where(x => x.Result.IsRejected && !x.Result.IsLotEvaluation)
-            .GroupBy(x => x.Result.InstrumentId,
-                     x => x.Target.TestParameterId)
-            .ToList();
-
-        var flagged = 0;
-
-        foreach (var instrument in rejectedByInstrument)
-        {
-            // Patient results produced since the last accepted control for the same parameter and
-            // instrument are flagged, so a biologist cannot release them without noticing.
-            flagged += await queries.FlagResultsCoveredByRejectedQcAsync(
-                [.. instrument.Distinct()], instrument.Key, runId, ct);
-        }
+        var flagged = evaluated.FlaggedResults.Count;
 
         if (flagged > 0)
             problems.Add(Error.Regulatory("Qc_PatientResultsFlagged", flagged));

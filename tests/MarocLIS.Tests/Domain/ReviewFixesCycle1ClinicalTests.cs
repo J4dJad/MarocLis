@@ -307,7 +307,8 @@ public sealed class ReviewFixesCycle1ClinicalTests
                     ["FlagResultsCoveredByRejectedQcAsync"] = args =>
                     {
                         self.FlagCalls.Add((Guid)args![1]!);
-                        return Task.FromResult(1);
+                        return Task.FromResult<IReadOnlyList<TestResult>>(
+                            [new TestResult(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
                     }
                 }),
                 Stub.Of<ISequenceAllocator>(),
@@ -634,7 +635,7 @@ public sealed class ReviewFixesCycle1ClinicalDatabaseTests(Cycle1ClinicalScratch
             var flagged = await new QualityQueries(write).FlagResultsCoveredByRejectedQcAsync(
                 [parameter], instrument, Guid.NewGuid());
             await write.SaveChangesAsync();
-            flagged.Should().Be(1);
+            flagged.Should().HaveCount(1);
         }
     }
 }

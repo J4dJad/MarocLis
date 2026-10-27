@@ -692,7 +692,8 @@ public sealed class ReviewFixesClinical2Tests
                     ["FlagResultsCoveredByRejectedQcAsync"] = args =>
                     {
                         self.FlagCalls.Add(([.. (IEnumerable<Guid>)args![0]!], (Guid)args[1]!));
-                        return Task.FromResult(1);
+                        return Task.FromResult<IReadOnlyList<TestResult>>(
+                            [new TestResult(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
                     }
                 }),
                 Stub.Of<ISequenceAllocator>(),

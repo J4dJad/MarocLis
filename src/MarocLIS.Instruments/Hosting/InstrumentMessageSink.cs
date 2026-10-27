@@ -625,15 +625,16 @@ public sealed class InstrumentMessageSink(
     /// <summary>
     /// Records a control result against its target, keeping it out of every patient file.
     /// <para>
-    /// The point is stored with the from-instrument flag and left pending review: the Westgard
-    /// evaluation and the decision about whether patient results may flow belong to the quality
-    /// control screen, where a biologist sees the chart. Evaluating it here and acting on the
-    /// verdict silently would make a rejection invisible.
+    /// The transmission is one run, judged exactly as a run typed on the QC screen
+    /// (<see cref="QcRunEvaluator"/>): the laboratory's limits once established, the Westgard rules
+    /// against the point's history and the run's other levels, an in-control routine point folded
+    /// into the statistics. A rejection is not hidden: it goes to the QC review list, and the
+    /// patient results the routine control covers are flagged, so a biologist cannot validate
+    /// them without a justified override. Left pending, analyser QC was judged by nobody.
     /// </para>
     /// <para>
-    /// A new lot's acceptance point is the exception: it is evaluated on the lot's own series, as
-    /// the QC screen does, because the release gate reads its verdict and flags no patient result.
-    /// Left pending, it blocked the lot's release for good.
+    /// A new lot's acceptance point is evaluated on the lot's own series and flags no patient
+    /// result: none was produced with that lot.
     /// </para>
     /// </summary>
     private async Task<int> ImportControlAsync(InstrumentInterface link,
@@ -696,13 +697,20 @@ public sealed class InstrumentMessageSink(
                 continue;
             }
 
+            var converted = mapping.Convert(value);
+
+            // A garbled field cannot be a control: it would fail the save of the whole transmission.
+            if (QcRunEvaluator.IsImplausible(target, converted))
+            {
+                issues.Add(Describe("Result_TechnicallyImpossible", $"{incoming.InstrumentTestCode} = {incoming.Value}"));
+                continue;
+            }
+
             var point = new QcResult(target.Id, mapping.TestParameterId, link.InstrumentId,
-                                      link.SiteId, mapping.Convert(value),
+                                      link.SiteId, converted,
                                       incoming.MeasuredAt ?? clock.Now, serviceAccount.UserId)
             {
-                IsAutoTransmitted = true,
-                TargetMean = target.AssignedMean,
-                TargetSd = target.AssignedSd
+                IsAutoTransmitted = true
             };
 
             await qcResults.AddAsync(point, ct);
@@ -738,7 +746,15 @@ public sealed class InstrumentMessageSink(
                 }
             }
 
-            await EvaluateAcceptancePointsAsync([.. points.Where(p => p.Point.IsLotEvaluation)], ct);
+            // The transmission is one run, judged as a typed run is: the laboratory's limits, the
+            // Westgard rules, its in-control points folded into the statistics, and the patient
+            // results a rejected routine control covers flagged before anyone validates them.
+            var runId = Guid.CreateVersion7();
+            foreach (var (point, target) in points) QcRunEvaluator.Anchor(point, target, runId);
+
+            // A rejected control is not an import problem: it goes to the QC review list, and the
+            // flagged results cannot be validated without a justified override.
+            await QcRunEvaluator.EvaluateAsync(qualityQueries, points, runId, ct);
 
             unitOfWork.AuditReason =
                 PluralText.French("Contrôle interne reçu de l'automate — lot {0}, {1} {1:plural:niveau|niveaux}", lot, imported);
@@ -793,51 +809,6 @@ public sealed class InstrumentMessageSink(
         }
 
         return candidates.Count == 1 ? (candidates[0], 1) : (null, candidates.Count);
-    }
-
-    /// <summary>
-    /// Evaluates the acceptance points of a lot under evaluation against that lot's own series,
-    /// with the target statistics the QC screen uses. The transmission is one run.
-    /// </summary>
-    private async Task EvaluateAcceptancePointsAsync(List<(QcResult Point, QcTarget Target)> points,
-                                                     CancellationToken ct)
-    {
-        if (points.Count == 0) return;
-
-        var runId = Guid.CreateVersion7();
-
-        foreach (var (point, target) in points)
-        {
-            point.QcRunId = runId;
-            point.TargetMean = target.EffectiveMean;
-            point.TargetSd = target.EffectiveSd;
-            point.ZScore = target.ZScore(point.Value);
-        }
-
-        foreach (var (point, target) in points)
-        {
-            if (point.ZScore is not { } z)
-            {
-                point.ApplyEvaluation(WestgardEvaluation.NotEvaluable);
-                continue;
-            }
-
-            var history = await qualityQueries.GetZScoreHistoryAsync(target.Id, 12, point.ReagentLotId, ct);
-            var series = new List<QcPoint>(history)
-            {
-                new(z, point.MeasuredAt, runId, await qualityQueries.GetMaterialLevelAsync(target.QcMaterialId, ct))
-            };
-
-            // The other levels of the same analyte on the same lot, sent in the same transmission.
-            var peers = points
-                .Where(x => x.Point.Id != point.Id && x.Point.ZScore is not null
-                            && x.Point.TestParameterId == point.TestParameterId
-                            && x.Point.ReagentLotId == point.ReagentLotId)
-                .Select(x => new QcPoint(x.Point.ZScore!.Value, x.Point.MeasuredAt, runId, QcLevel.Normal))
-                .ToList();
-
-            point.ApplyEvaluation(WestgardEvaluator.Evaluate(target.ActiveRules, series, peers));
-        }
     }
 
     // ---- Query answering -----------------------------------------------------------------------

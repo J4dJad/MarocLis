@@ -267,13 +267,13 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
     /// hands, and correcting them is the amended-report path, not a flag.
     /// </para>
     /// </summary>
-    public async Task<int> FlagResultsCoveredByRejectedQcAsync(
+    public async Task<IReadOnlyList<TestResult>> FlagResultsCoveredByRejectedQcAsync(
         IReadOnlyList<Guid> testParameterIds, Guid instrumentId, Guid qcRunId,
         CancellationToken ct = default)
     {
-        if (testParameterIds.Count == 0) return 0;
+        if (testParameterIds.Count == 0) return [];
 
-        var flagged = 0;
+        var flagged = new List<TestResult>();
 
         // One window per parameter. The latest accepted control across all the rejected parameters
         // bounded them all: with glucose last accepted yesterday and creatinine this morning, both
@@ -307,7 +307,7 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
                 result.CoveringQcRunId = qcRunId;
             }
 
-            flagged += affected.Count;
+            flagged.AddRange(affected);
         }
 
         return flagged;

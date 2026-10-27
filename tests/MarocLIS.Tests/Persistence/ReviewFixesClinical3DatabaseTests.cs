@@ -170,7 +170,7 @@ public sealed class ReviewFixesClinical3DatabaseTests(Clinical3ScratchDatabase d
                 [glucose.Id, creatinine.Id], instrumentId, Guid.NewGuid());
             await context.SaveChangesAsync();
 
-            flagged.Should().Be(2);
+            flagged.Should().HaveCount(2);
         }
 
         await using var read = database.Context();

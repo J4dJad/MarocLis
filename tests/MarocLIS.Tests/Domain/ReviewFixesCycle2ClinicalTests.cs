@@ -93,8 +93,9 @@ public sealed class ReviewFixesCycle2ClinicalTests
         var point = bench.Stored.Single();
         point.ReagentLotId.Should().Be(bench.LotInUse);
         point.IsLotEvaluation.Should().BeFalse();
-        point.Outcome.Should().Be(QcOutcome.Pending, "routine transmitted QC is judged in the QC screen");
-        bench.HistoryLots.Should().BeEmpty();
+        // 1.10 against 0.90 ± 0.05: +4 SD, judged on the routine series as typed QC is.
+        point.Outcome.Should().Be(QcOutcome.Rejected);
+        bench.HistoryLots.Should().Equal((Guid?)null);
     }
 
     // ---- K9: the level is the one of the control lot sent ------------------------------------------
@@ -206,7 +207,8 @@ public sealed class ReviewFixesCycle2ClinicalTests
                         self.HistoryLots.Add((Guid?)args![2]);
                         return Task.FromResult<IReadOnlyList<QcPoint>>([]);
                     },
-                    ["GetMaterialLevelAsync"] = _ => Task.FromResult(QcLevel.Low)
+                    ["GetMaterialLevelAsync"] = _ => Task.FromResult(QcLevel.Low),
+                    ["FlagResultsCoveredByRejectedQcAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>([])
                 }),
                 Stub.Of<IRepository<Instrument>>(new()
                 {

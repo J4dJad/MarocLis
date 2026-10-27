@@ -197,7 +197,37 @@ public sealed class ReviewFixesCycle3ClinicalTests
         bench.Stored[0].IsLotEvaluation.Should().BeTrue();
         bench.Stored[1].ReagentLotId.Should().Be(bench.LotInUse, "this level is routine QC of the lot in use");
         bench.Stored[1].IsLotEvaluation.Should().BeFalse();
-        bench.Stored[1].Outcome.Should().Be(QcOutcome.Pending);
+        bench.Stored[1].Outcome.Should().Be(QcOutcome.Accepted, "routine QC is judged like typed QC");
+    }
+
+    [Fact]
+    public async Task RoutineAnalyserQc_IsJudgedAgainstTheLaboratorysLimits_AndARejectionFlagsThePatientResults()
+    {
+        var bench = new ControlBench(("881", QcLevel.Low));
+        var target = bench.Targets[0];
+        // The laboratory's own limits, established from its points, differ from the insert's.
+        target.LaboratoryMean = 1.10m;
+        target.LaboratorySd = 0.02m;
+        target.LaboratoryPointCount = 25;
+
+        // +3.4 SD against the laboratory's limits.
+        await bench.SendAsync(Control("881", "1.168"));
+
+        var rejected = bench.Stored.Single();
+        rejected.TargetMean.Should().Be(1.10m);
+        rejected.TargetSd.Should().Be(0.02m);
+        rejected.ZScore.Should().Be(3.4m);
+        rejected.QcRunId.Should().NotBeNull();
+        rejected.Outcome.Should().Be(QcOutcome.Rejected);
+        bench.FlagCalls.Should().Equal(target.InstrumentId);
+        target.LaboratoryPointCount.Should().Be(25, "a rejected point does not shape the limits");
+
+        // An in-control point is accepted and folded into the laboratory's statistics.
+        await bench.SendAsync(Control("881", "1.10"));
+
+        bench.Stored[1].Outcome.Should().Be(QcOutcome.Accepted);
+        target.LaboratoryPointCount.Should().Be(26);
+        bench.FlagCalls.Should().HaveCount(1);
     }
 
     // ---- K15: a named lot applies to one analyser's rows -----------------------------------------
@@ -299,7 +329,8 @@ public sealed class ReviewFixesCycle3ClinicalTests
                     ["FlagResultsCoveredByRejectedQcAsync"] = args =>
                     {
                         self.FlagCalls.Add((Guid)args![1]!);
-                        return Task.FromResult(1);
+                        return Task.FromResult<IReadOnlyList<TestResult>>(
+                            [new TestResult(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
                     }
                 }),
                 Stub.Of<ISequenceAllocator>(),
@@ -325,6 +356,9 @@ public sealed class ReviewFixesCycle3ClinicalTests
         public Dictionary<Guid, Guid> UnderEvaluation { get; } = [];
         public List<QcResult> Stored { get; } = [];
         public string Issues { get; private set; } = string.Empty;
+
+        /// <summary>The analyser of each rejected run whose patient results were flagged.</summary>
+        public List<Guid> FlagCalls { get; } = [];
 
         private readonly InstrumentInterface _link;
         private readonly InstrumentMessageSink _sink;
@@ -393,7 +427,12 @@ public sealed class ReviewFixesCycle3ClinicalTests
                 Stub.Of<IQualityQueries>(new()
                 {
                     ["GetZScoreHistoryAsync"] = _ => Task.FromResult<IReadOnlyList<QcPoint>>([]),
-                    ["GetMaterialLevelAsync"] = _ => Task.FromResult(QcLevel.Low)
+                    ["GetMaterialLevelAsync"] = _ => Task.FromResult(QcLevel.Low),
+                    ["FlagResultsCoveredByRejectedQcAsync"] = args =>
+                    {
+                        self.FlagCalls.Add((Guid)args![1]!);
+                        return Task.FromResult<IReadOnlyList<TestResult>>([]);
+                    }
                 }),
                 Stub.Of<IRepository<Instrument>>(new()
                 {

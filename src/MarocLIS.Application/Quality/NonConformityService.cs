@@ -546,10 +546,12 @@ public interface IQualityQueries
                                                          CancellationToken ct = default);
 
     /// <summary>
-    /// Flags the unreleased patient results that a rejected run covers, and returns how many.
-    /// Those results then cannot be validated without a justified override.
+    /// Flags the unreleased patient results that a rejected run covers, and returns them. Those
+    /// results then cannot be validated without a justified override. Returned as entities so they
+    /// are tracked on the caller's context, whose save records the flags: counted on a context of
+    /// its own (the workstation's isolated queries), the flags were never saved.
     /// </summary>
-    Task<int> FlagResultsCoveredByRejectedQcAsync(
+    Task<IReadOnlyList<MarocLIS.Domain.Results.TestResult>> FlagResultsCoveredByRejectedQcAsync(
         IReadOnlyList<Guid> testParameterIds, Guid instrumentId, Guid qcRunId,
         CancellationToken ct = default);
 
