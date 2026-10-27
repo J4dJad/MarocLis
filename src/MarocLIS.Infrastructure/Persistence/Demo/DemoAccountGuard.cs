@@ -2,6 +2,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Billing;
 using Microsoft.EntityFrameworkCore;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Identity;
 
 namespace MarocLIS.Infrastructure.Persistence.Demo;
 
@@ -93,8 +94,34 @@ public static class DemoAccountGuard
             disabled.Add(user.UserName);
         }
 
-        if (disabled.Count > 0) await db.SaveChangesAsync(ct);
+        if (disabled.Count > 0) await SaveDeactivationsAsync(db, ct);
 
         return disabled;
+    }
+
+    /// <summary>
+    /// Saves the deactivations made on <paramref name="db"/>'s tracked accounts. A sign-in of one of
+    /// them stamped meanwhile (it writes the row directly) leaves the tracked row stale: the row is
+    /// read again and the deactivation applied to it again, instead of failing — a deactivation is
+    /// never lost to a sign-in at the same moment.
+    /// </summary>
+    public static async Task SaveDeactivationsAsync(LisDbContext db, CancellationToken ct = default)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+            catch (DbUpdateConcurrencyException conflict) when (attempt < 3)
+            {
+                foreach (var entry in conflict.Entries)
+                {
+                    await entry.ReloadAsync(ct);
+                    if (entry.Entity is AppUser user) user.Deactivate();
+                }
+            }
+        }
     }
 }

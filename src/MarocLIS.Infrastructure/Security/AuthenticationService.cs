@@ -97,7 +97,7 @@ public sealed class AuthenticationService(
             && await DemoAccountGuard.FindRealDataAsync(db, ct) is { } realData)
         {
             user.Deactivate();
-            await db.SaveChangesAsync(ct);
+            await DemoAccountGuard.SaveDeactivationsAsync(db, ct);
 
             await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, normalised,
                                            "Auth_DemoAccountDisabled",
@@ -142,15 +142,16 @@ public sealed class AuthenticationService(
         // password itself did not change, so neither does its age — SetPassword would have reset
         // it here, before IsPasswordExpired below reads it, and an expired password would have
         // gone unnoticed for another full period.
+        string? rehashed = null;
         if (passwordHasher.NeedsRehash(user.PasswordHash))
         {
-            user.ReplacePasswordHash(passwordHasher.Hash(password));
+            rehashed = passwordHasher.Hash(password);
             logger?.LogInformation("Rehashed the password for {UserName} at the current work factor.",
                                    normalised);
         }
 
-        user.RegisterSuccessfulLogin(clock.Now, currentUser.Workstation);
-        await db.SaveChangesAsync(ct);
+        var refused = await StampSuccessfulLoginAsync(user, normalised, rehashed, passwordCorrect, ct);
+        if (refused is not null) return Result.Failure<AuthenticatedSession>(refused);
 
         var activeRoles = user.Roles
             .Select(r => r.Role)
@@ -330,11 +331,82 @@ public sealed class AuthenticationService(
 
         if (user.FailedLoginAttempts > 0)
         {
-            user.RegisterSuccessfulApproval();
-            await db.SaveChangesAsync(ct);
+            // In the database, in one statement, as a failed attempt is counted: a sign-in of the
+            // same account saved meanwhile made the tracked row stale, and the approval failed on
+            // a concurrency error although the password was right.
+            var now = clock.Now;
+            var cleared = await db.Users.IgnoreQueryFilters()
+                .Where(u => u.Id == user.Id && u.IsActive && (u.LockedOutUntil == null || u.LockedOutUntil <= now))
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(u => u.FailedLoginAttempts, 0)
+                    .SetProperty(u => u.LockedOutUntil, (DateTimeOffset?)null), ct);
+            await db.Entry(user).ReloadAsync(ct);
+
+            // Deactivated or locked out between the check and now: that decision stands.
+            if (cleared == 0)
+                return await FailApprovalAsync(normalised, "Approval_InvalidCredentials", ct,
+                                               user.IsActive ? "Auth_AccountLockedOut" : "Auth_AccountInactive");
         }
 
         return Result.Success(new ApproverIdentity(user.Id, user.UserName, user.FullName));
+    }
+
+    /// <summary>
+    /// Records a successful sign-in — counter and lockout cleared, time and workstation noted, the
+    /// hash upgraded when it was produced under an older work factor — in the database itself, in
+    /// one statement, and reads the row back. Null when done; otherwise the answer to give.
+    /// <para>
+    /// Loaded, changed in memory and saved, it went through the account's row version: two
+    /// sign-ins of the same account at the same moment (a double click on « Se connecter », two
+    /// workstations) or a failed attempt counted in between, and the second save matched no row —
+    /// an error page instead of the session, although the password was right.
+    /// </para>
+    /// <para>
+    /// The statement only applies to an account still active, not locked out, and whose security
+    /// stamp has not moved (a password reset, a deactivation) since it was read: a change made
+    /// meanwhile by an administrator, or a lockout reached by guesses sent at the same moment, is
+    /// honoured, never overwritten.
+    /// </para>
+    /// </summary>
+    private async Task<Error?> StampSuccessfulLoginAsync(AppUser user, string userName, string? rehashed,
+                                                         bool passwordCorrect, CancellationToken ct)
+    {
+        var now = clock.Now;
+        var workstation = currentUser.Workstation;
+        var stamp = user.SecurityStamp;
+
+        var stamped = await db.Users.IgnoreQueryFilters()
+            .Where(u => u.Id == user.Id && u.IsActive && u.SecurityStamp == stamp
+                        && (u.LockedOutUntil == null || u.LockedOutUntil <= now))
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(u => u.FailedLoginAttempts, 0)
+                .SetProperty(u => u.LockedOutUntil, (DateTimeOffset?)null)
+                .SetProperty(u => u.LastLoginAt, now)
+                .SetProperty(u => u.LastLoginWorkstation, workstation)
+                .SetProperty(u => u.PasswordHash, u => rehashed ?? u.PasswordHash), ct);
+
+        // Row version included: the entry stays one this context can save later without a conflict.
+        await db.Entry(user).ReloadAsync(ct);
+
+        if (stamped == 1) return null;
+
+        if (!user.IsActive)
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, userName, "Auth_AccountInactive", ct: ct);
+            return Error.Forbidden("Auth_InvalidCredentials");
+        }
+
+        if (user.IsLockedOut(now))
+        {
+            await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, userName, "Auth_AccountLockedOut",
+                                           details: "Correct password", ct: ct);
+            return LockedOutAnswer(passwordCorrect, user.LockedOutUntil!.Value);
+        }
+
+        // The password was reset (or the account changed) while this one was being checked.
+        await securityAuditor.LogAsync(SecurityEventKind.LoginFailed, false, userName, "Auth_InvalidCredentials",
+                                       details: "Account changed during sign-in", ct: ct);
+        return Error.Forbidden("Auth_InvalidCredentials");
     }
 
     /// <summary>

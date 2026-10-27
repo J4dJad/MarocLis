@@ -4,6 +4,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Audit;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
+using MarocLIS.Domain.Organization;
 using MarocLIS.Infrastructure.Persistence;
 using MarocLIS.Infrastructure.Security;
 using Microsoft.Data.SqlClient;
@@ -177,5 +178,112 @@ public sealed class LockoutRaceDatabaseTests(LockoutRaceDatabase database) : ICl
         events.Should().HaveCount(Parallel);
         events.Should().Contain(e => e.Kind == SecurityEventKind.AccountLockedOut);
         events.Should().OnlyContain(e => e.Details != null && e.Details.StartsWith("Approval; attempt "));
+    }
+
+    private async Task<Guid> CreateWorkingUserAsync(string userName, int failedAttempts = 0, string? permission = null)
+    {
+        await using var context = database.Context();
+        var site = new LabSite("S" + Guid.NewGuid().ToString("N")[..6], new MultilingualText("Principal"),
+                               LabSiteKind.MainLaboratory);
+        context.Sites.Add(site);
+
+        var user = new AppUser(userName, "Biologiste " + userName, new BCryptPasswordHasher(4).Hash(RightPassword));
+        user.GrantSiteAccess(site.Id, isDefault: true);
+        for (var i = 0; i < failedAttempts; i++)
+            user.RegisterFailedLogin(new FixedClock().Now, maxAttempts: 5, TimeSpan.FromMinutes(15));
+
+        if (permission is not null)
+        {
+            var role = new Role("R" + Guid.NewGuid().ToString("N")[..6], new MultilingualText("Approbation"));
+            role.Grant(permission);
+            context.Roles.Add(role);
+            user.AssignRole(role.Id);
+        }
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        return user.Id;
+    }
+
+    [SqlServerFact]
+    public async Task Two_correct_sign_ins_of_the_same_account_at_the_same_moment_both_open_a_session()
+    {
+        const string userName = "biologiste-double";
+        var userId = await CreateWorkingUserAsync(userName, failedAttempts: 2);
+
+        // Both read the account before either saves: a double click on « Se connecter », or the
+        // same person signing in on two workstations at once.
+        using var gate = new CountdownEvent(2);
+        var events = new ConcurrentBag<(SecurityEventKind Kind, string? Details)>();
+
+        var answers = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+        {
+            await using var context = database.Context();
+            var auth = new AuthenticationService(context, new GatedHasher(gate), new PasswordPolicy(),
+                                                 new CurrentUserAccessor(), Recorder(events), new FixedClock());
+            return await auth.SignInAsync(userName, RightPassword, null);
+        })));
+
+        answers.Should().OnlyContain(a => a.IsSuccess, "the password was right both times; no error page");
+        events.Should().OnlyContain(e => e.Kind == SecurityEventKind.LoginSucceeded).And.HaveCount(2);
+
+        await using var check = database.Context();
+        var user = await check.Users.IgnoreQueryFilters().AsNoTracking().SingleAsync(u => u.Id == userId);
+        (user.FailedLoginAttempts, user.LastLoginAt).Should().Be((0, new FixedClock().Now));
+    }
+
+    [SqlServerFact]
+    public async Task A_correct_sign_in_does_not_undo_a_deactivation_made_while_the_password_was_checked()
+    {
+        const string userName = "biologiste-partie";
+        var userId = await CreateWorkingUserAsync(userName);
+
+        await using var context = database.Context();
+        var auth = new AuthenticationService(context, new DeactivatingHasher(database, userId), new PasswordPolicy(),
+                                             new CurrentUserAccessor(), Recorder([]), new FixedClock());
+
+        (await auth.SignInAsync(userName, RightPassword, null)).IsFailure.Should().BeTrue();
+
+        await using var check = database.Context();
+        (await check.Users.IgnoreQueryFilters().AsNoTracking().SingleAsync(u => u.Id == userId)).IsActive
+            .Should().BeFalse("the administrator's deactivation stands");
+    }
+
+    [SqlServerFact]
+    public async Task Two_correct_approvals_of_the_same_account_at_the_same_moment_both_pass()
+    {
+        const string userName = "approbateur-double";
+        var userId = await CreateWorkingUserAsync(userName, failedAttempts: 1, permission: Permissions.Billing.CreditNote);
+
+        using var gate = new CountdownEvent(2);
+        var answers = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(async () =>
+        {
+            await using var context = database.Context();
+            var auth = new AuthenticationService(context, new GatedHasher(gate), new PasswordPolicy(),
+                                                 new CurrentUserAccessor(), Recorder([]), new FixedClock());
+            return await auth.VerifyApproverAsync(userName, RightPassword, Permissions.Billing.CreditNote);
+        })));
+
+        answers.Should().OnlyContain(a => a.IsSuccess);
+        (await CounterOfAsync(userId)).Attempts.Should().Be(0);
+    }
+
+    /// <summary>An administrator deactivates the account while its password is being checked.</summary>
+    private sealed class DeactivatingHasher(LockoutRaceDatabase database, Guid userId) : IPasswordHasher
+    {
+        private static readonly BCryptPasswordHasher Inner = new(4);
+
+        public string Hash(string password) => Inner.Hash(password);
+
+        public bool Verify(string password, string hash)
+        {
+            using var context = database.Context();
+            var user = context.Users.IgnoreQueryFilters().Single(u => u.Id == userId);
+            user.Deactivate();
+            context.SaveChanges();
+            return Inner.Verify(password, hash);
+        }
+
+        public bool NeedsRehash(string hash) => false;
     }
 }
