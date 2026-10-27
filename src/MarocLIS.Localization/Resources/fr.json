@@ -7014,5 +7014,9 @@
     "LicenceRequestDownloaded": "Demande téléchargée. Envoyez ce fichier à votre fournisseur MarocLIS."
   },
   "User_CannotEditOwnSites": "Vous ne pouvez pas modifier vos propres sites. Demandez-le à un autre administrateur.",
-  "User_SiteNotYoursToGrant": "Vous ne pouvez ouvrir à un compte que les sites auxquels vous avez vous-même accès."
+  "User_SiteNotYoursToGrant": "Vous ne pouvez ouvrir à un compte que les sites auxquels vous avez vous-même accès.",
+  "CashSession_OpenOnAnotherSite": "Votre caisse est restée ouverte sur un autre site : clôturez-la sur ce site avant d'ouvrir une caisse ou d'encaisser des espèces ici.",
+  "Payment_MethodNotAllowed": "Ce mode de règlement ne s'enregistre pas au guichet : un abandon de créance ou un règlement de l'organisme passe par sa propre action, avec son droit.",
+  "Reason_TooShort": "Le motif doit compter au moins {0} {0:plural:caractère|caractères}.",
+  "Reason_TooLong": "Le motif ne doit pas dépasser {0} {0:plural:caractère|caractères}."
 }

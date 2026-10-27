@@ -7013,5 +7013,9 @@
     "LicenceRequestDownloaded": "Request downloaded. Send this file to your MarocLIS supplier."
   },
   "User_CannotEditOwnSites": "You cannot change your own sites. Ask another administrator.",
-  "User_SiteNotYoursToGrant": "You can only give an account access to sites you can access yourself."
+  "User_SiteNotYoursToGrant": "You can only give an account access to sites you can access yourself.",
+  "CashSession_OpenOnAnotherSite": "Your till is still open at another site: close it at that site before opening a till or taking cash here.",
+  "Payment_MethodNotAllowed": "This payment method is not recorded at the counter: a write-off or a payer's settlement goes through its own action, with its own right.",
+  "Reason_TooShort": "The reason must be at least {0} {0:plural:character|characters} long.",
+  "Reason_TooLong": "The reason must not exceed {0} {0:plural:character|characters}."
 }

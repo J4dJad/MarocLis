@@ -861,7 +861,10 @@ public sealed class BillingService(
 
         // Every method goes on the operator's shift report: cash for the reconciliation, cheques,
         // cards and transfers for the takings. Only cash requires an open till.
-        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (session, elsewhere) = await TillAsync(ct);
+
+        if (elsewhere is not null && request.Method == PaymentMethod.Cash)
+            return Result.Failure<string>(TillOpenElsewhere());
 
         if (session is null && request.Method == PaymentMethod.Cash)
             return Result.Failure<string>(Error.Validation("Payment_CashRequiresOpenSession"));
@@ -936,7 +939,10 @@ public sealed class BillingService(
 
         var amount = deposit.Remaining;
 
-        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (session, elsewhere) = await TillAsync(ct);
+
+        if (elsewhere is not null && deposit.Method == PaymentMethod.Cash)
+            return Result.Failure(TillOpenElsewhere());
 
         if (session is null && deposit.Method == PaymentMethod.Cash)
             return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
@@ -1027,13 +1033,21 @@ public sealed class BillingService(
         var permitted = guard.Require(Permissions.Billing.RecordPayment);
         if (permitted.IsFailure) return permitted;
 
+        // Only what the counter takes. A write-off or a payer's settlement closed the receivable
+        // with no money in the till, on the cashier's right alone; each has its own guarded action.
+        if (!BillingScreenRules.CounterMethods.Contains(request.Method))
+            return Result.Failure(Error.Validation("Payment_MethodNotAllowed"));
+
         var invoice = await invoices.GetByIdWithDetailsAsync(request.InvoiceId, ct);
         if (invoice is null) return Result.Failure(Error.NotFound("Invoice_NotFound"));
 
         // Looked up for every method, not only cash: the cheque, card and transfer lines of the
         // shift report read the session's counters, and stayed at zero while only cash reached them.
         // Only cash requires an open till.
-        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (session, elsewhere) = await TillAsync(ct);
+
+        if (elsewhere is not null && request.Method == PaymentMethod.Cash)
+            return Result.Failure(TillOpenElsewhere());
 
         if (session is null && request.Method == PaymentMethod.Cash)
             return Result.Failure(Error.Validation("Payment_CashRequiresOpenSession"));
@@ -1184,7 +1198,10 @@ public sealed class BillingService(
         // The till is checked before the payment is touched. The refund used to be applied first,
         // so a refusal here left the tracked payment Refunded in a long-lived context, and the next
         // unrelated save wrote the refund to the database without any money leaving the drawer.
-        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (session, elsewhere) = await TillAsync(ct);
+
+        if (elsewhere is not null && payment.Method == PaymentMethod.Cash)
+            return Result.Failure(TillOpenElsewhere());
 
         if (session is null && payment.Method == PaymentMethod.Cash)
             return Result.Failure(Error.Validation("Payment_CashRefundRequiresOpenSession"));
@@ -1250,7 +1267,8 @@ public sealed class BillingService(
         if (string.IsNullOrWhiteSpace(reason))
             return Result.Failure(Error.Validation("Payment_WithdrawalReasonRequired"));
 
-        var session = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (session, elsewhere) = await TillAsync(ct);
+        if (elsewhere is not null) return Result.Failure(TillOpenElsewhere());
         if (session is null) return Result.Failure(Error.Conflict("CashSession_NotOpen"));
 
         // Never more than the drawer should hold: a mistyped 5 000 for 500 left the expected cash
@@ -1454,13 +1472,32 @@ public sealed class BillingService(
 
     // ---- Till -----------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The operator's open till at the site they work on now, and a till of theirs still open at
+    /// another site. Money taken here never goes into a drawer left open there: its receipts were
+    /// booked to this site's cash account while its count, withdrawals and variance were the other
+    /// site's, and both cash accounts drifted.
+    /// </summary>
+    private async Task<(CashSession? Here, CashSession? Elsewhere)> TillAsync(CancellationToken ct)
+    {
+        var open = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+
+        return open is null ? (null, null)
+             : open.SiteId == currentUser.SiteId ? (open, null)
+             : (null, open);
+    }
+
+    private static Error TillOpenElsewhere() => Error.Conflict("CashSession_OpenOnAnotherSite");
+
     public async Task<Result<Guid>> OpenCashSessionAsync(decimal openingFloat,
                                                           CancellationToken ct = default)
     {
         var permitted = guard.Require(Permissions.Billing.RecordPayment);
         if (permitted.IsFailure) return Result.Failure<Guid>(permitted.FirstError);
 
-        var existing = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (existing, elsewhere) = await TillAsync(ct);
+
+        if (elsewhere is not null) return Result.Failure<Guid>(TillOpenElsewhere());
 
         if (existing is not null)
             return Result.Failure<Guid>(Error.Conflict("CashSession_AlreadyOpenForUser"));
@@ -1485,6 +1522,9 @@ public sealed class BillingService(
         var permitted = guard.Require(Permissions.Billing.View);
         if (permitted.IsFailure) return Result.Failure<CashSessionSummary>(permitted.FirstError);
 
+        var (_, elsewhere) = await TillAsync(ct);
+        if (elsewhere is not null) return Result.Failure<CashSessionSummary>(TillOpenElsewhere());
+
         var summary = await queries.GetCashSessionSummaryAsync(currentUser.UserId, ct);
 
         return summary is null
@@ -1506,7 +1546,8 @@ public sealed class BillingService(
         var permitted = guard.Require(Permissions.Billing.CloseCashSession);
         if (permitted.IsFailure) return Result.Failure<decimal>(permitted.FirstError);
 
-        var open = await queries.GetOpenCashSessionAsync(currentUser.UserId, ct);
+        var (open, elsewhere) = await TillAsync(ct);
+        if (elsewhere is not null) return Result.Failure<decimal>(TillOpenElsewhere());
         if (open is null) return Result.Failure<decimal>(Error.NotFound("CashSession_NotOpen"));
 
         var session = await cashSessions.GetByIdAsync(open.Id, ct);
