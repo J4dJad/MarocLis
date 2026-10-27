@@ -44,8 +44,10 @@ public sealed class WebCashDeskTests : WebFinanceContext
         SignIn(AppLanguage.French, Cashier);
         var summary = Session(opening: 500m, cash: 1450m, withdrawals: 1000m);
         // Only the cashier who opened the till closes it with their count.
-        var cashier = Services.GetRequiredService<MarocLIS.Web.Session.SessionContext>().User.UserId;
-        var session = new CashSession(Guid.NewGuid(), cashier, summary.OpenedAt, 950m);
+        var user = Services.GetRequiredService<MarocLIS.Web.Session.SessionContext>().User;
+        var cashier = user.UserId;
+        // The till of the site the cashier works at: one open at another site is not this desk's.
+        var session = new CashSession(user.SiteId, cashier, summary.OpenedAt, 950m);
         BillingQueries.On(nameof(IBillingQueries.GetCashSessionSummaryAsync), _ => summary)
                       .On(nameof(IBillingQueries.GetOpenCashSessionAsync), _ => session);
         SessionStore.On(nameof(IRepository<CashSession>.GetByIdAsync), _ => session);
