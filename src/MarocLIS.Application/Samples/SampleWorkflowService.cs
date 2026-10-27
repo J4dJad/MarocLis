@@ -579,6 +579,23 @@ public sealed class SampleWorkflowService(
                 continue;
             }
 
+            // Nor one some of whose values a biologist has already released: the analysis is not
+            // « validated » until all its values are, and refusing the tube cancelled it, released
+            // value and all. The release is withdrawn first.
+            if (order is not null && affected.Count > 0)
+            {
+                var orderId = order.Id;
+                var released = await results.ListAsync(
+                    r => r.LabOrderId == orderId
+                         && (r.Status == TestResultStatus.Validated || r.Status == TestResultStatus.Reported), ct);
+
+                if (released.Any(r => affected.Contains(r.LabOrderItemId)))
+                {
+                    problems.Add(Error.Conflict("Sample_RejectHasReleasedValues", sample.Barcode));
+                    continue;
+                }
+            }
+
             // A new draw for a tube whose analyses are all signed would have nothing to run.
             if (request.RequestRecollection && affected.Count == 0)
             {
@@ -654,7 +671,7 @@ public sealed class SampleWorkflowService(
         var now = clock.Now;
 
         var replacement = new Sample(barcode.Value, order.Id, rejected.SpecimenTypeId,
-                                      currentUser.SiteId)
+                                      order.SiteId)
         {
             ContainerTypeId = rejected.ContainerTypeId,
             SequenceInOrder = rejected.SequenceInOrder,
@@ -734,7 +751,7 @@ public sealed class SampleWorkflowService(
             if (parameter.ValueType == ResultValueType.Heading) continue;
 
             await results.AddAsync(
-                new TestResult(order.Id, item.Id, parameter.Id, currentUser.SiteId)
+                new TestResult(order.Id, item.Id, parameter.Id, order.SiteId)
                 {
                     DepartmentId = test.DepartmentId,
                     AppliedDecimals = parameter.Decimals,

@@ -136,6 +136,119 @@ public sealed class Fix87mTests
             "a value re-run while the screen stood open is refused instead of released unseen");
     }
 
+    // ---- A value already released keeps its analysis and its tube -------------------------------
+
+    private static readonly DateTimeOffset Now = new(2026, 10, 27, 10, 0, 0, TimeSpan.FromHours(1));
+
+    /// <summary>A blood count on one tube, its haemoglobin released by a biologist, the rest awaiting.</summary>
+    private static (LabOrder Order, Sample Tube, LabOrderItem Count, List<TestResult> Values) PartlyReleasedCount(bool release = true)
+    {
+        var siteId = Guid.NewGuid();
+        var order = new LabOrder("2610-000087", Guid.NewGuid(), siteId, Now, Guid.NewGuid());
+        var tube = new Sample("T-0087", order.Id, Guid.NewGuid(), siteId);
+        tube.Collect(Now, Guid.NewGuid(), null, null);
+        tube.Receive(Now, Guid.NewGuid(), SampleDefect.None, false, null, null).IsSuccess.Should().BeTrue();
+
+        var count = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine) { SampleId = tube.Id };
+        order.AddItem(count).IsSuccess.Should().BeTrue();
+        count.MarkCollected(Now);
+        count.MarkReceived(Now, null);
+
+        var hb = new TestParameter("HB", new MultilingualText("HB"), ResultValueType.Numeric);
+        var wbc = new TestParameter("GB", new MultilingualText("GB"), ResultValueType.Numeric);
+        var hbValue = new TestResult(order.Id, count.Id, hb.Id, siteId);
+        var wbcValue = new TestResult(order.Id, count.Id, wbc.Id, siteId);
+        hbValue.EnterNumeric(hb, 13.5m, Now, Guid.NewGuid()).IsSuccess.Should().BeTrue();
+        wbcValue.EnterNumeric(wbc, 7.5m, Now, Guid.NewGuid()).IsSuccess.Should().BeTrue();
+        hbValue.TechnicallyValidate(Now, Guid.NewGuid()).IsSuccess.Should().BeTrue();
+        if (release) hbValue.BiologicallyValidate(Now, Guid.NewGuid(), false, true).IsSuccess.Should().BeTrue();
+
+        return (order, tube, count, [hbValue, wbcValue]);
+    }
+
+    private static IRepository<TestResult> Results(List<TestResult> values) => Stub.Of<IRepository<TestResult>>(new()
+    {
+        ["ListAsync"] = a => Task.FromResult<IReadOnlyList<TestResult>>(
+            [.. values.Where(((Expression<Func<TestResult, bool>>)a![0]!).Compile())])
+    });
+
+    [Fact]
+    public async Task AnAnalysisOrAFile_WithAReleasedValue_CannotBeCancelled()
+    {
+        var (order, _, count, values) = PartlyReleasedCount();
+        var service = new OrderAmendmentService(
+            Stub.Of<IRepository<LabOrder>>(new() { ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<LabOrder?>(order) }),
+            Stub.Of<IRepository<Patient>>(), Stub.Of<IRepository<Sample>>(), null!, Stub.Of<IOrderQueries>(),
+            Stub.Of<IUnitOfWork>(), Stub.Of<IPermissionGuard>(), Stub.Of<ICurrentUser>(), Stub.Of<IDataAccessAuditor>(),
+            Stub.Of<IClock>(new() { ["get_Now"] = _ => Now }), Results(values));
+
+        count.Status.Should().NotBe(LabOrderItemStatus.Validated, "only one of its values is released");
+
+        (await service.CancelItemAsync(order.Id, count.Id, "Erreur de saisie"))
+            .FirstError.ResourceKey.Should().Be("Order_ItemHasReleasedValues");
+        (await service.CancelOrderAsync(order.Id, "Erreur de saisie"))
+            .FirstError.ResourceKey.Should().Be("Order_HasValidatedItemsCannotCancel");
+        count.IsCancelled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ATube_WithAReleasedValue_CannotBeRejected()
+    {
+        var (order, tube, count, values) = PartlyReleasedCount();
+        var service = new SampleWorkflowService(
+            Stub.Of<IRepository<Sample>>(new() { ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<Sample?>(tube) }),
+            Stub.Of<IRepository<LabOrder>>(new() { ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<LabOrder?>(order) }),
+            Stub.Of<IRepository<AnalysisTest>>(), Stub.Of<IRepository<Patient>>(), Results(values),
+            Stub.Of<ISampleQueries>(), Stub.Of<ISequenceAllocator>(), Stub.Of<IUnitOfWork>(), Stub.Of<IPermissionGuard>(),
+            Stub.Of<ICurrentUser>(), Stub.Of<IDataAccessAuditor>(), Stub.Of<IClock>(new() { ["get_Now"] = _ => Now }),
+            new OrderRegistrationOptions());
+
+        var outcome = await service.RejectAsync([new RejectSampleRequest(tube.Id, SampleRejectionReason.Haemolysed, null, true)]);
+
+        var problems = outcome.IsFailure ? outcome.Errors : outcome.Value.Problems;
+        problems.Select(e => e.ResourceKey).Should().Contain("Sample_RejectHasReleasedValues");
+        tube.Status.Should().NotBe(SampleStatus.Rejected);
+        count.IsCancelled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AReplacementTube_AndItsRows_BelongToTheOrdersSite_NotTheOperators()
+    {
+        var (order, tube, count, _) = PartlyReleasedCount(release: false);
+        var analysis = new AnalysisTest("NFS", new MultilingualText("NFS"), Guid.NewGuid(), Guid.NewGuid());
+        analysis.AddParameter(new TestParameter("HB", new MultilingualText("HB"), ResultValueType.Numeric));
+        typeof(LabOrderItem).GetProperty(nameof(LabOrderItem.AnalysisTestId))!.SetValue(count, analysis.Id);
+
+        var centralLab = Guid.NewGuid();
+        var added = new List<object>();
+        var service = new SampleWorkflowService(
+            Stub.Of<IRepository<Sample>>(new()
+            {
+                ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<Sample?>(tube),
+                ["AddAsync"] = a => { added.Add(a![0]!); return Task.CompletedTask; }
+            }),
+            Stub.Of<IRepository<LabOrder>>(new() { ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<LabOrder?>(order) }),
+            Stub.Of<IRepository<AnalysisTest>>(new() { ["GetByIdWithDetailsAsync"] = _ => Task.FromResult<AnalysisTest?>(analysis) }),
+            Stub.Of<IRepository<Patient>>(),
+            Stub.Of<IRepository<TestResult>>(new()
+            {
+                ["ListAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>([]),
+                ["AddAsync"] = a => { added.Add(a![0]!); return Task.CompletedTask; }
+            }),
+            Stub.Of<ISampleQueries>(),
+            Stub.Of<ISequenceAllocator>(new() { ["NextAsync"] = _ => Task.FromResult(Result.Success("T-0088")) }),
+            Stub.Of<IUnitOfWork>(), Stub.Of<IPermissionGuard>(),
+            Stub.Of<ICurrentUser>(new() { ["get_SiteId"] = _ => centralLab }),
+            Stub.Of<IDataAccessAuditor>(), Stub.Of<IClock>(new() { ["get_Now"] = _ => Now }),
+            new OrderRegistrationOptions());
+
+        var outcome = await service.RejectAsync([new RejectSampleRequest(tube.Id, SampleRejectionReason.Haemolysed, null, true)]);
+
+        outcome.Value.ReplacementLabels.Should().ContainSingle();
+        added.OfType<Sample>().Single().SiteId.Should().Be(order.SiteId, "the collection centre's worklist shows it");
+        added.OfType<TestResult>().Should().NotBeEmpty().And.OnlyContain(r => r.SiteId == order.SiteId);
+    }
+
     private class Stub : DispatchProxy
     {
         private Dictionary<string, Func<object?[]?, object?>> _handlers = [];

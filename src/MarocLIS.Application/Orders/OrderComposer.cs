@@ -388,7 +388,7 @@ public sealed class OrderComposer(
             if (barcode.IsFailure) continue;
 
             var sample = new Sample(barcode.Value, order.Id, group.Key.SpecimenTypeId,
-                                    currentUser.SiteId)
+                                    order.SiteId)
             {
                 ContainerTypeId = group.Key.ContainerTypeId,
                 SequenceInOrder = sequence,
@@ -471,7 +471,7 @@ public sealed class OrderComposer(
                 if (parameter.ValueType == ResultValueType.Heading) continue;
 
                 await results.AddAsync(
-                    new TestResult(order.Id, item.Id, parameter.Id, currentUser.SiteId)
+                    new TestResult(order.Id, item.Id, parameter.Id, order.SiteId)
                     {
                         DepartmentId = analysis.Test.DepartmentId,
                         AppliedDecimals = parameter.Decimals,

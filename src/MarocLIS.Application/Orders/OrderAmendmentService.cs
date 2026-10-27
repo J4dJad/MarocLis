@@ -473,6 +473,12 @@ public sealed class OrderAmendmentService(
 
         var code = item.AnalysisTest?.Code ?? item.AnalysisTestId.ToString();
 
+        // An analysis is « validated » only once all its values are; a haemoglobin a biologist has
+        // released out of an 18-line blood count is released all the same, and cancelling the
+        // count made it disappear from the file. The release is withdrawn first.
+        if ((await ReleasedValuesAsync(order.Id, ct)).Any(r => r.LabOrderItemId == itemId))
+            return Result.Failure(Error.Conflict("Order_ItemHasReleasedValues"));
+
         var cancelled = order.CancelItem(itemId, clock.Now, currentUser.UserId, reason.Trim());
         if (cancelled.IsFailure) return cancelled;
 
@@ -505,6 +511,11 @@ public sealed class OrderAmendmentService(
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure(Error.NotFound("Order_NotFound", orderId));
 
+        // Refused once any value is released, not only once a whole analysis is.
+        var live = order.Items.Where(i => !i.IsCancelled).Select(i => i.Id).ToHashSet();
+        if ((await ReleasedValuesAsync(order.Id, ct)).Any(r => live.Contains(r.LabOrderItemId)))
+            return Result.Failure(Error.Conflict("Order_HasValidatedItemsCannotCancel"));
+
         var cancelled = order.Cancel(clock.Now, currentUser.UserId, reason.Trim());
         if (cancelled.IsFailure) return cancelled;
 
@@ -530,6 +541,11 @@ public sealed class OrderAmendmentService(
 
         return Result.Success();
     }
+
+    /// <summary>The order's values a biologist has released (validated or reported).</summary>
+    private Task<IReadOnlyList<TestResult>> ReleasedValuesAsync(Guid orderId, CancellationToken ct) =>
+        results.ListAsync(r => r.LabOrderId == orderId
+                               && (r.Status == TestResultStatus.Validated || r.Status == TestResultStatus.Reported), ct);
 
     // ---- Repeating -----------------------------------------------------------------------------
 

@@ -7018,5 +7018,7 @@
   "CashSession_OpenOnAnotherSite": "Votre caisse est restée ouverte sur un autre site : clôturez-la sur ce site avant d'ouvrir une caisse ou d'encaisser des espèces ici.",
   "Payment_MethodNotAllowed": "Ce mode de règlement ne s'enregistre pas au guichet : un abandon de créance ou un règlement de l'organisme passe par sa propre action, avec son droit.",
   "Reason_TooShort": "Le motif doit compter au moins {0} {0:plural:caractère|caractères}.",
-  "Reason_TooLong": "Le motif ne doit pas dépasser {0} {0:plural:caractère|caractères}."
+  "Reason_TooLong": "Le motif ne doit pas dépasser {0} {0:plural:caractère|caractères}.",
+  "Order_ItemHasReleasedValues": "Des résultats de cette analyse sont déjà validés par un biologiste : retirez d'abord leur validation, ou émettez un compte rendu rectifié.",
+  "Sample_RejectHasReleasedValues": "Le tube {0} porte des résultats déjà validés par un biologiste : il ne peut pas être refusé. Retirez d'abord leur validation."
 }
