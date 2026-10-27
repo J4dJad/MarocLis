@@ -546,14 +546,21 @@ public interface IQualityQueries
                                                          CancellationToken ct = default);
 
     /// <summary>
-    /// Flags the unreleased patient results that a rejected run covers, and returns them. Those
-    /// results then cannot be validated without a justified override. Returned as entities so they
+    /// Flags the patient results that a rejected run covers, and returns them: those not yet
+    /// validated then cannot be validated without a justified override; those already validated or
+    /// released are flagged for the look-back, never withdrawn. Returned as entities so they
     /// are tracked on the caller's context, whose save records the flags: counted on a context of
     /// its own (the workstation's isolated queries), the flags were never saved.
     /// </summary>
     Task<IReadOnlyList<MarocLIS.Domain.Results.TestResult>> FlagResultsCoveredByRejectedQcAsync(
         IReadOnlyList<Guid> testParameterIds, Guid instrumentId, Guid qcRunId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// How many patient results a rejected run covers that were already biologically validated or
+    /// reported: the look-back its review owes.
+    /// </summary>
+    Task<int> CountReleasedResultsCoveredAsync(Guid qcRunId, CancellationToken ct = default);
 
     Task<string?> GetParameterCodeAsync(Guid testParameterId, CancellationToken ct = default);
 

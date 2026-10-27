@@ -120,6 +120,10 @@ public sealed class PluralTextTests
         Fr("Catalog.NomenclatureInUseNotice", 1).Should().EndWith("tant qu'il s'y réfère.");
         Fr("Test_HasOpenItemsCannotDeactivate", 2).Should().StartWith("2 analyses en cours attendent encore un résultat");
         Fr("Qc_PatientResultsFlagged", 1).Should().StartWith("1 résultat patient non diffusé a été signalé : sa validation");
+        Fr("Qc_ReleasedResultsCovered", 1).Should().StartWith("1 résultat déjà validé ou diffusé est couvert par ce contrôle rejeté : il est signalé pour réexamen, sans être retiré,");
+        En("Qc_ReleasedResultsCovered", 2).Should().StartWith("2 results already validated or released are covered by this rejected control: they are flagged");
+        Fr("Qc.AffectedWithReleased", 5, 1).Should().Be("5 dont 1 déjà validé");
+        Fr("Qc.AffectedWithReleased", 5, 2).Should().Be("5 dont 2 déjà validés");
         Fr("Quality.RuleCount", 1).Should().Be("1 règle active.");
         Fr("StorageLocations.DeactivateConfirm", "Frigo", 1).Should().EndWith("1 tube rangé ici garde ce lieu.");
         En("StorageLocations.DeactivateConfirm", "Fridge", 5).Should().EndWith("5 tubes stored there keep this location.");

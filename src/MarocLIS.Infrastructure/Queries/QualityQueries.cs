@@ -228,7 +228,8 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
                       x.Result.WasOverridden,
                       // How many patient results this rejection has already flagged — the figure
                       // that tells the reviewer how urgent the file is.
-                      db.TestResults.Count(tr => tr.CoveringQcRunId == x.Result.QcRunId)))
+                      db.TestResults.Count(tr => tr.CoveringQcRunId == x.Result.QcRunId),
+                      db.TestResults.Count(tr => tr.CoveringQcRunId == x.Result.QcRunId && tr.ValidatedAt != null)))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<decimal>> GetAcceptedValuesAsync(
@@ -255,7 +256,7 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
     }
 
     /// <summary>
-    /// Flags unreleased patient results that a rejected control run covers.
+    /// Flags the patient results that a rejected control run covers.
     /// <para>
     /// "Covers" means: the same parameter, the same instrument, produced since the last accepted
     /// control for that pair. Those are the results whose validity the rejected control calls into
@@ -263,8 +264,11 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
     /// <see cref="TestResult.BiologicallyValidate"/> refuse them without a justified override.
     /// </para>
     /// <para>
-    /// Already-released results are deliberately not touched: they are out of the laboratory's
-    /// hands, and correcting them is the amended-report path, not a flag.
+    /// Results already biologically validated or reported are flagged too, and stay as they are:
+    /// they are not withdrawn — a released figure is corrected through the amended report — but
+    /// they are counted apart on the review (<see cref="QcReviewRow.AffectedReleasedCount"/>), and
+    /// their review opens a non-conformity for the look-back. Leaving them out made a rejection
+    /// after a morning's validations count nothing, and the review asked an optional question.
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<TestResult>> FlagResultsCoveredByRejectedQcAsync(
@@ -296,8 +300,6 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
             var affected = await db.TestResults
                 .Where(r => r.InstrumentId == instrumentId
                             && r.TestParameterId == parameterId
-                            && r.Status != TestResultStatus.Reported
-                            && r.ValidatedAt == null
                             && (lastAccepted == null || r.MeasuredAt >= lastAccepted))
                 .ToListAsync(ct);
 
@@ -312,6 +314,9 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 
         return flagged;
     }
+
+    public Task<int> CountReleasedResultsCoveredAsync(Guid qcRunId, CancellationToken ct = default) =>
+        db.TestResults.AsNoTracking().CountAsync(r => r.CoveringQcRunId == qcRunId && r.ValidatedAt != null, ct);
 
     public Task<string?> GetParameterCodeAsync(Guid testParameterId, CancellationToken ct = default) =>
         db.TestParameters.AsNoTracking()

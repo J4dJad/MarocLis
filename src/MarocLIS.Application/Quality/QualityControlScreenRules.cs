@@ -241,13 +241,28 @@ public static class QualityControlScreenRules
     public static string Affected(QcReviewRow row) =>
         row.AffectedResultCount > 0 ? row.AffectedResultCount.ToString(CultureInfo.InvariantCulture) : string.Empty;
 
+    /// <summary>
+    /// The patient results a rejection covers, with those already validated or released said apart
+    /// (« 5 dont 2 déjà validés ») — the ones a look-back is owed for.
+    /// </summary>
+    public static string Affected(QcReviewRow row, ScreenText text)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(text);
+
+        return row.AffectedReleasedCount > 0
+            ? text("Qc.AffectedWithReleased", row.AffectedResultCount, row.AffectedReleasedCount)
+            : Affected(row);
+    }
+
     /// <summary>The patient results the rejections hold back, said where the reviewer looks first; null when none.</summary>
     public static string? Blocked(IEnumerable<QcReviewRow> pending, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(pending);
         ArgumentNullException.ThrowIfNull(text);
 
-        var blocked = pending.Sum(r => r.AffectedResultCount);
+        // Held back: those not yet validated. The ones already validated are a look-back, not a block.
+        var blocked = pending.Sum(r => r.AffectedResultCount - r.AffectedReleasedCount);
         return blocked > 0 ? text("QualityHr.Qc.Blocked", blocked) : null;
     }
 
@@ -265,8 +280,9 @@ public static class QualityControlScreenRules
     }
 
     /// <summary>
-    /// A rejection that held back patient results opens a non-conformity without asking: a departure
-    /// has demonstrably occurred. Otherwise the reviewer is asked.
+    /// A rejection that held back patient results, or covers results already validated or released,
+    /// opens a non-conformity without asking: a departure has demonstrably occurred. Otherwise the
+    /// reviewer is asked. The service opens it for released results whatever the answer.
     /// </summary>
     public static bool OpensNonConformityWithoutAsking(QcReviewRow row) => row.AffectedResultCount > 0;
 

@@ -5497,6 +5497,8 @@
   },
 
   "Qc": {
+    "AffectedResults": "Résultats patients concernés",
+    "AffectedWithReleased": "{0} dont {1} {1:plural:déjà validé|déjà validés}",
     "ChartNoTarget": "Cible non établie",
     "Overridden": "dérogation",
     "EvaluationStopped": "Évaluation du lot {0} arrêtée : les contrôles transmis reviennent au lot en cours.",
@@ -6012,6 +6014,7 @@
   "Qc_ResultNotFound": "Point de contrôle introuvable.",
   "Qc_NotEnoughPointsForStatistics": "Il faut au moins {0} points acceptés pour établir les limites du laboratoire ; {1} {1:plural:disponible|disponibles} sur la période.",
   "Qc_PatientResultsFlagged": "{0} {0:plural:résultat patient non diffusé a été signalé : sa|résultats patient non diffusés ont été signalés : leur} validation exigera une dérogation motivée.",
+  "Qc_ReleasedResultsCovered": "{0} {0:plural:résultat déjà validé ou diffusé est couvert|résultats déjà validés ou diffusés sont couverts} par ce contrôle rejeté : {0:plural:il est signalé|ils sont signalés} pour réexamen, sans être {0:plural:retiré|retirés}, et la revue ouvrira une non-conformité.",
 
   "Nc_ActionRequiredBeforeClosure": "Au moins une action doit être enregistrée avant de clôturer la fiche.",
   "Nc_AllActionsMustBeCompleted": "Toutes les actions doivent être soldées avant la clôture.",

@@ -402,7 +402,7 @@ public sealed class QualityControlView : LocalizedView
             _review.Column("value").HeaderText = T("Result.Value");
             _review.Column("z").HeaderText = T("Quality.ZScore");
             _review.Column("rules").HeaderText = T("QualityHr.Qc.ViolatedRules");
-            _review.Column("affected").HeaderText = T("NonConformity.AffectedResults");
+            _review.Column("affected").HeaderText = T("Qc.AffectedResults");
         }
 
         if (_rows.Count > 0)
@@ -626,7 +626,7 @@ public sealed class QualityControlView : LocalizedView
                 QualityControlScreenRules.Value(row),
                 QualityControlScreenRules.ZScore(row.ZScore),
                 WestgardRuleNames.Describe(row.ViolatedRules),
-                QualityControlScreenRules.Affected(row));
+                QualityControlScreenRules.Affected(row, T));
 
             _review.Rows[index].Tag = row;
         }

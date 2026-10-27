@@ -151,6 +151,44 @@ public sealed class ReviewFixesClinical2Tests
     }
 
     [Fact]
+    public async Task ARejectedControl_SaysApartTheResultsAlreadyValidated_AndItsReviewOpensANonConformityWhateverIsAnswered()
+    {
+        var qc = new QcBench();
+        var target = qc.Target(Guid.NewGuid(), Guid.NewGuid());
+        var parameter = new TestParameter("CRP", new MultilingualText("CRP"), ResultValueType.Numeric);
+
+        TestResult Covered(bool validated)
+        {
+            var result = new TestResult(Guid.NewGuid(), Guid.NewGuid(), parameter.Id, Guid.NewGuid());
+            result.EnterNumeric(parameter, 12m, Now, Guid.NewGuid());
+            if (!validated) return result;
+            result.TechnicallyValidate(Now, Guid.NewGuid());
+            result.BiologicallyValidate(Now, Guid.NewGuid(), false, true).IsSuccess.Should().BeTrue();
+            return result;
+        }
+
+        // In the window: one result awaiting validation, two already validated.
+        qc.Covered = [Covered(false), Covered(true), Covered(true)];
+
+        var outcome = await qc.Service.SubmitAsync([new QcEntry(target.Id, 140m)]);
+
+        outcome.Value.Warnings.Should().Contain(e => e.ResourceKey == "Qc_PatientResultsFlagged"
+                                                     && Equals(e.Args[0], 1));
+        outcome.Value.Warnings.Should().Contain(e => e.ResourceKey == "Qc_ReleasedResultsCovered"
+                                                     && Equals(e.Args[0], 2));
+
+        // The reviewer answers « no » to the question: a departure on released results is recorded anyway.
+        qc.ReleasedCovered = 2;
+        var rejected = qc.Points.Single();
+        (await qc.Service.ReviewAsync(rejected.Id, "Recalibration faite, contrôle repassé", openNonConformity: false))
+            .IsSuccess.Should().BeTrue();
+
+        var opened = qc.NonConformities.Should().ContainSingle().Subject;
+        opened.AffectedReleasedResults.Should().BeTrue();
+        rejected.NonConformityId.Should().Be(opened.Id);
+    }
+
+    [Fact]
     public async Task C7_RejectedControls_FlagPatientResultsOnTheirOwnAnalyser()
     {
         var qc = new QcBench();
@@ -674,6 +712,15 @@ public sealed class ReviewFixesClinical2Tests
         public List<(IReadOnlyList<Guid> Parameters, Guid Instrument)> FlagCalls { get; } = [];
         public QualityControlService Service { get; }
 
+        /// <summary>What a flagging call finds in the window; one result awaiting validation unless set.</summary>
+        public List<TestResult>? Covered { get; set; }
+
+        /// <summary>The results already validated or released a run covers, as the review reads them.</summary>
+        public int ReleasedCovered { get; set; }
+
+        public List<QcResult> Points { get; } = [];
+        public List<NonConformity> NonConformities { get; } = [];
+
         public QcBench()
         {
             var self = this;
@@ -683,9 +730,16 @@ public sealed class ReviewFixesClinical2Tests
                 {
                     ["GetByIdAsync"] = args => Task.FromResult(self._targets.GetValueOrDefault((Guid)args![0]!))
                 }),
-                Stub.Of<IRepository<QcResult>>(),
+                Stub.Of<IRepository<QcResult>>(new()
+                {
+                    ["AddAsync"] = args => { self.Points.Add((QcResult)args![0]!); return Task.CompletedTask; },
+                    ["GetByIdAsync"] = args => Task.FromResult(self.Points.FirstOrDefault(p => p.Id == (Guid)args![0]!))
+                }),
                 Stub.Of<IRepository<QcMaterial>>(),
-                Stub.Of<IRepository<NonConformity>>(),
+                Stub.Of<IRepository<NonConformity>>(new()
+                {
+                    ["AddAsync"] = args => { self.NonConformities.Add((NonConformity)args![0]!); return Task.CompletedTask; }
+                }),
                 Stub.Of<IQualityQueries>(new()
                 {
                     ["GetZScoreHistoryAsync"] = _ => Task.FromResult<IReadOnlyList<QcPoint>>([]),
@@ -693,10 +747,14 @@ public sealed class ReviewFixesClinical2Tests
                     {
                         self.FlagCalls.Add(([.. (IEnumerable<Guid>)args![0]!], (Guid)args[1]!));
                         return Task.FromResult<IReadOnlyList<TestResult>>(
-                            [new TestResult(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
-                    }
+                            self.Covered ?? [new TestResult(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
+                    },
+                    ["CountReleasedResultsCoveredAsync"] = _ => Task.FromResult(self.ReleasedCovered)
                 }),
-                Stub.Of<ISequenceAllocator>(),
+                Stub.Of<ISequenceAllocator>(new()
+                {
+                    ["NextAsync"] = _ => Task.FromResult(Result.Success("NC-2026-00001"))
+                }),
                 Stub.Of<IUnitOfWork>(),
                 Stub.Of<IPermissionGuard>(),
                 CurrentUser(),

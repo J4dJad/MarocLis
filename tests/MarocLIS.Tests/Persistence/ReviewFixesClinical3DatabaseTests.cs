@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Equipment;
 using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Quality;
@@ -97,6 +98,79 @@ public sealed class ReviewFixesClinical3DatabaseTests(Clinical3ScratchDatabase d
         var item = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine);
         order.AddItem(item);
         return (order, item);
+    }
+
+    [SqlServerFact]
+    public async Task ARejectedControl_LooksBackAtTheResultsAlreadyValidatedOrReleased_FlagsThem_AndCountsThemApart()
+    {
+        var siteId = Guid.NewGuid();
+        var instrument = new Instrument(Unique("AN"), new MultilingualText("Analyseur"), EquipmentKind.Analyser, siteId);
+        var crp = Parameter(Unique("CRP"));
+        var material = new QcMaterial(Unique("Q"), new MultilingualText("Contrôle"), QcLevel.Normal, DateOnly.FromDateTime(Now.Date).AddDays(90));
+        var target = new QcTarget(material.Id, crp.Id, instrument.Id) { AssignedMean = 10m, AssignedSd = 1m };
+
+        // Last accepted control at 08:00; patient CRPs measured at 09:00, validated at 10:00.
+        var at8 = new DateTimeOffset(Now.Date.AddHours(8), Now.Offset);
+        var at9 = at8.AddHours(1);
+        var accepted = new QcResult(target.Id, crp.Id, instrument.Id, siteId, 10m, at8, Guid.NewGuid());
+        accepted.ApplyEvaluation(WestgardEvaluation.InControl);
+
+        var (order, item) = Order(Guid.NewGuid(), siteId, at9);
+        var waitingItem = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine);
+        var releasedItem = new LabOrderItem(Guid.NewGuid(), OrderPriority.Routine);
+        order.AddItem(waitingItem);
+        order.AddItem(releasedItem);
+        var pending = Entered(order, item, crp, 12m, at9, instrument.Id);
+        var waiting = Entered(order, waitingItem, crp, 13m, at9, instrument.Id);
+        waiting.TechnicallyValidate(at9, Guid.NewGuid());
+        waiting.BiologicallyValidate(at9.AddHours(1), Guid.NewGuid(), false, true).IsSuccess.Should().BeTrue();
+        var released = Entered(order, releasedItem, crp, 14m, at9, instrument.Id);
+        released.TechnicallyValidate(at9, Guid.NewGuid());
+        released.BiologicallyValidate(at9.AddHours(1), Guid.NewGuid(), false, true).IsSuccess.Should().BeTrue();
+        released.MarkReported();
+
+        // At 11:00 the control is rejected.
+        var runId = Guid.NewGuid();
+        var rejected = new QcResult(target.Id, crp.Id, instrument.Id, siteId, 14m, at9.AddHours(2), Guid.NewGuid())
+        {
+            QcRunId = runId,
+            ZScore = 4m
+        };
+        rejected.ApplyEvaluation(WestgardEvaluator.Evaluate(target.ActiveRules, [new QcPoint(4m, rejected.MeasuredAt, runId, QcLevel.Normal)], []));
+        rejected.IsRejected.Should().BeTrue();
+
+        await using (var context = database.Context())
+        {
+            context.Instruments.Add(instrument);
+            context.TestParameters.Add(crp);
+            context.QcMaterials.Add(material);
+            context.QcTargets.Add(target);
+            context.QcResults.AddRange(accepted, rejected);
+            context.LabOrders.Add(order);
+            context.TestResults.AddRange(pending, waiting, released);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = database.Context())
+        {
+            var flagged = await new QualityQueries(context).FlagResultsCoveredByRejectedQcAsync([crp.Id], instrument.Id, runId);
+            await context.SaveChangesAsync();
+
+            flagged.Should().HaveCount(3, "the results already validated or released are in question too");
+        }
+
+        await using var read = database.Context();
+        var stored = await read.TestResults.AsNoTracking().Where(r => r.LabOrderId == order.Id).ToListAsync();
+        stored.Should().OnlyContain(r => r.Flags.HasFlag(ResultFlag.QcOutOfControl) && r.CoveringQcRunId == runId);
+        stored.Single(r => r.Id == released.Id).Status.Should().Be(TestResultStatus.Reported, "nothing is withdrawn silently");
+        stored.Single(r => r.Id == waiting.Id).Status.Should().Be(TestResultStatus.Validated);
+
+        var queries = new QualityQueries(read);
+        (await queries.CountReleasedResultsCoveredAsync(runId)).Should().Be(2);
+
+        var row = (await queries.GetPendingQcReviewAsync(siteId)).Should().ContainSingle().Subject;
+        row.AffectedResultCount.Should().Be(3);
+        row.AffectedReleasedCount.Should().Be(2);
     }
 
     [SqlServerFact]

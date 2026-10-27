@@ -5496,6 +5496,8 @@
   },
 
   "Qc": {
+    "AffectedResults": "Patient results affected",
+    "AffectedWithReleased": "{0}, {1} already validated",
     "ChartNoTarget": "No target established",
     "Overridden": "override",
     "EvaluationStopped": "Evaluation of lot {0} stopped: transmitted controls go back to the lot in use.",
@@ -6011,6 +6013,7 @@
   "Qc_ResultNotFound": "Control point not found.",
   "Qc_NotEnoughPointsForStatistics": "At least {0} accepted points are needed to establish the laboratory limits; {1} available in the period.",
   "Qc_PatientResultsFlagged": "{0} unreleased patient {0:plural:result was|results were} flagged: validating {0:plural:it|them} will require a justified override.",
+  "Qc_ReleasedResultsCovered": "{0} {0:plural:result already validated or released is|results already validated or released are} covered by this rejected control: {0:plural:it is|they are} flagged for a look-back, not withdrawn, and the review will open a non-conformity.",
 
   "Nc_ActionRequiredBeforeClosure": "At least one action must be recorded before the record can be closed.",
   "Nc_AllActionsMustBeCompleted": "All actions must be completed before closure.",

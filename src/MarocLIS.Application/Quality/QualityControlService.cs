@@ -124,7 +124,10 @@ public sealed record QcReviewRow(
     DateTimeOffset MeasuredAt,
     WestgardRule ViolatedRules,
     bool WasOverridden,
-    int AffectedResultCount);
+    int AffectedResultCount,
+    // Of those, the results already biologically validated or reported when the control was
+    // rejected: a look-back, and a non-conformity, are owed for them.
+    int AffectedReleasedCount = 0);
 
 /// <summary>
 /// Internal quality control.
@@ -304,10 +307,16 @@ public sealed class QualityControlService(
                                     evaluated.Evaluations[result.Id].ViolationKeys));
         }
 
-        var flagged = evaluated.FlaggedResults.Count;
+        // The results not yet validated are held back; those a biologist had already validated or
+        // released are flagged for a look-back, never withdrawn silently, and owe a non-conformity.
+        var released = evaluated.FlaggedResults.Count(r => r.IsValidated);
+        var flagged = evaluated.FlaggedResults.Count - released;
 
         if (flagged > 0)
             problems.Add(Error.Regulatory("Qc_PatientResultsFlagged", flagged));
+
+        if (released > 0)
+            problems.Add(Error.Regulatory("Qc_ReleasedResultsCovered", released));
 
         unitOfWork.AuditReason = $"Saisie du contrôle interne — série {runId:N}";
         await unitOfWork.SaveChangesAsync(ct);
@@ -399,7 +408,13 @@ public sealed class QualityControlService(
         var reviewed = result.Review(clock.Now, currentUser.UserId, correctiveAction);
         if (reviewed.IsFailure) return reviewed;
 
-        if (openNonConformity && result.NonConformityId is null)
+        // Results already validated or released under this control: the departure is established,
+        // and the non-conformity is opened whatever the reviewer answered.
+        var released = result is { IsRejected: true, QcRunId: { } runId }
+            ? await queries.CountReleasedResultsCoveredAsync(runId, ct)
+            : 0;
+
+        if ((openNonConformity || released > 0) && result.NonConformityId is null)
         {
             await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
@@ -427,7 +442,8 @@ public sealed class QualityControlService(
                 InstrumentId = result.InstrumentId,
                 ReagentLotId = result.ReagentLotId,
                 ImmediateAction = new MultilingualText(correctiveAction),
-                DueDate = clock.Today.AddDays(14)
+                DueDate = clock.Today.AddDays(14),
+                AffectedReleasedResults = released > 0
             };
 
             await nonConformities.AddAsync(nonConformity, ct);

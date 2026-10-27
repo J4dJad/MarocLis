@@ -192,7 +192,7 @@
                             <th class="num">@Texts["Result.Value"]</th>
                             <th class="num">Z</th>
                             <th>@Texts["QualityHr.Qc.ViolatedRules"]</th>
-                            <th class="num">@Texts["NonConformity.AffectedResults"]</th>
+                            <th class="num">@Texts["Qc.AffectedResults"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -208,7 +208,7 @@
                                 <td class="num mono strong">@QualityControlScreenRules.Value(row, Texts.Culture)</td>
                                 <td class="num mono strong">@QualityControlScreenRules.ZScore(row.ZScore, Texts.Culture)</td>
                                 <td class="small strong mono" dir="ltr">@WestgardRuleNames.Describe(row.ViolatedRules)</td>
-                                <td class="num mono @(row.AffectedResultCount > 0 ? "strong" : null)">@QualityControlScreenRules.Affected(row)</td>
+                                <td class="num mono @(row.AffectedResultCount > 0 ? "strong" : null)">@QualityControlScreenRules.Affected(row, Texts.T)</td>
                             </tr>
                         }
                     </tbody>
