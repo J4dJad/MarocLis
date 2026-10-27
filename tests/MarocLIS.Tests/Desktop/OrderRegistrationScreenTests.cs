@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using MarocLIS.Application.Catalog;
 using MarocLIS.Application.Orders;
@@ -143,7 +144,7 @@ public sealed class OrderRegistrationScreenTests
         {
             string Text(string key, params object?[] args) => localizer.Format(language, key, args);
 
-            var lines = OrderRegistrationRules.PricingLines(Text, "2610-000014", pricing, m => $"{m.Amount:0.00} DH");
+            var lines = OrderRegistrationRules.PricingLines(Text, "2610-000014", pricing, m => string.Create(CultureInfo.InvariantCulture, $"{m.Amount:0.00} DH"));
 
             lines.Should().NotContain(l => l.Contains("[[", StringComparison.Ordinal), $"every key exists in {language}");
             lines[^1].Should().Be(Text("OrderEntry.ToCollect", "27.00 DH"));
@@ -152,12 +153,12 @@ public sealed class OrderRegistrationScreenTests
         }
 
         var french = OrderRegistrationRules.PricingLines((k, a) => localizer.Format(AppLanguage.French, k, a), "2610-000014",
-                                                         pricing, m => $"{m.Amount:0.00} DH");
+                                                         pricing, m => string.Create(CultureInfo.InvariantCulture, $"{m.Amount:0.00} DH"));
         french[^1].Should().Be("À encaisser au guichet : 27.00 DH — aucun règlement n'est encore enregistré");
 
         var free = pricing with { DueAtCounter = Money.Zero };
         OrderRegistrationRules.PricingLines((k, a) => localizer.Format(AppLanguage.French, k, a), "2610-000014", free,
-                                            m => $"{m.Amount:0.00} DH")[^1]
+                                            m => string.Create(CultureInfo.InvariantCulture, $"{m.Amount:0.00} DH"))[^1]
             .Should().Be("Rien à encaisser au guichet");
     }
 }
