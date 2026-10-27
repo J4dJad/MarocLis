@@ -93,6 +93,64 @@ public sealed class ReviewFixesResultatsTests
         results[1].HasValue.Should().BeFalse();
     }
 
+    // ---- Comment-only edits in the grid ------------------------------------------------------
+
+    [Fact]
+    public async Task AddingOnlyACommentToAnAnalyserValue_KeepsTheValue_ItsEntryTime_AndItsAnalyserTrace()
+    {
+        var bench = new Bench();
+        var wbc = Numeric("WBC");
+        wbc.Decimals = 0;
+        var result = bench.AddAnalysis(wbc).Single();
+        var enteredAt = Now.AddHours(-2);
+        result.EnterNumeric(wbc, 7500m, enteredAt, Guid.NewGuid(), fromInstrument: true, rawValue: "7500")
+              .IsSuccess.Should().BeTrue();
+
+        var rows = (await bench.Service.OpenAsync(bench.Order.Id)).Value.Rows;
+        var row = rows.Single(r => r.TestResultId == result.Id);
+        row.CurrentValue.Should().Be("7500", "the value box is typed into again: no thousands separator");
+
+        // The box is left as loaded; only the comment changes.
+        var entries = ResultEntryRules.ChangedEntries(rows, _ => row.CurrentValue, _ => "Contrôlé");
+        entries.Should().ContainSingle().Which.Action.Should().Be(ResultEntryAction.Comment);
+
+        var submitted = await bench.Service.SubmitAsync(bench.Order.Id, entries);
+        submitted.Value.Rejected.Should().BeEmpty();
+        result.NumericValue.Should().Be(7500m);
+        result.TechnicalComment.Should().Be("Contrôlé");
+        result.PrintTechnicalComment.Should().BeTrue();
+        result.EnteredAt.Should().Be(enteredAt, "a comment does not re-enter the value, nor void a read-back call");
+        result.IsAutoTransmitted.Should().BeTrue();
+        result.RawInstrumentValue.Should().Be("7500");
+    }
+
+    [Fact]
+    public async Task ChangingTheReasonOfANotDoneLine_KeepsItNotDone_WithTheNewReason()
+    {
+        var bench = new Bench();
+        var remark = new TestParameter("OBS", new MultilingualText("OBS"), ResultValueType.Text);
+        var result = bench.AddAnalysis(remark).Single();
+        result.MarkNotDone("Tube hémolysé", Now.AddHours(-1), Guid.NewGuid()).IsSuccess.Should().BeTrue();
+
+        var rows = (await bench.Service.OpenAsync(bench.Order.Id)).Value.Rows;
+        var row = rows.Single();
+
+        var entries = ResultEntryRules.ChangedEntries(rows, _ => row.CurrentValue, _ => "Tube coagulé");
+        var submitted = await bench.Service.SubmitAsync(bench.Order.Id, entries);
+
+        submitted.Value.Rejected.Should().BeEmpty();
+        result.Status.Should().Be(TestResultStatus.NotDone);
+        result.TextValue.Should().BeNull("« Non fait » is not a result");
+        result.TechnicalComment.Should().Be("Tube coagulé");
+        result.PrintTechnicalComment.Should().BeTrue();
+
+        // The reason cannot be emptied: the clinician would not know why.
+        var emptied = await bench.Service.SubmitAsync(bench.Order.Id,
+            ResultEntryRules.ChangedEntries(rows, _ => row.CurrentValue, _ => " "));
+        emptied.Value.Rejected.Should().ContainSingle().Which.ResourceKey.Should().Be("Result_NotDoneReasonRequired");
+        result.TechnicalComment.Should().Be("Tube coagulé");
+    }
+
     // ---- 1. Correcting a released or printed value ---------------------------------------------
 
     [Fact]

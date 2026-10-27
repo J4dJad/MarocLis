@@ -646,7 +646,15 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
     }
 
     /// <summary>The value as it appears on the report, in the requested language.</summary>
-    public string FormatValue(AppLanguage language)
+    public string FormatValue(AppLanguage language) => FormatValue(language, grouped: true);
+
+    /// <summary>
+    /// The value as the entry box shows it, to be typed into again: as on the report, but without
+    /// a thousands separator, which the entry reads back as a decimal one (« 7.500 » for 7500).
+    /// </summary>
+    public string FormatEntryValue(AppLanguage language) => FormatValue(language, grouped: false);
+
+    private string FormatValue(AppLanguage language, bool grouped)
     {
         if (Flags.HasFlag(ResultFlag.NotDone))
             return language switch
@@ -658,7 +666,8 @@ public sealed class TestResult : AuditableAggregateRoot, ISiteScoped
 
         if (NumericValue is { } value)
         {
-            var text = value.ToString("N" + Math.Clamp(AppliedDecimals, 0, 6), language.ToCulture());
+            var text = value.ToString((grouped ? "N" : "F") + Math.Clamp(AppliedDecimals, 0, 6),
+                                      language.ToCulture());
             return ValueOperator is null ? text : $"{ValueOperator} {text}";
         }
 

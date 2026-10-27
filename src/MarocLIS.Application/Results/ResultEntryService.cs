@@ -150,7 +150,15 @@ public enum ResultEntryAction
     /// Withdraws a value keyed by mistake, or a "not done", so the result is awaited again. Only
     /// before biological validation; a released value is corrected, never cleared.
     /// </summary>
-    Clear = 2
+    Clear = 2,
+
+    /// <summary>
+    /// Changes only the technical comment — or, on a "not done", its reason — and leaves the value
+    /// as it stands: who entered it and when, its analyser trace, its technical check. The value
+    /// box re-read as typed would have re-entered the figure (a thousands separator read as a
+    /// decimal one), and a new entry time voids a critical call read back before it.
+    /// </summary>
+    Comment = 3
 }
 
 public sealed record ResultEntryOutcome(
@@ -298,7 +306,7 @@ public sealed class ResultEntryService(
                 // Empty until something is entered: FormatValue's "-" placeholder in the cell read
                 // as a value, and the cursor skipped the row as already filled.
                 CurrentValue = result.HasValue || result.Flags.HasFlag(ResultFlag.NotDone)
-                    ? result.FormatValue(currentUser.Language)
+                    ? result.FormatEntryValue(currentUser.Language)
                     : null,
                 NumericValue = result.NumericValue,
                 ValueOperator = result.ValueOperator,
@@ -481,6 +489,26 @@ public sealed class ResultEntryService(
                 && !currentUser.Has(Permissions.Results.Modify))
             {
                 rejected.Add(Error.Forbidden("Result_ModifyRequiresPermission", parameter.Code));
+                continue;
+            }
+
+            // Only the comment changed: the value stands as it was entered — not re-read from the
+            // box, not re-stamped, its analyser trace and technical check kept. On a "not done"
+            // the comment is the reason printed in the value's place, so it cannot be emptied.
+            if (entry.Action == ResultEntryAction.Comment)
+            {
+                var comment = string.IsNullOrWhiteSpace(entry.TechnicalComment) ? null : entry.TechnicalComment.Trim();
+                var notDone = result.Flags.HasFlag(ResultFlag.NotDone);
+
+                if (notDone && comment is null)
+                {
+                    rejected.Add(Error.Validation("Result_NotDoneReasonRequired"));
+                    continue;
+                }
+
+                result.TechnicalComment = comment;
+                result.PrintTechnicalComment = notDone || (comment is not null && entry.PrintTechnicalComment);
+                accepted++;
                 continue;
             }
 

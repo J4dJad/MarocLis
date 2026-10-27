@@ -201,7 +201,8 @@ public static class ResultEntryRules
     /// <summary>
     /// The entries a save sends: the lines whose typed value or comment changed, except
     /// <paramref name="except"/>. Only what changed — resubmitting an unchanged value would stamp a
-    /// new entry time and lose the original one — and never an empty value, which a save skips.
+    /// new entry time and lose the original one — and never an empty value, which a save skips. A
+    /// line whose comment alone changed is sent as a comment (<see cref="ResultEntryAction.Comment"/>).
     /// </summary>
     public static List<ResultEntry> ChangedEntries(IEnumerable<ResultEntryRow> rows, Func<Guid, string?> typedValue,
                                                    Func<Guid, string?> typedComment, Guid? except = null)
@@ -215,14 +216,20 @@ public static class ResultEntryRules
             var typed = typedValue(row.TestResultId)?.Trim() ?? string.Empty;
             var comment = typedComment(row.TestResultId)?.Trim();
 
-            var unchanged = string.Equals(typed, row.CurrentValue?.Trim() ?? string.Empty, StringComparison.Ordinal)
-                            && string.Equals(comment ?? string.Empty, row.TechnicalComment ?? string.Empty,
-                                             StringComparison.Ordinal);
+            var sameValue = string.Equals(typed, row.CurrentValue?.Trim() ?? string.Empty, StringComparison.Ordinal);
+            var sameComment = string.Equals(comment ?? string.Empty, row.TechnicalComment ?? string.Empty,
+                                            StringComparison.Ordinal);
 
-            if (unchanged || typed.Length == 0) continue;
+            if ((sameValue && sameComment) || typed.Length == 0) continue;
 
-            entries.Add(new ResultEntry(row.TestResultId, typed, comment,
-                                        PrintTechnicalComment: !string.IsNullOrWhiteSpace(comment)));
+            // Only the comment changed: the value is not sent again, which would re-enter it as
+            // typed — a new entry time, and the box's text read back as a figure.
+            entries.Add(sameValue
+                ? new ResultEntry(row.TestResultId, null, comment ?? string.Empty,
+                                  PrintTechnicalComment: !string.IsNullOrWhiteSpace(comment),
+                                  Action: ResultEntryAction.Comment)
+                : new ResultEntry(row.TestResultId, typed, comment,
+                                  PrintTechnicalComment: !string.IsNullOrWhiteSpace(comment)));
         }
 
         return entries;
