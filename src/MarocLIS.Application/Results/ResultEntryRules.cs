@@ -35,6 +35,14 @@ public sealed record ResultHistoryCurrent(decimal Value, string? Operator);
 /// </summary>
 public static class ResultEntryRules
 {
+    /// <summary>The reason printed in place of a value marked « not done ».</summary>
+    public const int NotDoneReasonMinimumLength = 3;
+    public const int NotDoneReasonMaxLength = 500;
+
+    /// <summary>Correcting a released value: the reason goes on the amended report.</summary>
+    public const int CorrectionReasonMinimumLength = 15;
+    public const int CorrectionReasonMaxLength = 500;
+
     /// <summary>A line a value can be keyed on: not derived, not a heading, its tube received, not released.</summary>
     public static bool IsKeyable(ResultEntryRow? row) =>
         row is { IsEditable: true, IsAwaitingSample: false }

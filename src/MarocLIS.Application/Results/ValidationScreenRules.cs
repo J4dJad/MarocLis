@@ -72,6 +72,14 @@ public static class CriticalCallNotes
 /// </summary>
 public static class ValidationScreenRules
 {
+    /// <summary>Withdrawing a release: the reason goes to the audit trail and the amended report.</summary>
+    public const int UnvalidateReasonMinimumLength = 15;
+    public const int UnvalidateReasonMaxLength = 500;
+
+    /// <summary>Releasing over an out-of-control QC: the justification is written onto the QC point.</summary>
+    public const int QcOverrideMinimumLength = 15;
+    public const int QcOverrideMaxLength = 1000;
+
     /// <summary>
     /// Whether a file belongs under a chip. « Urgents » is the former « Urgent » tick box, which
     /// asked the server for the files whose priority is not routine: the same test, applied to the

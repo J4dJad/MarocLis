@@ -2081,8 +2081,9 @@ public sealed class ResultEntryView : LocalizedView
 
         var name = row.ParameterName.For(Localizer.CurrentLanguage);
         var reason = _dialogs.PromptForReason(T("ResultEntry.NotDonePrompt", name),
-                                              T("ResultEntry.MarkNotDone"), minimumLength: 3,
-                                              maxLength: 500);
+                                              T("ResultEntry.MarkNotDone"),
+                                              minimumLength: ResultEntryRules.NotDoneReasonMinimumLength,
+                                              maxLength: ResultEntryRules.NotDoneReasonMaxLength);
         if (reason is null) return;
 
         var entries = CollectTypedEntries(except: row.TestResultId);
@@ -2137,7 +2138,8 @@ public sealed class ResultEntryView : LocalizedView
         if (string.IsNullOrWhiteSpace(value)) return;
 
         var reason = _dialogs.PromptForReason(T("ResultEntry.CorrectReasonPrompt", name), title,
-                                              minimumLength: 15, maxLength: 500);
+                                              minimumLength: ResultEntryRules.CorrectionReasonMinimumLength,
+                                              maxLength: ResultEntryRules.CorrectionReasonMaxLength);
         if (reason is null) return;
 
         var outcome = await _entry.CorrectReleasedAsync(sheet.LabOrderId, row.TestResultId, value, reason);

@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Calculations;
 using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Catalog;
@@ -626,8 +627,10 @@ public sealed class ResultEntryService(
         var licensed = licence.RequireBenchWork();
         if (licensed.IsFailure) return Result.Failure<ResultEntryOutcome>(licensed.FirstError);
 
-        if (string.IsNullOrWhiteSpace(reason))
-            return Result.Failure<ResultEntryOutcome>(Error.Validation("Result_RevisionReasonRequired"));
+        if (ReasonRules.Problem(reason, ResultEntryRules.CorrectionReasonMinimumLength,
+                                "Result_RevisionReasonRequired",
+                                ResultEntryRules.CorrectionReasonMaxLength) is { } badReason)
+            return Result.Failure<ResultEntryOutcome>(badReason);
         if (string.IsNullOrWhiteSpace(newValue))
             return Result.Failure<ResultEntryOutcome>(Error.Validation("Result_CorrectionValueRequired"));
 
@@ -807,9 +810,11 @@ public sealed class ResultEntryService(
         var raw = entry.RawValue?.Trim();
 
         if (entry.Action == ResultEntryAction.NotDone)
-            return string.IsNullOrWhiteSpace(entry.TechnicalComment)
-                ? Result.Failure(Error.Validation("Result_NotDoneReasonRequired"))
-                : result.MarkNotDone(entry.TechnicalComment.Trim(), now, currentUser.UserId);
+            return ReasonRules.Problem(entry.TechnicalComment, ResultEntryRules.NotDoneReasonMinimumLength,
+                                       "Result_NotDoneReasonRequired",
+                                       ResultEntryRules.NotDoneReasonMaxLength) is { } badReason
+                ? Result.Failure(badReason)
+                : result.MarkNotDone(entry.TechnicalComment!.Trim(), now, currentUser.UserId);
 
         if (string.IsNullOrEmpty(raw))
             return result.MarkNotDone(entry.TechnicalComment ?? "Non fait", now, currentUser.UserId);

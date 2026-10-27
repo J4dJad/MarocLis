@@ -1738,7 +1738,8 @@ public sealed class ValidationView : LocalizedView
 
         var reason = _dialogs.PromptForReason(
             T("Validation.UnvalidatePrompt", ids.Count), T("Validation.Unvalidate"),
-            minimumLength: 15, maxLength: 500);
+            minimumLength: ValidationScreenRules.UnvalidateReasonMinimumLength,
+            maxLength: ValidationScreenRules.UnvalidateReasonMaxLength);
 
         if (reason is null) return;
 
@@ -1784,7 +1785,8 @@ public sealed class ValidationView : LocalizedView
                 $"{T("Result_QcOutOfControlBlocksValidation")}\n\n" +
                 $"{string.Join(", ", qcAffected)}\n\n{T("Validation.OverrideJustification")}",
                 T("Validation.QcOverride"),
-                minimumLength: 15, maxLength: 1000);
+                minimumLength: ValidationScreenRules.QcOverrideMinimumLength,
+                maxLength: ValidationScreenRules.QcOverrideMaxLength);
 
             if (qcJustification is null) return;
 

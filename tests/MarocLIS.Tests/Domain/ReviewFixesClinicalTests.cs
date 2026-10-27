@@ -352,6 +352,9 @@ public sealed class ReviewFixesClinicalTests
         // department, may not withdraw the release either.
         harness.BiologicalValidation = Result.Failure(Error.Forbidden("Validation_DepartmentNotAuthorized", "BIO"));
 
+        (await harness.Service.UnvalidateAsync(harness.Order.Id, [result.Id], "Contrôle"))
+            .FirstError.ResourceKey.Should().Be("Reason_TooShort", "the service holds the screens' 15 characters");
+
         var withdrawn = await harness.Service.UnvalidateAsync(harness.Order.Id, [result.Id], "Contrôle demandé");
 
         withdrawn.IsFailure.Should().BeTrue();

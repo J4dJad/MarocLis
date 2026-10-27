@@ -230,6 +230,11 @@ public sealed class ReviewFixesResultatsTests
 
         (await bench.Service.CorrectReleasedAsync(bench.Order.Id, results[0].Id, "4.2", "  "))
             .FirstError.ResourceKey.Should().Be("Result_RevisionReasonRequired");
+        // Held by the service as on both screens: a reason of a few letters is not a reason.
+        (await bench.Service.CorrectReleasedAsync(bench.Order.Id, results[0].Id, "4.2", "erreur"))
+            .FirstError.ResourceKey.Should().Be("Reason_TooShort");
+        (await bench.Service.CorrectReleasedAsync(bench.Order.Id, results[0].Id, "4.2", new string('x', 501)))
+            .FirstError.ResourceKey.Should().Be("Reason_TooLong");
         (await bench.Service.CorrectReleasedAsync(bench.Order.Id, results[0].Id, " ", "Erreur de saisie"))
             .FirstError.ResourceKey.Should().Be("Result_CorrectionValueRequired");
         (await bench.Service.CorrectReleasedAsync(bench.Order.Id, results[0].Id, "6,8", "Erreur de saisie"))
@@ -335,6 +340,11 @@ public sealed class ReviewFixesResultatsTests
             [new ResultEntry(result.Id, null, " ", Action: ResultEntryAction.NotDone)]);
         refused.Value.Rejected.Should().ContainSingle()
                .Which.ResourceKey.Should().Be("Result_NotDoneReasonRequired");
+        result.Status.Should().Be(TestResultStatus.Awaited);
+
+        (await bench.Service.SubmitAsync(bench.Order.Id,
+            [new ResultEntry(result.Id, null, "x", Action: ResultEntryAction.NotDone)]))
+            .Value.Rejected.Single().ResourceKey.Should().Be("Reason_TooShort");
         result.Status.Should().Be(TestResultStatus.Awaited);
 
         // A value typed in the cell is ignored: the action says what the entry does.

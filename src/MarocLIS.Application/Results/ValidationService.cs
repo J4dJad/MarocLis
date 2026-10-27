@@ -1,4 +1,5 @@
 using MarocLIS.Application.Abstractions;
+using MarocLIS.Application.Input;
 using MarocLIS.Application.Licensing;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -220,6 +221,15 @@ public sealed class ValidationService(
                 continue;
             }
 
+            if (result.Flags.HasFlag(ResultFlag.QcOutOfControl)
+                && ReasonRules.Problem(decision.QcOverrideJustification, ValidationScreenRules.QcOverrideMinimumLength,
+                                       "Result_QcOutOfControlBlocksValidation",
+                                       ValidationScreenRules.QcOverrideMaxLength) is { } badJustification)
+            {
+                blocked.Add(badJustification);
+                continue;
+            }
+
             var criticalCommunicated = !result.IsCritical
                 || await validationQueries.IsCriticalCommunicatedAsync(result.Id, ct);
 
@@ -338,8 +348,11 @@ public sealed class ValidationService(
         var licensed = licence.RequireBenchWork();
         if (licensed.IsFailure) return licensed;
 
-        if (string.IsNullOrWhiteSpace(reason))
-            return Result.Failure(Error.Validation("Item_UnvalidationReasonRequired"));
+        // The screens' lengths, held here for any caller: the reason is versed to the audit trail.
+        if (ReasonRules.Problem(reason, ValidationScreenRules.UnvalidateReasonMinimumLength,
+                                "Item_UnvalidationReasonRequired",
+                                ValidationScreenRules.UnvalidateReasonMaxLength) is { } badReason)
+            return Result.Failure(badReason);
 
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure(Error.NotFound("Order_NotFound"));

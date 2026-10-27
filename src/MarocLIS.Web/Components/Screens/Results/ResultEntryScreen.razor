@@ -268,7 +268,7 @@
         break;
 
     case EntryDialog.NotDone when SelectedRow is { } row:
-        <ReasonPrompt Title="@Texts["ResultEntry.MarkNotDone"]" MinimumLength="3" MaxLength="500"
+        <ReasonPrompt Title="@Texts["ResultEntry.MarkNotDone"]" MinimumLength="ResultEntryRules.NotDoneReasonMinimumLength" MaxLength="ResultEntryRules.NotDoneReasonMaxLength"
                       Prompt="@Texts.T("ResultEntry.NotDonePrompt", row.ParameterName.For(Texts.Language))"
                       OnConfirm="MarkNotDoneAsync" OnCancel="CloseDialog" />
         break;
@@ -286,7 +286,7 @@
         break;
 
     case EntryDialog.CorrectReason when SelectedRow is { } row:
-        <ReasonPrompt Title="@Texts["ResultEntry.CorrectReleased"]" MinimumLength="15" MaxLength="500"
+        <ReasonPrompt Title="@Texts["ResultEntry.CorrectReleased"]" MinimumLength="ResultEntryRules.CorrectionReasonMinimumLength" MaxLength="ResultEntryRules.CorrectionReasonMaxLength"
                       Prompt="@Texts.T("ResultEntry.CorrectReasonPrompt", row.ParameterName.For(Texts.Language))"
                       OnConfirm="CorrectAsync" OnCancel="CloseDialog" />
         break;

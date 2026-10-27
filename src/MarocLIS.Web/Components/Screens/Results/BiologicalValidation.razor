@@ -272,12 +272,12 @@
         break;
 
     case ValidationDialog.Unvalidate:
-        <ReasonPrompt Title="@Texts["Validation.Unvalidate"]" MinimumLength="15" MaxLength="500"
+        <ReasonPrompt Title="@Texts["Validation.Unvalidate"]" MinimumLength="ValidationScreenRules.UnvalidateReasonMinimumLength" MaxLength="ValidationScreenRules.UnvalidateReasonMaxLength"
                       Prompt="@Texts.T("Validation.UnvalidatePrompt", Withdrawals.Count)" OnConfirm="UnvalidateAsync" OnCancel="CloseDialog" />
         break;
 
     case ValidationDialog.QcOverride when _qcNames is { } names:
-        <ReasonPrompt Title="@Texts["Validation.QcOverride"]" MinimumLength="15" MaxLength="1000"
+        <ReasonPrompt Title="@Texts["Validation.QcOverride"]" MinimumLength="ValidationScreenRules.QcOverrideMinimumLength" MaxLength="ValidationScreenRules.QcOverrideMaxLength"
                       Prompt="@($"{Texts["Result_QcOutOfControlBlocksValidation"]}\n\n{string.Join(", ", names)}\n\n{Texts["Validation.OverrideJustification"]}")"
                       OnConfirm="QcJustifiedAsync" OnCancel="CloseDialog" />
         break;
