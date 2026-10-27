@@ -3,6 +3,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Input;
 using MarocLIS.Application.Navigation;
 using MarocLIS.Application.Reports;
+using MarocLIS.Domain.Identity;
 
 namespace MarocLIS.Application.Dashboard;
 
@@ -192,6 +193,12 @@ public static class DashboardScreenRules
     /// The pre-go-live banner for the codes still awaiting the laboratory's check, or none when the
     /// catalogue is complete: the reference intervals first when both are pending, the tariffs then
     /// named after them as a count.
+    /// <para>
+    /// Only to who can settle them: the intervals to who may manage the catalogue or the reference
+    /// intervals, the tariffs to who may manage the catalogue or the tariffs. The secretary and the
+    /// technician, who may only read the catalogue, were greeted every morning by « 96 paramètres
+    /// attendent la validation de leurs valeurs usuelles » that they could do nothing about.
+    /// </para>
     /// </summary>
     public static DashboardSetupBanner? Setup(IReadOnlyList<string> unverifiedRanges, IReadOnlyList<string> placeholderTariffs,
                                               ICurrentUser? user, ScreenText text)
@@ -199,6 +206,13 @@ public static class DashboardScreenRules
         ArgumentNullException.ThrowIfNull(unverifiedRanges);
         ArgumentNullException.ThrowIfNull(placeholderTariffs);
         ArgumentNullException.ThrowIfNull(text);
+
+        if (user is null) return null;
+        if (!user.Has(Permissions.Catalog.Manage) && !user.Has(Permissions.Catalog.ManageReferenceRanges))
+            unverifiedRanges = [];
+        if (!user.Has(Permissions.Catalog.Manage) && !user.Has(Permissions.Billing.ManageTariffs))
+            placeholderTariffs = [];
+
         if (unverifiedRanges.Count == 0 && placeholderTariffs.Count == 0) return null;
 
         string Names(IReadOnlyList<string> codes)

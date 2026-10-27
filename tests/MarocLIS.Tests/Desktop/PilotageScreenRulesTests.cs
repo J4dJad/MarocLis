@@ -309,14 +309,33 @@ public sealed class PilotageScreenRulesTests
     {
         DashboardScreenRules.Setup([], [], null, Text).Should().BeNull();
 
-        var both = DashboardScreenRules.Setup(["GLY", "UREE", "CREA", "NA"], ["NFS"], new User(true, Permissions.Catalog.View), Text)!;
+        var both = DashboardScreenRules.Setup(["GLY", "UREE", "CREA", "NA"], ["NFS"],
+                                              new User(true, Permissions.Catalog.View, Permissions.Catalog.Manage), Text)!;
         both.Title.Should().Be("Dashboard.RangesPending(4)");
         both.Detail.Should().Be("Dashboard.AndOthers(GLY, UREE, CREA,1)  ·  Dashboard.TariffsPending(1)");
         both.ReviewKey.Should().Be("Dashboard.ReviewRanges");
         both.Review.Should().BeTrue();
 
-        var tariffs = DashboardScreenRules.Setup([], ["NFS", "TSH"], new User(true, Permissions.Billing.View), Text)!;
+        var tariffs = DashboardScreenRules.Setup([], ["NFS", "TSH"], new User(true, Permissions.Billing.ManageTariffs), Text)!;
         tariffs.Should().Be(new DashboardSetupBanner("Dashboard.TariffsPending(2)", "NFS, TSH", "Dashboard.OpenCatalog", false));
+    }
+
+    [Fact]
+    public void The_banner_before_go_live_is_not_shown_to_who_can_do_nothing_about_it()
+    {
+        // Before: the secretary and the technician, reading the catalogue only, were greeted by
+        // « 96 paramètres attendent la validation de leurs valeurs usuelles ».
+        var reader = new User(true, Permissions.Catalog.View, Permissions.Billing.View);
+        DashboardScreenRules.Setup(["GLY"], ["NFS"], reader, Text).Should().BeNull();
+
+        // The quality manager settles the intervals, not the tariffs: hers only.
+        var quality = new User(true, Permissions.Catalog.View, Permissions.Catalog.ManageReferenceRanges);
+        var banner = DashboardScreenRules.Setup(["GLY"], ["NFS"], quality, Text)!;
+        banner.Title.Should().Be("Dashboard.RangesPending(1)");
+        banner.Detail.Should().Be("GLY");
+        banner.Review.Should().BeTrue();
+
+        DashboardScreenRules.Setup(["GLY"], [], new User(true, Permissions.Billing.ManageTariffs), Text).Should().BeNull();
     }
 
     [Fact]

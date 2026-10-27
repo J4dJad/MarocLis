@@ -162,8 +162,7 @@ public sealed class WebPilotageTests : WebScreenContext
         page.FindAll("[data-alert]").Should().ContainSingle().Which.GetAttribute("data-alert").Should().Be("Dashboard.Receivables");
         page.Find("[data-alert='Dashboard.Receivables'] a").GetAttribute("href").Should().Be("ecran/billing");
         page.FindAll("[data-quiet]").Should().BeEmpty();
-        page.Find("[data-state=setup]").TextContent.Should().Contain("GLY", "the banner shows to everyone");
-        page.FindAll("[data-state=setup] a").Should().BeEmpty("the way to the catalogue only to whom may open it");
+        page.FindAll("[data-state=setup]").Should().BeEmpty("the banner is for who can settle the catalogue, not the cashier");
     }
 
     [Fact]
