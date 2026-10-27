@@ -109,7 +109,7 @@ public static class PurchaseOrderScreenRules
     {
         ArgumentNullException.ThrowIfNull(has);
         var manage = has(Permissions.Inventory.ManagePurchaseOrders);
-        var own = order is { Status: PurchaseOrderStatus.Draft } && order.RaisedByUserId == userId;
+        var own = order is { Status: PurchaseOrderStatus.Draft, RaisedAutomatically: false } && order.RaisedByUserId == userId;
 
         return new PurchaseOrderScreenActions(
             New: manage,

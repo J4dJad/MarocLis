@@ -104,7 +104,18 @@ public sealed class InventoryService(
     /// each operation that lowers the stock, and when the stock screen opens, so that lots expiring
     /// overnight are caught too.
     /// </summary>
+    /// <para>
+    /// From the screen, only for someone who may see the stock: it ran before any check, and a
+    /// user with no right on purchasing ended up as the requester of the orders it drafted.
+    /// </para>
     public async Task<ReorderOutcome> RaiseReorderDraftsAsync(CancellationToken ct = default)
+    {
+        if (guard.Require(Permissions.Inventory.View).IsFailure) return LastReorder = ReorderOutcome.None;
+        return await DraftReordersAsync(ct);
+    }
+
+    /// <summary>The drafting itself, after a stock operation its own right already allowed.</summary>
+    private async Task<ReorderOutcome> DraftReordersAsync(CancellationToken ct)
     {
         LastReorder = reorder is null ? ReorderOutcome.None : await reorder.RaiseDraftsAsync(ct);
         return LastReorder;
@@ -376,7 +387,7 @@ public sealed class InventoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        await RaiseReorderDraftsAsync(ct);
+        await DraftReordersAsync(ct);
 
         return Result.Success(affected);
     }
@@ -450,7 +461,7 @@ public sealed class InventoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        await RaiseReorderDraftsAsync(ct);
+        await DraftReordersAsync(ct);
 
         return Result.Success(string.Join(", ", consumedFrom));
     }
@@ -507,7 +518,7 @@ public sealed class InventoryService(
         unitOfWork.AuditReason = $"{kind} de {applied} sur le lot {lot.LotNumber} : {reason}";
         await unitOfWork.SaveChangesAsync(ct);
 
-        await RaiseReorderDraftsAsync(ct);
+        await DraftReordersAsync(ct);
 
         return Result.Success();
     }

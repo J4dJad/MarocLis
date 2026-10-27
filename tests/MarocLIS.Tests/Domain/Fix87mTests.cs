@@ -11,6 +11,8 @@ using MarocLIS.Domain.Orders;
 using MarocLIS.Domain.Patients;
 using MarocLIS.Domain.Results;
 using MarocLIS.Domain.Samples;
+using MarocLIS.Domain.Inventory;
+using MarocLIS.Application.Inventory;
 using System.Linq.Expressions;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
@@ -284,6 +286,54 @@ public sealed class Fix87mTests
         var web = File.ReadAllText(Path.Combine(MarocLIS.Tests.Web.WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web",
                                                 "Components", "Screens", "Quality", "QualityControl.razor"));
         web.Should().NotContain("<th class=\"num\">Z</th>").And.Contain("Texts[\"Quality.ZScore\"]");
+    }
+
+    // ---- An order drafted at the reorder point is nobody's own request ---------------------------
+
+    [Fact]
+    public void AnAutomaticReorderDraft_CanBeApprovedByWhoeverTriggeredIt_AManualOneStillNot()
+    {
+        var director = Guid.NewGuid();
+        PurchaseOrder Draft(bool automatic)
+        {
+            var order = new PurchaseOrder("BC/2026/00087", Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2026, 10, 27), director)
+            {
+                RaisedAutomatically = automatic
+            };
+            order.AddLine(new PurchaseOrderLine(Guid.NewGuid(), 10m, 12m)).IsSuccess.Should().BeTrue();
+            return order;
+        }
+
+        Draft(automatic: true).Approve(Now, director).IsSuccess.Should().BeTrue();
+        Draft(automatic: false).Approve(Now, director).FirstError.ResourceKey.Should().Be("Po_ApproverMustDifferFromRequester");
+    }
+
+    [Fact]
+    public async Task OpeningTheStockScreen_WithoutTheRightToSeeTheStock_DraftsNoOrder()
+    {
+        var looked = 0;
+        var planner = new ReorderPlanner(
+            Stub.Of<IRepository<PurchaseOrder>>(),
+            Stub.Of<IPurchaseOrderQueries>(new()
+            {
+                ["GetReorderCandidatesAsync"] = _ => { looked++; return Task.FromResult<IReadOnlyList<ReorderCandidate>>([]); }
+            }),
+            Stub.Of<ISequenceAllocator>(), Stub.Of<IUnitOfWork>(), Stub.Of<ICurrentUser>(), Stub.Of<IClock>());
+
+        InventoryService Service(bool maySeeStock) => new(
+            Stub.Of<IRepository<StockItem>>(), Stub.Of<IRepository<StockMovement>>(), Stub.Of<IRepository<Supplier>>(),
+            Stub.Of<IInventoryQueries>(), Stub.Of<IUnitOfWork>(),
+            Stub.Of<IPermissionGuard>(new()
+            {
+                ["Require"] = _ => maySeeStock ? Result.Success() : Result.Failure(Error.Forbidden("Message.PermissionDenied"))
+            }),
+            Stub.Of<ICurrentUser>(), Stub.Of<IClock>(), planner);
+
+        (await Service(maySeeStock: false).RaiseReorderDraftsAsync()).Should().Be(ReorderOutcome.None);
+        looked.Should().Be(0, "nothing is drafted in the name of someone who may not see the stock");
+
+        await Service(maySeeStock: true).RaiseReorderDraftsAsync();
+        looked.Should().Be(1);
     }
 
     private class Stub : DispatchProxy

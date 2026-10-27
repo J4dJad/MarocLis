@@ -84,7 +84,10 @@ public sealed class PurchaseOrder : AuditableAggregateRoot, ISiteScoped
             return Result.Failure(Error.Conflict("Po_NotADraft"));
         if (_lines.Count == 0)
             return Result.Failure(Error.Validation("Po_NoLines"));
-        if (byUserId == RaisedByUserId)
+        // An order the system drafted at the reorder point was nobody's request: it carries the
+        // name of whoever's screen or stock movement triggered it, and the director who opened the
+        // stock screen at 08:00 could then never approve it.
+        if (byUserId == RaisedByUserId && !RaisedAutomatically)
             return Result.Failure(Error.Forbidden("Po_ApproverMustDifferFromRequester"));
 
         ApprovedAt = at;
