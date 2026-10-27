@@ -470,9 +470,12 @@ public sealed class BillingService(
                     Coefficient = item.BilledCoefficient,
                     ReferenceTariffBase = item.ReferenceTariffBase,
                     ServiceDate = DateOnly.FromDateTime(order.RegisteredAt.Date),
-                    // Medical biology acts are VAT-exempt in Morocco.
-                    IsVatExempt = true,
-                    VatRate = 0m
+                    // As charged at registration: medical biology acts are VAT-exempt in Morocco,
+                    // and an act whose tariff carries VAT was told to the patient with it. The
+                    // line used to be exempt whatever the tariff said, so the counter took the VAT
+                    // the invoice, the VAT statement and the 4455 journal never showed.
+                    IsVatExempt = item.IsVatExempt,
+                    VatRate = item.IsVatExempt ? 0m : item.VatRate
                 };
 
                 var added = invoice.AddLine(line);

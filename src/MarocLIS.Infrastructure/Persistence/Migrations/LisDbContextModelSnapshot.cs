@@ -6438,6 +6438,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsSubcontracted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsVatExempt")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("LabOrderId")
                         .HasColumnType("uniqueidentifier");
 
@@ -6526,6 +6529,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("ValidatedByUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("VatRate")
+                        .HasColumnType("decimal(18,6)");
 
                     b.HasKey("Id");
 

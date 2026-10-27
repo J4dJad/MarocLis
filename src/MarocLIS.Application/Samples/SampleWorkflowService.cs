@@ -682,6 +682,8 @@ public sealed class SampleWorkflowService(
                 ReferenceTariffBase = source.ReferenceTariffBase,
                 PayerShare = source.PayerShare,
                 PatientShare = source.PatientShare,
+                IsVatExempt = source.IsVatExempt,
+                VatRate = source.VatRate,
                 BilledLetterKey = source.BilledLetterKey,
                 BilledCoefficient = source.BilledCoefficient,
                 BilledActCode = source.BilledActCode,

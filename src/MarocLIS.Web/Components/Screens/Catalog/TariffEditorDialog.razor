@@ -65,7 +65,7 @@
                 <input type="checkbox" data-field="vatexempt" @bind="_form.VatExempt" @bind:after="VatChanged" /><span>@Texts["Billing.VatExempt"]</span>
             </label>
             <label class="field">
-                <span class="field-label">@Texts["Billing.Vat"]</span>
+                <span class="field-label">@Texts["Billing.VatPercent"]</span>
                 <input class="input mono num" dir="ltr" inputmode="decimal" data-field="vatrate" disabled="@_form.VatExempt" maxlength="@TypedNumber.MeasureMaxLength" @bind="_form.VatRate" />
                 <FieldMessage Refusal="_refusal" Field="vatrate" />
             </label>

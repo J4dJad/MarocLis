@@ -65,6 +65,17 @@ public sealed class LabOrderItem : Entity, IAuditable
     /// <summary>Share borne by the patient (ticket modérateur plus any excess over the TNR).</summary>
     public decimal PatientShare { get; set; }
 
+    /// <summary>
+    /// Whether the act was charged without VAT, frozen from its tariff at registration. Medical
+    /// biology acts are exempt; a certificate or another non-biology act may not be. The shares
+    /// above include the VAT charged, so the invoice line takes the same flag and rate: printed
+    /// exempt, it billed less than the counter took and the VAT never reached the declaration.
+    /// </summary>
+    public bool IsVatExempt { get; set; } = true;
+
+    /// <summary>VAT rate charged, as a fraction (0.20 = 20 %). Zero when exempt.</summary>
+    public decimal VatRate { get; set; }
+
     // ---- Subcontracting -----------------------------------------------------------------------
 
     /// <summary>Set when the act is sent to a partner laboratory; the report must say so.</summary>

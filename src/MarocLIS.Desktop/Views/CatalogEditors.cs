@@ -1122,7 +1122,7 @@ internal sealed class TariffEditorDialog : MasterDataEditor
 
         // The rate box sits clear of the check box's caption, which is long and bold.
         _vatExempt = Check("Billing.VatExempt", 20, 214, form.VatExempt, bold: true);
-        _vatRate = TextField("Billing.Vat", 440, 206, 100, form.VatRate, latin: true, right: true);
+        _vatRate = TextField("Billing.VatPercent", 440, 206, 100, form.VatRate, latin: true, right: true);
         Numeric(EditorValues.MeasureMaxLength, _vatRate);
 
         Notice(20, 244, 580, 44, "Catalog.VatNotice");

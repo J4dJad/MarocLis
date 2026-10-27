@@ -926,7 +926,7 @@ public static partial class CatalogEditorRules
             LetterKeyValue = Fixed(KnownLetterKeyValue(editing, existing, national), "0.####", culture),
             Price = Fixed(editing?.Price ?? analysis.CurrentPrice, "0.00", culture),
             VatExempt = editing?.IsVatExempt ?? true,
-            VatRate = editing is { IsVatExempt: false } ? editing.VatRate.ToString("0.####", culture) : string.Empty
+            VatRate = editing is { IsVatExempt: false } ? (editing.VatRate * 100m).ToString("0.##", culture) : string.Empty
         };
 
         return form with { ValidFrom = ValidFrom(form.ValidFrom, CurrentTariff(editing, existing, form.PayerId), editing is not null) };
@@ -947,6 +947,7 @@ public static partial class CatalogEditorRules
         if (TypedNumber.Parse(form.Price) is null or < 0m) return new FieldRefusal("price", "Tariff_NegativePrice");
         if (string.IsNullOrWhiteSpace(form.LetterKey)) return new FieldRefusal("letterkey", "Tariff_LetterKeyRequired");
         if (!form.VatExempt && TypedNumber.Parse(form.VatRate) is null or <= 0m) return new FieldRefusal("vatrate", "Tariff_VatRateRequired");
+        if (!form.VatExempt && TypedNumber.Parse(form.VatRate) > 100m) return new FieldRefusal("vatrate", "Tariff_VatRateOutOfRange");
 
         return null;
     }
@@ -965,7 +966,9 @@ public static partial class CatalogEditorRules
             LetterKeyValue = TypedNumber.Parse(form.LetterKeyValue) ?? 0m,
             Price = TypedNumber.Parse(form.Price) ?? 0m,
             IsVatExempt = form.VatExempt,
-            VatRate = form.VatExempt ? 0m : TypedNumber.Parse(form.VatRate) ?? 0m
+            // Typed in percent, as the box's label says (« 20 » for 20 %), and kept as a fraction,
+            // as the pricing multiplies by it: « 20 » stored as typed charged 2 000 %.
+            VatRate = form.VatExempt ? 0m : (TypedNumber.Parse(form.VatRate) ?? 0m) / 100m
         };
     }
 

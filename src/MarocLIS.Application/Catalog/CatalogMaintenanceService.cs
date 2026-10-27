@@ -135,6 +135,8 @@ public sealed record TariffRequest
     public decimal LetterKeyValue { get; init; }
     public decimal Price { get; init; }
     public bool IsVatExempt { get; init; } = true;
+
+    /// <summary>As a fraction, within (0, 1]: 0.20 is 20 %. The editor divides the typed percent.</summary>
     public decimal VatRate { get; init; }
 }
 
@@ -1197,6 +1199,10 @@ public sealed class CatalogMaintenanceService(
         if (request.LetterKeyValue < 0m) errors.Add(Error.Validation("Tariff_NegativeLetterKeyValue"));
         if (!request.IsVatExempt && request.VatRate <= 0m)
             errors.Add(Error.Validation("Tariff_VatRateRequired"));
+        // A fraction: 0.20 is 20 %. A rate above 1 is a percentage typed where a fraction was
+        // expected, and would charge the patient twenty times the act.
+        if (!request.IsVatExempt && request.VatRate > 1m)
+            errors.Add(Error.Validation("Tariff_VatRateOutOfRange"));
 
         // An act carrying a national code but no reimbursement base pays the patient's share out of
         // a base of zero, so the payer share computes to nothing and the patient is charged in full
@@ -1270,6 +1276,10 @@ public sealed class CatalogMaintenanceService(
         if (request.LetterKeyValue < 0m) errors.Add(Error.Validation("Tariff_NegativeLetterKeyValue"));
         if (!request.IsVatExempt && request.VatRate <= 0m)
             errors.Add(Error.Validation("Tariff_VatRateRequired"));
+        // A fraction: 0.20 is 20 %. A rate above 1 is a percentage typed where a fraction was
+        // expected, and would charge the patient twenty times the act.
+        if (!request.IsVatExempt && request.VatRate > 1m)
+            errors.Add(Error.Validation("Tariff_VatRateOutOfRange"));
 
         if (!string.IsNullOrWhiteSpace(analysis.NationalActCode)
             && (request.Coefficient <= 0m || request.LetterKeyValue <= 0m))

@@ -327,6 +327,8 @@ public sealed class OrderComposer(
             BilledActCode = priced.Input.NationalActCode,
             PayerShare = priced.PayerShare.Amount,
             PatientShare = priced.PatientShare.Amount,
+            IsVatExempt = priced.Input.IsVatExempt,
+            VatRate = priced.Input.IsVatExempt ? 0m : priced.Input.VatRate,
             IsSubcontracted = analysis.Test.IsSubcontracted,
             SubcontractorSiteId = analysis.Test.SubcontractorSiteId
         };
