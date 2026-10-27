@@ -543,6 +543,8 @@ public sealed class MigrationPlanner
             : _context.Targets.GetValueOrDefault(MigrationCodeList.Unit)?.FirstOrDefault(t => t.Value == unitTarget)?.Label ?? rawUnit;
 
         var parsed = ValueParsers.ParseResult(value);
+        if (parsed is not null && ValueParsers.IsAmbiguousThousands(value))
+            Warn(row, MigrationSchema.Value, "Migration_NumberAmbiguous", [Label(MigrationSchema.Value), value]);
         var oldAccession = OptionalText(i, row, MigrationSchema.OldAccession);
         var range = OptionalText(i, row, MigrationSchema.ReferenceRange);
 
@@ -793,6 +795,7 @@ public sealed class MigrationPlanner
         var value = ValueParsers.ParseDecimal(raw);
         if (value is null) Warn(row, field, "Migration_NumberUnreadable", [Label(field), raw]);
         else if (Math.Abs(value.Value) >= 1_000_000_000_000m) { Warn(row, field, "Migration_NumberTooLarge", [Label(field), raw]); return null; }
+        else if (ValueParsers.IsAmbiguousThousands(raw)) Warn(row, field, "Migration_NumberAmbiguous", [Label(field), raw]);
         return value;
     }
 
@@ -809,6 +812,7 @@ public sealed class MigrationPlanner
         var value = ValueParsers.ParseDecimal(raw);
         if (value is null) Fail(row, field, "Migration_NumberUnreadable", [Label(field), raw]);
         else if (Math.Abs(value.Value) >= 1_000_000_000_000m) { Fail(row, field, "Migration_NumberTooLarge", [Label(field), raw]); return null; }
+        else if (ValueParsers.IsAmbiguousThousands(raw)) Warn(row, field, "Migration_NumberAmbiguous", [Label(field), raw]);
         return value;
     }
 

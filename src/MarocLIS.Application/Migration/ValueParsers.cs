@@ -97,6 +97,27 @@ public static partial class ValueParsers
             : null;
     }
 
+    /// <summary>
+    /// « 1.500 » or « 1,500 »: one separator followed by exactly three digits, after a figure that
+    /// does not start with 0. It is read as a decimal (1,5), but a legacy export writing thousands
+    /// with a dot or a comma meant 1 500: the import says so instead of dividing an amount by a
+    /// thousand without a word.
+    /// </summary>
+    public static bool IsAmbiguousThousands(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var value = CurrencyWord().Replace(text, string.Empty)
+                                  .Replace(" ", string.Empty, StringComparison.Ordinal)
+                                  .Replace("\u00A0", string.Empty, StringComparison.Ordinal)
+                                  .Replace("\u202F", string.Empty, StringComparison.Ordinal)
+                                  .TrimStart('<', '>', '=', '≤', '≥')
+                                  .Trim();
+        return AmbiguousThousands().IsMatch(value);
+    }
+
+    [GeneratedRegex(@"^[+-]?[1-9][0-9]{0,2}[.,][0-9]{3}$", RegexOptions.CultureInvariant)]
+    private static partial Regex AmbiguousThousands();
+
     public static int? ParseInteger(string? text) =>
         ParseDecimal(text) is { } value && value == decimal.Truncate(value) && value is >= int.MinValue and <= int.MaxValue
             ? (int)value

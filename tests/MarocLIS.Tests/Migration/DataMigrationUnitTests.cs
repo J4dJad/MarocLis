@@ -422,6 +422,26 @@ public sealed class DataMigrationUnitTests
         Problems(balances, 6).Should().Contain("Migration_BalanceDebtorRequired");
     }
 
+    [Fact]
+    public void AnAmountLike1Point500_IsFlaggedInTheSimulation_SoNobodyImports1Point5WithoutAWord()
+    {
+        var patient = Guid.NewGuid();
+        var context = Context(patientRecords: new Dictionary<string, Guid> { [MigrationPlanner.KeyOf("OLD", DataMigrationKind.Patients, "P1")] = patient });
+        var balances = Plan(DataMigrationKind.OpeningBalances, CsvSource.Parse(
+            "Ancien identifiant;Ancien identifiant patient;Montant dû (MAD)\nF1;P1;1.500\nF2;P1;150,50\nF3;P1;0.500\nF4;P1;1 500,00\nF5;P1;2,250\n"), context);
+
+        Problems(balances, 2).Should().Contain("Migration_NumberAmbiguous");
+        Problems(balances, 6).Should().Contain("Migration_NumberAmbiguous");
+        Problems(balances, 3).Should().NotContain("Migration_NumberAmbiguous");
+        Problems(balances, 4).Should().NotContain("Migration_NumberAmbiguous", "a leading 0 is a decimal");
+        Problems(balances, 5).Should().NotContain("Migration_NumberAmbiguous");
+        balances.Rows.Single(r => r.Row == 2).Outcome.Should().Be(MigrationOutcome.Create, "a warning, not a refusal");
+
+        ValueParsers.IsAmbiguousThousands("< 7.500").Should().BeTrue();
+        ValueParsers.IsAmbiguousThousands("7.5").Should().BeFalse();
+        ValueParsers.IsAmbiguousThousands("1.234.567").Should().BeFalse();
+    }
+
     private static List<string> Problems(MigrationAnalysis analysis, int row) =>
         [.. analysis.Anomalies.Where(a => a.Row == row).Select(a => a.ProblemKey)];
 
