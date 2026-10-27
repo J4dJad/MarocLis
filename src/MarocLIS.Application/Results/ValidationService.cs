@@ -310,7 +310,7 @@ public sealed class ValidationService(
         order.RecomputeStatus();
 
         unitOfWork.AuditReason =
-            $"Validation biologique — dossier {order.AccessionNumber} ({validated} résultat(s))";
+            PluralText.French("Validation biologique — dossier {0} ({1} {1:plural:résultat|résultats})", order.AccessionNumber, validated);
         await unitOfWork.SaveChangesAsync(ct);
 
         await accessAuditor.LogAsync(Domain.Audit.DataAccessKind.ViewOrder, order.PatientId,

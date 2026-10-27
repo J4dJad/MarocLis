@@ -109,7 +109,7 @@ public sealed class OrderFileHistoryDatabaseTests(OrderFileScratchDatabase datab
                       "secretaire"),
                 Entry(nameof(TestResult), result.Id, T0.AddHours(2), "Saisie de résultats", entry, "technicien"),
                 // A save with no correlation is a line of its own.
-                Entry(nameof(Sample), tube.Id, T0.AddHours(3), "Réception de 1 tube(s)", null, "technicien"),
+                Entry(nameof(Sample), tube.Id, T0.AddHours(3), "Réception de 1 tube", null, "technicien"),
                 // Without a reason, or on another file: not this file's history.
                 Entry(nameof(LabOrder), order.Id, T0.AddHours(4), null, Guid.NewGuid()),
                 Entry(nameof(LabOrder), other.Id, T0.AddHours(1), "Annulation du dossier", Guid.NewGuid()));
@@ -125,7 +125,7 @@ public sealed class OrderFileHistoryDatabaseTests(OrderFileScratchDatabase datab
                     (T0, OrderFileEventKind.Change, "accueil", "Enregistrement du dossier", (int?)null),
                     (T0.AddHours(1), OrderFileEventKind.Change, "secretaire", "Modification du dossier : prescripteur", null),
                     (T0.AddHours(2), OrderFileEventKind.Change, "technicien", "Saisie de résultats", null),
-                    (T0.AddHours(3), OrderFileEventKind.Change, "technicien", "Réception de 1 tube(s)", null),
+                    (T0.AddHours(3), OrderFileEventKind.Change, "technicien", "Réception de 1 tube", null),
                     (T0.AddHours(5), OrderFileEventKind.ReportReleased, "Dr BIOLOGISTE", null, 1));
 
             // Another site's operator sees nothing of the file.

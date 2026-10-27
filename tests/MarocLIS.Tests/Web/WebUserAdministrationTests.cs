@@ -64,7 +64,7 @@ public sealed class WebUserAdministrationTests : WebAdminContext
         page.Find("[data-modal=roles] [data-action='Action.Save']").Click();
 
         account.Roles.Should().ContainSingle(r => r.RoleId == cashier.RoleId);
-        AuditReason.Should().Be("Rôles de s.elfassi — 1 rôle(s)");
+        AuditReason.Should().Be("Rôles de s.elfassi — 1 rôle");
         SecurityLog.Events.Should().ContainSingle(e => e.Kind == SecurityEventKind.RoleAssigned);
         page.Find("[data-state=status]").TextContent.Should().NotBeEmpty();
     }

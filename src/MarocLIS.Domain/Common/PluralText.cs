@@ -40,11 +40,11 @@ public static class PluralText
     /// <summary>
     /// A French text agreed with its counts and formatted: « Réception de 1 tube », « Réception de
     /// 3 tubes » from <c>"Réception de {0} {0:plural:tube|tubes}"</c>. For the texts written in
-    /// French whatever the session's language — the audit trail's reasons.
+    /// French whatever the session's language — the audit trail's reasons. Numbers, amounts and
+    /// dates are written in the current culture, as the interpolated texts it replaces wrote them.
     /// </summary>
     public static string French(string template, params object?[] args) =>
-        string.Format(CultureInfo.GetCultureInfo(AppLanguage.French.ToCultureName()),
-                      Resolve(template, args, AppLanguage.French), args);
+        string.Format(CultureInfo.CurrentCulture, Resolve(template, args, AppLanguage.French), args);
 
     /// <summary>Whether a count takes the singular: below 2 in French, exactly 1 in English and Arabic.</summary>
     public static bool IsSingular(object value, AppLanguage language)

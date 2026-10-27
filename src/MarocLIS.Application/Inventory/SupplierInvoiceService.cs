@@ -376,7 +376,7 @@ public sealed class SupplierInvoiceService(
         await MoveLaterTermsAsync(invoice, live: true, ct);
 
         unitOfWork.AuditReason = invoice.Status == SupplierInvoiceStatus.Blocked
-            ? $"Saisie de la facture fournisseur {number} ({supplier.Code}) : bloquée, {invoice.Variances.Count} écart(s)"
+            ? PluralText.French("Saisie de la facture fournisseur {0} ({1}) : bloquée, {2} {2:plural:écart|écarts}", number, supplier.Code, invoice.Variances.Count)
             : $"Saisie de la facture fournisseur {number} ({supplier.Code}) : rapprochée, bonne à payer";
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -407,7 +407,7 @@ public sealed class SupplierInvoiceService(
 
         unitOfWork.AuditReason = $"Nouveau rapprochement de la facture fournisseur {invoice.InvoiceNumber} : " +
                                  (invoice.Status == SupplierInvoiceStatus.Blocked
-                                     ? $"toujours bloquée, {invoice.Variances.Count} écart(s)"
+                                     ? PluralText.French("toujours bloquée, {0} {0:plural:écart|écarts}", invoice.Variances.Count)
                                      : "rapprochée, bonne à payer");
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -495,7 +495,7 @@ public sealed class SupplierInvoiceService(
         if (done.IsFailure) return done;
 
         unitOfWork.AuditReason =
-            $"Déblocage de la facture fournisseur {invoice.InvoiceNumber} malgré {invoice.Variances.Count} écart(s) : {justification!.Trim()}";
+            PluralText.French("Déblocage de la facture fournisseur {0} malgré {1} {1:plural:écart|écarts} : {2}", invoice.InvoiceNumber, invoice.Variances.Count, justification!.Trim());
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
     }

@@ -264,7 +264,7 @@ public sealed class InventoryCountService(
             posted++;
         }
 
-        unitOfWork.AuditReason = $"Clôture de l'inventaire {count.Number} : {posted} ajustement(s) de stock";
+        unitOfWork.AuditReason = PluralText.French("Clôture de l'inventaire {0} : {1} {1:plural:ajustement|ajustements} de stock", count.Number, posted);
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(posted);

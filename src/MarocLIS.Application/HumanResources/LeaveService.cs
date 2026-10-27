@@ -458,7 +458,7 @@ public sealed class LeaveService(
 
         unitOfWork.AuditReason = recounted.Count == 0
             ? $"Jour férié ajouté : {date:dd/MM/yyyy} {name.Trim()}"
-            : $"Jour férié ajouté : {date:dd/MM/yyyy} {name.Trim()} ({recounted.Count} congé(s) recompté(s))";
+            : PluralText.French("Jour férié ajouté : {0:dd/MM/yyyy} {1} ({2} {2:plural:congé recompté|congés recomptés})", date, name.Trim(), recounted.Count);
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success<IReadOnlyList<HolidayRecount>>(recounted);
     }

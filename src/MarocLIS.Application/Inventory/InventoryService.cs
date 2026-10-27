@@ -372,7 +372,7 @@ public sealed class InventoryService(
         var affected = await queries.CountResultsProducedWithLotAsync(reagentLotId, ct);
 
         unitOfWork.AuditReason =
-            $"Rappel du lot {lot.LotNumber} ({recallReference}) — {affected} résultat(s) concerné(s)";
+            PluralText.French("Rappel du lot {0} ({1}) — {2} {2:plural:résultat concerné|résultats concernés}", lot.LotNumber, recallReference, affected);
 
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -446,7 +446,7 @@ public sealed class InventoryService(
         }
 
         unitOfWork.AuditReason =
-            $"Sortie de {quantity} {item.UnitOfMeasure} de {item.Code} — lot(s) {string.Join(", ", consumedFrom)}";
+            PluralText.French("Sortie de {0} {1} de {2} — {3:plural:lot|lots} {4}", quantity, item.UnitOfMeasure, item.Code, consumedFrom.Count, string.Join(", ", consumedFrom));
 
         await unitOfWork.SaveChangesAsync(ct);
 

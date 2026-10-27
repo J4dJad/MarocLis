@@ -3,6 +3,7 @@ using MarocLIS.Domain.HumanResources;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using MarocLIS.Domain.Common;
 
 namespace MarocLIS.Reporting;
 
@@ -128,7 +129,8 @@ public sealed partial class QuestPdfHrDocumentRenderer
             {
                 column.Spacing(8);
                 column.Item().AlignCenter().Text($"REGISTRE DES ACCIDENTS DU TRAVAIL — {document.Year}").FontSize(14).Bold();
-                column.Item().AlignCenter().Text($"{rows.Count} accident(s), {rows.Sum(r => r.StoppageDays):0.#} jour(s) d'arrêt — édité le {D(document.IssuedOn)}")
+                column.Item().AlignCenter().Text(PluralText.French("{0} {0:plural:accident|accidents}, {1:0.#} {1:plural:jour|jours} d'arrêt — édité le {2}",
+                                                                rows.Count, rows.Sum(r => r.StoppageDays), D(document.IssuedOn)))
                       .FontSize(9).FontColor(Colors.Grey.Darken2);
 
                 column.Item().Table(table =>

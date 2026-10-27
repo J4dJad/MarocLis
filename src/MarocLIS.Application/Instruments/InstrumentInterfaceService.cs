@@ -341,7 +341,7 @@ public sealed class InstrumentInterfaceService(
         await securityAuditor.LogAsync(
             SecurityEventKind.DataPurged,
             succeeded: true,
-            details: $"eqp.InstrumentMessageLog: {purged} frame(s) before "
+            details: $"eqp.InstrumentMessageLog: {purged} {(purged == 1 ? "frame" : "frames")} before "
                      + $"{cutoff:yyyy-MM-dd} ({hostOptions.MessageLogRetentionDays} d) - "
                      + reason.Trim(),
             ct: ct);
@@ -631,7 +631,7 @@ public sealed class InstrumentInterfaceService(
         }
 
         unitOfWork.AuditReason = $"Table de correspondance de l'interface mise à jour "
-                                 + $"({mappings.Count} code(s))";
+                                 + PluralText.French("({0} {0:plural:code|codes})", mappings.Count);
 
         await unitOfWork.SaveChangesAsync(ct);
 

@@ -511,7 +511,7 @@ public sealed class BillingService(
         if (depositsApplied.IsFailure) return Result.Failure<Guid>(depositsApplied.Errors);
 
         unitOfWork.AuditReason = depositsApplied.Value > 0m
-            ? $"Émission de la facture {invoice.Number}, acompte(s) imputé(s) : {depositsApplied.Value:N2} DH"
+            ? $"Émission de la facture {invoice.Number}, acomptes imputés : {depositsApplied.Value:N2} DH"
             : $"Émission de la facture {invoice.Number}";
 
         if (approver is not null)
@@ -716,7 +716,7 @@ public sealed class BillingService(
 
         unitOfWork.AuditReason =
             $"Avoir {creditNote.Number} sur la facture {original.Number} : {reason}"
-            + (released.Count > 0 ? $" — dossier(s) à refacturer : {string.Join(", ", released)}" : string.Empty);
+            + (released.Count > 0 ? PluralText.French(" — {0:plural:dossier|dossiers} à refacturer : {1}", released.Count, string.Join(", ", released)) : string.Empty);
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
@@ -1252,7 +1252,7 @@ public sealed class BillingService(
             ? errors
             : [Error.Validation("Billing.SelectOneInvoice")]);
 
-        unitOfWork.AuditReason = $"Retour tiers payant {outcome} sur {updated} facture(s)"
+        unitOfWork.AuditReason = PluralText.French("Retour tiers payant {0} sur {1} {1:plural:facture|factures}", outcome, updated)
                                  + (rejectionReason is null ? string.Empty : $" : {rejectionReason}");
 
         await unitOfWork.SaveChangesAsync(ct);

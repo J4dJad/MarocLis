@@ -242,7 +242,7 @@ public sealed class DataMigrationStore(
 
             db.MigrationBatches.Add(batch);
             AuditSaveChangesInterceptor.PendingReason =
-                $"Reprise de données : début de l'import {Describe(kind)} depuis {Short(sourceLabel)} ({rowCount} ligne(s))";
+                $"Reprise de données : début de l'import {Describe(kind)} depuis {Short(sourceLabel)} " + PluralText.French("({0} {0:plural:ligne|lignes})", rowCount);
             try { await db.SaveChangesAsync(ct); }
             finally { AuditSaveChangesInterceptor.PendingReason = null; }
 
@@ -266,7 +266,7 @@ public sealed class DataMigrationStore(
             // and the counts.
             AuditSaveChangesInterceptor.PendingReason =
                 $"Reprise de données {Describe(batch.Kind)} depuis {Short(batch.SourceLabel)} ({batch.SourceSystem}) : " +
-                $"{created} créé(s), {updated} mis à jour, {skipped} ignoré(s), {failed} en erreur" +
+                PluralText.French("{0} {0:plural:créé|créés}, {1} mis à jour, {2} {2:plural:ignoré|ignorés}, {3} en erreur", created, updated, skipped, failed) +
                 (interrupted ? " — interrompue" : string.Empty);
             try { await db.SaveChangesAsync(ct); }
             finally { AuditSaveChangesInterceptor.PendingReason = null; }

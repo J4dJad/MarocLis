@@ -18,7 +18,8 @@ public sealed class PluralTextTests
         PluralText.French("Réception de {0} {0:plural:tube|tubes}", 0).Should().Be("Réception de 0 tube");
         PluralText.French("Réception de {0} {0:plural:tube|tubes}", 1).Should().Be("Réception de 1 tube");
         PluralText.French("Réception de {0} {0:plural:tube|tubes}", 3).Should().Be("Réception de 3 tubes");
-        PluralText.French("{0} {0:plural:jour|jours}", 1.5m).Should().Be("1,5 jour");
+        PluralText.Resolve("{0:plural:jour|jours}", [1.5m], AppLanguage.French).Should().Be("jour");
+        PluralText.Resolve("{0:plural:day|days}", [1.5m], AppLanguage.English).Should().Be("days");
 
         PluralText.Resolve("{0:plural:tube|tubes}", [0], AppLanguage.English).Should().Be("tubes");
         PluralText.Resolve("{0:plural:tube|tubes}", [1], AppLanguage.English).Should().Be("tube");

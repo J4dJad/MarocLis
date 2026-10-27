@@ -1103,7 +1103,7 @@ public sealed class CatalogMaintenanceService(
 
             unitOfWork.AuditReason =
                 $"Révision de l'intervalle de référence {loaded.Code}/{parameter.Code} "
-                + $"à compter du {from:dd/MM/yyyy} ({interpreted} résultat(s) déjà interprétés)";
+                + PluralText.French("à compter du {0:dd/MM/yyyy} ({1} {1:plural:résultat déjà interprété|résultats déjà interprétés})", from, interpreted);
 
             await unitOfWork.SaveChangesAsync(ct);
 

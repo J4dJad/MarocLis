@@ -311,7 +311,7 @@ public sealed class TreasuryService(
 
         account.CsvMapping = mapping.ToJson();
 
-        unitOfWork.AuditReason = $"Import du relevé {Path.GetFileName(fileName)} — {fresh.Count} ligne(s), compte {account.Label}";
+        unitOfWork.AuditReason = PluralText.French("Import du relevé {0} — {1} {1:plural:ligne|lignes}, compte {2}", Path.GetFileName(fileName), fresh.Count, account.Label);
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ImportResult(
@@ -367,7 +367,7 @@ public sealed class TreasuryService(
         var reason = $"Import du relevé {line.SourceFileName ?? line.ImportId.ToString("N")[..8]} annulé";
         foreach (var l in batch) lines.SoftDelete(l, currentUser.UserId, reason);
 
-        unitOfWork.AuditReason = $"{reason} — {batch.Count} ligne(s), {Money.Round(batch.Sum(l => l.AmountMad)):N2} DH";
+        unitOfWork.AuditReason = PluralText.French("{0} — {1} {1:plural:ligne|lignes}, {2:N2} DH", reason, batch.Count, Money.Round(batch.Sum(l => l.AmountMad)));
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success(batch.Count);
     }
@@ -438,7 +438,7 @@ public sealed class TreasuryService(
                                                  clock.Now, currentUser.UserId), ct);
         }
 
-        unitOfWork.AuditReason = $"Rapprochement automatique — {proposals.Count} ligne(s), compte {data.Value.Account.Label}";
+        unitOfWork.AuditReason = PluralText.French("Rapprochement automatique — {0} {0:plural:ligne|lignes}, compte {1}", proposals.Count, data.Value.Account.Label);
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success(proposals.Count);
     }
@@ -537,7 +537,7 @@ public sealed class TreasuryService(
             if (undone.IsFailure) return undone;
         }
 
-        unitOfWork.AuditReason = $"Annulation du rapprochement — {active.Count} mouvement(s)";
+        unitOfWork.AuditReason = PluralText.French("Annulation du rapprochement — {0} {0:plural:mouvement|mouvements}", active.Count);
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
     }

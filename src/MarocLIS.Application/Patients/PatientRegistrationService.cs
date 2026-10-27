@@ -280,7 +280,7 @@ public sealed class PatientRegistrationService(
 
         unitOfWork.AuditReason = candidates.Count > 0
             ? $"Création du dossier {patient.MedicalRecordNumber} ({patient.FullName}) " +
-              $"malgré {candidates.Count} doublon(s) possible(s) : {identity.DuplicateOverrideReason}"
+              PluralText.French("malgré {0} {0:plural:doublon possible|doublons possibles} : {1}", candidates.Count, identity.DuplicateOverrideReason)
             : $"Création du dossier {patient.MedicalRecordNumber} ({patient.FullName})";
 
         await unitOfWork.SaveChangesAsync(ct);
@@ -419,11 +419,11 @@ public sealed class PatientRegistrationService(
             var (reinterpreted, validated) = await ReinterpretResultsAsync(patient, ct);
 
             if (reinterpreted > 0)
-                unitOfWork.AuditReason += $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s)";
+                unitOfWork.AuditReason += PluralText.French(" ; {0} {0:plural:résultat non validé réinterprété|résultats non validés réinterprétés}", reinterpreted);
             if (validated > 0)
                 unitOfWork.AuditReason +=
-                    $" ; données démographiques modifiées : {validated} résultat(s) déjà validé(s) " +
-                    "interprété(s) selon les anciennes données, à revoir et à amender si nécessaire";
+                    PluralText.French(" ; données démographiques modifiées : {0} {0:plural:résultat déjà validé interprété|résultats déjà validés interprétés} " +
+                                      "selon les anciennes données, à revoir et à amender si nécessaire", validated);
         }
 
         await unitOfWork.SaveChangesAsync(ct);
@@ -695,15 +695,15 @@ public sealed class PatientRegistrationService(
 
             if (reinterpreted > 0)
                 unitOfWork.AuditReason +=
-                    $" ; {reinterpreted} résultat(s) non validé(s) réinterprété(s) avec l'antériorité " +
-                    "du dossier conservé";
+                    PluralText.French(" ; {0} {0:plural:résultat non validé réinterprété|résultats non validés réinterprétés} avec l'antériorité " +
+                                      "du dossier conservé", reinterpreted);
 
             // Validated results were interpreted with the duplicate's sex or age; when the two
             // files agree on those, nothing about them was wrong.
             if (demographicsDiffer && validated > 0)
                 unitOfWork.AuditReason +=
-                    $" ; {validated} résultat(s) déjà validé(s) interprété(s) selon les données " +
-                    "du doublon, à revoir et à amender si nécessaire";
+                    PluralText.French(" ; {0} {0:plural:résultat déjà validé interprété|résultats déjà validés interprétés} selon les données " +
+                                      "du doublon, à revoir et à amender si nécessaire", validated);
 
             await unitOfWork.SaveChangesAsync(ct);
         }

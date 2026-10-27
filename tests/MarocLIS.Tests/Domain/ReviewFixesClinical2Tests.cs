@@ -206,7 +206,7 @@ public sealed class ReviewFixesClinical2Tests
         pending.AppliedLowerLimit.Should().Be(12m);
         released.Interpretation.Should().Be(ResultInterpretation.Low);
         bench.AuditReasons.Should().ContainSingle()
-             .Which.Should().Contain("1 résultat(s) déjà validé(s)").And.Contain("à revoir");
+             .Which.Should().Contain("1 résultat déjà validé interprété").And.Contain("à revoir");
     }
 
     [Fact]

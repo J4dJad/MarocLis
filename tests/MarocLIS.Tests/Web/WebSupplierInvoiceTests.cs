@@ -123,7 +123,7 @@ public sealed class WebSupplierInvoiceTests : WebScreenContext
         page.Find("[data-modal=reason] [data-action='Action.Ok']").Click();
 
         invoice.Status.Should().Be(SupplierInvoiceStatus.ApprovedForPayment);
-        AuditReason.Should().Be("Déblocage de la facture fournisseur FA-2026-0418 malgré 1 écart(s) : Hausse tarifaire notifiée");
+        AuditReason.Should().Be("Déblocage de la facture fournisseur FA-2026-0418 malgré 1 écart : Hausse tarifaire notifiée");
     }
 
     [Fact]

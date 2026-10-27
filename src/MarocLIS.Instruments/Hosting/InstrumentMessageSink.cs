@@ -310,7 +310,7 @@ public sealed class InstrumentMessageSink(
         if (imported > 0)
         {
             unitOfWork.AuditReason =
-                $"Résultats reçus de l'automate ({link.Protocol}) — {imported} valeur(s)";
+                PluralText.French("Résultats reçus de l'automate ({0}) — {1} {1:plural:valeur|valeurs}", link.Protocol, imported);
 
             await unitOfWork.SaveChangesAsync(ct);
         }
@@ -741,7 +741,7 @@ public sealed class InstrumentMessageSink(
             await EvaluateAcceptancePointsAsync([.. points.Where(p => p.Point.IsLotEvaluation)], ct);
 
             unitOfWork.AuditReason =
-                $"Contrôle interne reçu de l'automate — lot {lot}, {imported} niveau(x)";
+                PluralText.French("Contrôle interne reçu de l'automate — lot {0}, {1} {1:plural:niveau|niveaux}", lot, imported);
 
             await unitOfWork.SaveChangesAsync(ct);
         }

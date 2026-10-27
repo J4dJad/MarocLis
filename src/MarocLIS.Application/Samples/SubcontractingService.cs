@@ -189,7 +189,7 @@ public sealed class SubcontractingService(
         }
 
         unitOfWork.AuditReason = "Envoi en sous-traitance : " +
-                                 string.Join(", ", created.Select(c => $"{c.Number} ({c.ItemCount} analyse(s) → {partners[c.PartnerSiteId].Code})"));
+                                 string.Join(", ", created.Select(c => PluralText.French("{0} ({1} {1:plural:analyse|analyses} → {2})", c.Number, c.ItemCount, partners[c.PartnerSiteId].Code)));
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);

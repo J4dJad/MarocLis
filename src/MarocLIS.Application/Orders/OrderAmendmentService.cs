@@ -442,7 +442,7 @@ public sealed class OrderAmendmentService(
         order.RecomputeStatus();
 
         unitOfWork.AuditReason =
-            $"Ajout de {added.Count} analyse(s) au dossier {order.AccessionNumber} : {reason.Trim()}";
+            PluralText.French("Ajout de {0} {0:plural:analyse|analyses} au dossier {1} : {2}", added.Count, order.AccessionNumber, reason.Trim());
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);

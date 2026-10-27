@@ -205,7 +205,7 @@ public sealed class LicenceService(
     private static string Describe(LicenceTerms terms, string? fileName, StoredLicence? replaced)
     {
         var text = $"Licence {terms.Number} v{terms.Version} ({LicenceTerms.KindWord(terms.Kind)}, " +
-                   $"{terms.Workstations} poste(s), modules : {(terms.Modules.Count == 0 ? "socle" : string.Join(", ", terms.Modules))})";
+                   PluralText.French("{0} {0:plural:poste|postes}", terms.Workstations) + $", modules : {(terms.Modules.Count == 0 ? "socle" : string.Join(", ", terms.Modules))})";
 
         if (replaced is { Number: { } number }) text += $" en remplacement de {number} v{replaced.Version}";
         if (fileName is not null) text += $" — fichier {Path.GetFileName(fileName)}";

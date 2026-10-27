@@ -1,6 +1,7 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Domain.Billing;
 using Microsoft.EntityFrameworkCore;
+using MarocLIS.Domain.Common;
 
 namespace MarocLIS.Infrastructure.Persistence.Demo;
 
@@ -48,7 +49,7 @@ public static class DemoAccountGuard
         var realPatients = await db.Patients.IgnoreQueryFilters().AsNoTracking()
             .CountAsync(p => !p.MedicalRecordNumber.StartsWith(prefix), ct);
         if (realPatients > 0)
-            return $"{realPatients} patient(s) hors démonstration";
+            return PluralText.French("{0} {0:plural:patient|patients} hors démonstration", realPatients);
 
         // Every invoice the demonstration issues is a DEMO- patient's (and so is a credit note
         // correcting one, which carries the original's patient); a draft has consumed no number.
@@ -59,7 +60,7 @@ public static class DemoAccountGuard
                                     p => p.Id == i.PatientId
                                          && p.MedicalRecordNumber.StartsWith(prefix)), ct);
         if (realInvoices > 0)
-            return $"{realInvoices} facture(s) émise(s) hors démonstration";
+            return PluralText.French("{0} {0:plural:facture émise|factures émises} hors démonstration", realInvoices);
 
         return null;
     }

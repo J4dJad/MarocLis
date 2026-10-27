@@ -334,7 +334,7 @@ public sealed class UserAdministrationService(
 
         await securityAuditor.LogAsync(SecurityEventKind.UserCreated, succeeded: true,
                                         targetUserId: user.Id,
-                                        details: $"{userName} — {request.RoleIds.Count} rôle(s)",
+                                        details: PluralText.French("{0} — {1} {1:plural:rôle|rôles}", userName, request.RoleIds.Count),
                                         ct: ct);
 
         return Result.Success(user.Id);
@@ -443,7 +443,7 @@ public sealed class UserAdministrationService(
 
         users.Update(user);
 
-        unitOfWork.AuditReason = $"Rôles de {user.UserName} — {wanted.Count} rôle(s)";
+        unitOfWork.AuditReason = PluralText.French("Rôles de {0} — {1} {1:plural:rôle|rôles}", user.UserName, wanted.Count);
         await unitOfWork.SaveChangesAsync(ct);
 
         // Logged separately from the entity audit: a privilege change is the event a security
@@ -455,14 +455,14 @@ public sealed class UserAdministrationService(
         {
             await securityAuditor.LogAsync(SecurityEventKind.RoleAssigned, succeeded: true,
                                             targetUserId: user.Id,
-                                            details: $"{added} rôle(s) attribué(s)", ct: ct);
+                                            details: PluralText.French("{0} {0:plural:rôle attribué|rôles attribués}", added), ct: ct);
         }
 
         if (removed > 0)
         {
             await securityAuditor.LogAsync(SecurityEventKind.RoleRemoved, succeeded: true,
                                             targetUserId: user.Id,
-                                            details: $"{removed} rôle(s) retiré(s)", ct: ct);
+                                            details: PluralText.French("{0} {0:plural:rôle retiré|rôles retirés}", removed), ct: ct);
         }
 
         return Result.Success();
@@ -756,7 +756,7 @@ public sealed class UserAdministrationService(
 
         await roles.AddAsync(role, ct);
 
-        unitOfWork.AuditReason = $"Création du rôle {normalized} — {permissions.Count} permission(s)";
+        unitOfWork.AuditReason = PluralText.French("Création du rôle {0} — {1} {1:plural:permission|permissions}", normalized, permissions.Count);
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(role.Id);
@@ -817,7 +817,7 @@ public sealed class UserAdministrationService(
         await unitOfWork.SaveChangesAsync(ct);
 
         await securityAuditor.LogAsync(SecurityEventKind.PermissionsChanged, succeeded: true,
-                                        details: $"{role.Code} — {wanted.Count} permission(s)",
+                                        details: PluralText.French("{0} — {1} {1:plural:permission|permissions}", role.Code, wanted.Count),
                                         ct: ct);
 
         return Result.Success();

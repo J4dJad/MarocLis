@@ -277,7 +277,7 @@ public sealed class SampleWorkflowService(
             }
         }
 
-        unitOfWork.AuditReason = $"Prélèvement de {requests.Count} tube(s)";
+        unitOfWork.AuditReason = PluralText.French("Prélèvement de {0} {0:plural:tube|tubes}", requests.Count);
         await unitOfWork.SaveChangesAsync(ct);
 
         return problems.Count == 0 ? Result.Success() : Result.Failure(problems);
@@ -310,7 +310,7 @@ public sealed class SampleWorkflowService(
             if (dispatched.IsFailure) problems.Add(dispatched.FirstError);
         }
 
-        unitOfWork.AuditReason = $"Expédition de {sampleIds.Count} tube(s)";
+        unitOfWork.AuditReason = PluralText.French("Expédition de {0} {0:plural:tube|tubes}", sampleIds.Count);
         await unitOfWork.SaveChangesAsync(ct);
 
         return problems.Count == 0 ? Result.Success() : Result.Failure(problems);
@@ -515,7 +515,7 @@ public sealed class SampleWorkflowService(
         if (received == 0)
             return Result.Success(new ReceptionOutcome(0, 0, problems, []));
 
-        unitOfWork.AuditReason = $"Réception de {received} tube(s)";
+        unitOfWork.AuditReason = PluralText.French("Réception de {0} {0:plural:tube|tubes}", received);
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success(new ReceptionOutcome(received, 0, problems, []));
@@ -627,7 +627,7 @@ public sealed class SampleWorkflowService(
             rejected++;
         }
 
-        unitOfWork.AuditReason = $"Refus de {rejected} échantillon(s)";
+        unitOfWork.AuditReason = PluralText.French("Refus de {0} {0:plural:échantillon|échantillons}", rejected);
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 
