@@ -161,7 +161,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the bank accounts failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
     }
 
@@ -207,7 +207,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a bank account failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

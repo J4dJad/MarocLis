@@ -103,7 +103,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Computing the steering dashboard failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

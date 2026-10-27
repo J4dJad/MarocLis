@@ -433,7 +433,7 @@
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Loading patient messaging failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -679,7 +679,7 @@
         {
             Logger.LogError(ex, "A patient messaging operation failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

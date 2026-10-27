@@ -124,7 +124,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the storage places failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -190,7 +190,7 @@
         {
             Logger.LogError(ex, "Changing a storage place failed.");
             Close();
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

@@ -130,7 +130,7 @@
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Loading the leave balances failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -187,7 +187,7 @@
         {
             Logger.LogError(ex, "Adjusting a leave balance failed.");
             CloseAdjust();
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

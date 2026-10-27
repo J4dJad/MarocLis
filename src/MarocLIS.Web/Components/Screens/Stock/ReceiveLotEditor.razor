@@ -183,7 +183,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Looking up a scanned GTIN failed.");
-            _scanNote = (Texts["Message.UnexpectedError"], true);
+            _scanNote = (Texts[WebFailures.KeyFor(ex)], true);
         }
     }
 

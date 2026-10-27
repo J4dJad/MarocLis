@@ -206,7 +206,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the sites of the accounting export failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -338,7 +338,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "An accounting export step failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

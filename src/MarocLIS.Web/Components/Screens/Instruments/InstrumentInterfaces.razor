@@ -371,7 +371,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the analyser interfaces failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -478,7 +478,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving an analyser interface failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -554,7 +554,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving an analyser's code table failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -622,7 +622,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Replaying an analyser transmission failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

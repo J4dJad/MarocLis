@@ -136,7 +136,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the number sequences failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -169,7 +169,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Changing a number sequence failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

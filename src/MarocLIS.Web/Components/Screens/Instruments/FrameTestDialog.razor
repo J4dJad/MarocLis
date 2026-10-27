@@ -136,7 +136,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Previewing an analyser frame failed.");
-            _message = Texts["Message.UnexpectedError"];
+            _message = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

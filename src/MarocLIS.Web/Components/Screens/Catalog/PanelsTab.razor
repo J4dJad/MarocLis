@@ -190,7 +190,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a panel failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

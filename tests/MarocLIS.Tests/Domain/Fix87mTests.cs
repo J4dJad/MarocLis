@@ -365,6 +365,24 @@ public sealed class Fix87mTests
         wrote.Should().Be(0);
     }
 
+    [Fact]
+    public void ASaveRefusedBecauseSomeoneSavedFirst_SaysSoOnTheWeb_AsAtTheWorkstation()
+    {
+        var conflict = new MarocLIS.Infrastructure.Persistence.ConcurrencyConflictException(
+            "Message.ConcurrencyConflict", new InvalidOperationException());
+
+        MarocLIS.Web.Components.WebFailures.KeyFor(conflict).Should().Be("Message.ConcurrencyConflict");
+        MarocLIS.Web.Components.WebFailures.KeyFor(new AggregateException(conflict)).Should().Be("Message.ConcurrencyConflict");
+        MarocLIS.Web.Components.WebFailures.KeyFor(new InvalidOperationException()).Should().Be("Message.UnexpectedError");
+
+        // Every web screen's catch goes through it: none writes « Erreur inattendue » itself.
+        var web = Path.Combine(MarocLIS.Tests.Web.WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Web", "Components", "Screens");
+        Directory.EnumerateFiles(web, "*.razor", SearchOption.AllDirectories)
+                 .Where(f => File.ReadAllText(f).Contains("Texts[\"Message.UnexpectedError\"]", StringComparison.Ordinal))
+                 .Select(Path.GetFileName)
+                 .Should().BeEmpty();
+    }
+
     private class Stub : DispatchProxy
     {
         private Dictionary<string, Func<object?[]?, object?>> _handlers = [];

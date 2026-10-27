@@ -403,7 +403,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the validation worklist failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -468,7 +468,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening order {OrderId} for validation failed.", orderId);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -664,7 +664,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
-            Show(Texts["Result.History"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Result.History"], Texts[WebFailures.KeyFor(ex)]);
         }
     }
 
@@ -742,7 +742,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Validating order {OrderId} failed.", sheet.LabOrderId);
-            Show(Texts["Validation.Biological"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Validation.Biological"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -788,7 +788,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Unvalidating results of order {OrderId} failed.", sheet.LabOrderId);
-            Show(Texts["Validation.Unvalidate"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Validation.Unvalidate"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -855,7 +855,7 @@
         {
             Logger.LogError(ex, "Raising the critical call of result {ResultId} failed.", row.TestResultId);
             _toCall = null;
-            Show(Texts["Nav.CriticalResults"], Texts["Message.UnexpectedError"], EndCallsAsync);
+            Show(Texts["Nav.CriticalResults"], Texts[WebFailures.KeyFor(ex)], EndCallsAsync);
         }
     }
 
@@ -939,7 +939,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Releasing the report of order {OrderId} failed.", sheet.LabOrderId);
-            Show(Texts["Report.Title"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Report.Title"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

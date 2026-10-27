@@ -210,7 +210,7 @@
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Loading the planning failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -432,7 +432,7 @@
         {
             Logger.LogError(ex, "A planning operation failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

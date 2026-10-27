@@ -183,7 +183,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the backups failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -277,7 +277,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "A backup action failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
             return null;
         }
         finally

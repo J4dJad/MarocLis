@@ -205,7 +205,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the licence failed.");
-            _message = (Texts["Message.UnexpectedError"], "critical");
+            _message = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -268,7 +268,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Importing a licence failed.");
-            _message = (Texts["Message.UnexpectedError"], "critical");
+            _message = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -292,7 +292,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Exporting the licence request failed.");
-            _message = (Texts["Message.UnexpectedError"], "critical");
+            _message = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

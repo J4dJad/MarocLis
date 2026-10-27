@@ -110,7 +110,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Creating a prescriber from the counter failed.");
-            _error = Texts["Message.UnexpectedError"];
+            _error = Texts[WebFailures.KeyFor(ex)];
         }
     }
 

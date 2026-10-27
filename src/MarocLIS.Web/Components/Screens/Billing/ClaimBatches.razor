@@ -230,7 +230,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the claim register failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -419,7 +419,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Submitting a claim batch failed.");
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -456,7 +456,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Recording the outcome of claim batch {Reference} failed.", batch.ClaimReference);
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

@@ -91,7 +91,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Exporting the recall list failed.");
-            _status = (Texts["Message.UnexpectedError"], true);
+            _status = (Texts[WebFailures.KeyFor(ex)], true);
         }
         finally
         {

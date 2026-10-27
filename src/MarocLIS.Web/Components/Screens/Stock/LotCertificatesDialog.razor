@@ -88,7 +88,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the lot certificates failed.");
-            _message = (Texts["Message.UnexpectedError"], true);
+            _message = (Texts[WebFailures.KeyFor(ex)], true);
         }
         finally
         {
@@ -117,7 +117,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening a lot certificate failed.");
-            _message = (Texts["Message.UnexpectedError"], true);
+            _message = (Texts[WebFailures.KeyFor(ex)], true);
         }
         finally
         {
@@ -170,7 +170,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Attaching a lot certificate failed.");
-            _message = (Texts["Message.UnexpectedError"], true);
+            _message = (Texts[WebFailures.KeyFor(ex)], true);
         }
         finally
         {

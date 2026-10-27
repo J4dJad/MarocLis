@@ -302,7 +302,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the instrument contracts failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -343,7 +343,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading a contract's interventions failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -529,7 +529,7 @@
         {
             Logger.LogError(ex, "An instrument contract step failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

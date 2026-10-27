@@ -129,7 +129,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the catalogue failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -177,7 +177,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Reading the catalogue failed ({What}).", what);
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
             return default;
         }
     }
@@ -430,7 +430,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving an analysis failed.");
-            _editRefusal = Texts["Message.UnexpectedError"];
+            _editRefusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

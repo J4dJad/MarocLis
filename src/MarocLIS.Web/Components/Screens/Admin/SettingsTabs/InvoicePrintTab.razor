@@ -109,7 +109,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the invoice print settings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -166,7 +166,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving the invoice print settings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

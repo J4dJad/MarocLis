@@ -312,7 +312,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the sites failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -404,7 +404,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving the site failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -443,7 +443,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Creating a site failed.");
-            _newRefusal = Texts["Message.UnexpectedError"];
+            _newRefusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

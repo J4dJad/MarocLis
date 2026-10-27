@@ -183,7 +183,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Computing the consumption failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -284,7 +284,7 @@
         {
             Logger.LogError(ex, "A consumption operation failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

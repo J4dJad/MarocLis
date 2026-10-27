@@ -115,7 +115,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the settings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -152,7 +152,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a setting failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

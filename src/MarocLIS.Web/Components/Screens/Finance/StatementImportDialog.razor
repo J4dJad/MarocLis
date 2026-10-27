@@ -269,7 +269,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Previewing a bank statement failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -304,7 +304,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Importing a bank statement failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

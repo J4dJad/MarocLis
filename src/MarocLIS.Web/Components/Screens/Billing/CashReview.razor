@@ -186,7 +186,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the tills to sign off failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -262,7 +262,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Signing off a till failed.");
-            _message = Texts["Message.UnexpectedError"];
+            _message = Texts[WebFailures.KeyFor(ex)];
             _dialog = ReviewDialog.Message;
         }
         finally

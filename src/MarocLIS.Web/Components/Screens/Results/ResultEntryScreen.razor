@@ -481,7 +481,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the result entry worklist failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -559,7 +559,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Resolving {Term} for entry failed.", term);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -585,7 +585,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading order {OrderId} for entry failed.", orderId);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -769,7 +769,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the history of parameter {ParameterId} failed.", row.TestParameterId);
-            Show(Texts["Result.History"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Result.History"], Texts[WebFailures.KeyFor(ex)]);
         }
     }
 
@@ -793,7 +793,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the bench worksheet options failed.");
-            Show(Texts["BenchSheet.Title"], Texts["Message.UnexpectedError"]);
+            Show(Texts["BenchSheet.Title"], Texts[WebFailures.KeyFor(ex)]);
         }
     }
 
@@ -826,7 +826,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Printing the bench worksheet failed.");
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
     }
 
@@ -883,7 +883,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving the results of order {OrderId} failed.", sheet.LabOrderId);
-            Show(Texts["Action.Save"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Action.Save"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -983,7 +983,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Correcting result {ResultId} failed.", row.TestResultId);
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -1040,7 +1040,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Technical validation of order {OrderId} failed.", sheet.LabOrderId);
-            Show(Texts["Validation.Technical"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Validation.Technical"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

@@ -363,7 +363,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the report register failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -574,7 +574,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Releasing the report of order {OrderId} failed.", row.LabOrderId);
-            Show(Texts["Report.Issue"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Report.Issue"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -606,7 +606,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Reprinting report {ReportId} failed.", row.ReportId);
-            Show(Texts["Report.Reprint"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Report.Reprint"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -658,7 +658,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Recording the delivery of report {ReportId} failed.", row.ReportId);
-            Show(Texts["Report.RecordDelivery"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Report.RecordDelivery"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -695,7 +695,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Amending report {ReportId} failed.", row.ReportId);
-            Show(Texts["Report.IssueAmendment"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Report.IssueAmendment"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

@@ -248,7 +248,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the storage units failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -306,7 +306,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the month's readings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -434,7 +434,7 @@
         {
             Logger.LogError(ex, "A temperature step failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

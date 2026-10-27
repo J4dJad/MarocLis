@@ -104,7 +104,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Computing activity statistics failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

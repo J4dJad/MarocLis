@@ -318,7 +318,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading uninvoiced orders failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -345,7 +345,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the invoice ledger failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -471,7 +471,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Billing action « {Title} » failed.", title);
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

@@ -144,7 +144,7 @@
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Loading the public holidays failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -202,7 +202,7 @@
         {
             Logger.LogError(ex, "Adding a public holiday failed.");
             CloseAdd();
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -239,7 +239,7 @@
         {
             Logger.LogError(ex, "Removing a public holiday failed.");
             _removing = null;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

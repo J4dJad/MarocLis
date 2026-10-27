@@ -537,7 +537,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the user list failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -554,7 +554,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the roles failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -577,7 +577,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the security log failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -601,7 +601,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "An administration write failed ({Title}).", title);
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

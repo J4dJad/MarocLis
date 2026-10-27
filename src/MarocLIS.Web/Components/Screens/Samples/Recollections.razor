@@ -208,7 +208,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the recollection list failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -296,7 +296,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Recollection action failed.");
-            Show(title, Texts["Message.UnexpectedError"]);
+            Show(title, Texts[WebFailures.KeyFor(ex)]);
         }
     }
 }

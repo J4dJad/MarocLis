@@ -549,7 +549,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the order list for {Term} failed.", term);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
             return false;
         }
     }
@@ -599,7 +599,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Searching orders for {Term} failed.", term);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -644,7 +644,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading order {OrderId} failed.", orderId);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -997,7 +997,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening the report of {Accession} failed.", detail.AccessionNumber);
-            Show(caption, Texts["Message.UnexpectedError"]);
+            Show(caption, Texts[WebFailures.KeyFor(ex)]);
         }
     }
 

@@ -674,7 +674,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the data migration targets failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
 
         RenderCorrespondences();
@@ -1038,7 +1038,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Undoing the last data migration failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
 
         await LoadJournalAsync();
@@ -1070,7 +1070,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Looking up an old number failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -1111,7 +1111,7 @@
         {
             var said = onFailure?.Invoke(ex);
             if (said is null) Logger.LogError(ex, "A data migration step failed.");
-            _deferred = (said ?? Texts["Message.UnexpectedError"], "critical");
+            _deferred = (said ?? Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

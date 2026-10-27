@@ -152,7 +152,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Applying the official coefficient failed.");
-            Screen.Say(Texts["Message.UnexpectedError"], "critical");
+            Screen.Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

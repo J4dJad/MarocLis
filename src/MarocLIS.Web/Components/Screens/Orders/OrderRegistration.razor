@@ -642,7 +642,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening the patient's latest file failed.");
-            _notice = (Texts["Message.UnexpectedError"], "critical");
+            _notice = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -683,7 +683,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening a provisional file failed.");
-            _info = new Info("failure", Texts["Patient.Provisional"], [Texts["Message.UnexpectedError"]]);
+            _info = new Info("failure", Texts["Patient.Provisional"], [Texts[WebFailures.KeyFor(ex)]]);
         }
     }
 
@@ -1090,7 +1090,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Order registration failed.");
-            _info = new Info("failure", Texts["Order.Title"], [Texts["Message.UnexpectedError"]]);
+            _info = new Info("failure", Texts["Order.Title"], [Texts[WebFailures.KeyFor(ex)]]);
         }
         finally
         {

@@ -172,7 +172,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the habilitation matrix failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -274,7 +274,7 @@
         {
             Logger.LogError(ex, "A habilitation operation failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

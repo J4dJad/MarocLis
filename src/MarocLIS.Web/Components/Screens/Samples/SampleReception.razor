@@ -417,7 +417,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Scanning {Barcode} at reception failed.", barcode);
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -495,7 +495,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Receiving {Barcode} failed.", candidate.Barcode);
-            Show(Texts["Action.Accept"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Action.Accept"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {
@@ -562,7 +562,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Rejecting {Barcode} failed.", candidate.Barcode);
-            Show(Texts["Action.Reject"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Action.Reject"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

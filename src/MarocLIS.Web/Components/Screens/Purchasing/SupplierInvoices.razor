@@ -397,7 +397,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the supplier invoices failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -429,7 +429,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading a supplier invoice failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -773,7 +773,7 @@
         {
             Logger.LogError(ex, "A supplier invoice operation failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

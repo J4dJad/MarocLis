@@ -310,7 +310,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the fixed-assets register failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -604,7 +604,7 @@
         {
             Logger.LogError(ex, "A fixed-assets step failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

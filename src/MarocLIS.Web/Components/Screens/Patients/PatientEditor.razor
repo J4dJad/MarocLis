@@ -383,7 +383,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening the patient file failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -574,7 +574,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving the patient file failed.");
-            Say(Texts["Message.UnexpectedError"], "critical");
+            Say(Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

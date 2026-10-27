@@ -339,7 +339,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Patient search failed for '{Term}'.", term);
-            _error = Texts["Message.UnexpectedError"];
+            _error = Texts[WebFailures.KeyFor(ex)];
         }
     }
 

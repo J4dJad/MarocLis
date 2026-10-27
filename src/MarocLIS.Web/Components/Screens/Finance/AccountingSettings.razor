@@ -110,7 +110,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the accounting settings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -166,7 +166,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "An accounting settings step failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

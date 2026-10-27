@@ -382,7 +382,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the quality control screen failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -506,7 +506,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Submitting a control run failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -611,7 +611,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Reviewing a rejected control failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

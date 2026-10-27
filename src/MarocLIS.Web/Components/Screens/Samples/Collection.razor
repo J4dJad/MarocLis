@@ -305,7 +305,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the collection worklist failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -602,7 +602,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Recording the draw failed.");
-            Show(Texts["Collection.ValidateDraw"], Texts["Message.UnexpectedError"]);
+            Show(Texts["Collection.ValidateDraw"], Texts[WebFailures.KeyFor(ex)]);
         }
         finally
         {

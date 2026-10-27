@@ -279,7 +279,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the non-conformity register failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -553,7 +553,7 @@
         {
             Logger.LogError(ex, "A non-conformity step failed.");
             _prompt = Prompt.None;
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {

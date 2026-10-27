@@ -159,7 +159,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Loading the forecast items failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
     }
 
@@ -206,7 +206,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a forecast item failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

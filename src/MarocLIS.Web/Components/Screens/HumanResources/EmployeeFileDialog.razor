@@ -431,7 +431,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Opening a personnel file failed.");
-            _failure = Texts["Message.UnexpectedError"];
+            _failure = Texts[WebFailures.KeyFor(ex)];
         }
     }
 
@@ -488,7 +488,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a personnel file failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -555,7 +555,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving a document of a personnel file failed.");
-            _promptRefusal = Texts["Message.UnexpectedError"];
+            _promptRefusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -621,7 +621,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Attaching a scan to a personnel file failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -648,7 +648,7 @@ else
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Opening the scan of a personnel document failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {
@@ -682,7 +682,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Removing a document of a personnel file failed.");
-            _refusal = Texts["Message.UnexpectedError"];
+            _refusal = Texts[WebFailures.KeyFor(ex)];
         }
         finally
         {

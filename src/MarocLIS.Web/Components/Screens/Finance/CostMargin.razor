@@ -181,7 +181,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Computing cost and margin failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
         finally
         {
@@ -223,7 +223,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Reading the cost settings failed.");
-            _status = (Texts["Message.UnexpectedError"], "critical");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
         }
     }
 
@@ -252,7 +252,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Saving the cost settings failed.");
-            _dialogRefusal = Texts["Message.UnexpectedError"];
+            _dialogRefusal = Texts[WebFailures.KeyFor(ex)];
             return;
         }
         finally
