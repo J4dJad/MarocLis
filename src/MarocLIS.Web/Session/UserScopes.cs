@@ -1,3 +1,5 @@
+using MarocLIS.Web.Security;
+
 namespace MarocLIS.Web.Session;
 
 /// <summary>
@@ -10,13 +12,19 @@ namespace MarocLIS.Web.Session;
 /// the session is replayed first: a new scope's accessor is empty, and an empty operator is no one.
 /// </para>
 /// </summary>
-public sealed class UserScopes(IServiceScopeFactory scopes, SessionContext context)
+public sealed class UserScopes(IServiceScopeFactory scopes, SessionContext context, WebSessionStore store)
 {
+    /// <summary>
+    /// A scope for the tab's operator, as long as the session is still open: signed out in another
+    /// tab, it has left the store at once, while this tab's monitor only notices at its next tick.
+    /// Until then a click here ran — and was audited — under the operator who had left; now the
+    /// scope has no operator, so every use case refuses it, and the monitor sends the tab away.
+    /// </summary>
     public AsyncServiceScope Create()
     {
         var scope = scopes.CreateAsyncScope();
-        if (context.Session is { } session)
-            scope.ServiceProvider.GetRequiredService<SessionContext>().Attach(session);
+        if (context.Session is { } session && store.Get(session.Id) is { } current)
+            scope.ServiceProvider.GetRequiredService<SessionContext>().Attach(current);
         return scope;
     }
 

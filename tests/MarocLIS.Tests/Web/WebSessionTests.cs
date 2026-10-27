@@ -40,6 +40,7 @@ public sealed class WebSessionTests : IDisposable
         services.AddScoped<SessionContext>();
         services.AddScoped<AuthenticationStateProvider, PrincipalState>();
         services.AddScoped<SessionCircuitHandler>();
+        services.AddScoped<UserScopes>();
         services.UsePerRequestCurrentUser();
         _services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
@@ -111,6 +112,26 @@ public sealed class WebSessionTests : IDisposable
 
         context.Invoking(c => c.Attach(intruder)).Should().Throw<InvalidOperationException>();
         other.ServiceProvider.GetRequiredService<ICurrentUser>().UserName.Should().Be("un");
+    }
+
+    [Fact]
+    public async Task ATabStillOpen_AfterSigningOutInAnotherTab_ActsAsNoOne_NotAsTheOperatorWhoLeft()
+    {
+        var session = Open(Account("bio", Permissions.Results.BiologicalValidate), "WEB-EEEEEEEEEE");
+        await using var tab = await OpenTabAsync(session);
+        var scopes = tab.ServiceProvider.GetRequiredService<UserScopes>();
+
+        await using (var before = scopes.Create())
+            before.ServiceProvider.GetRequiredService<ICurrentUser>().UserName.Should().Be("bio");
+
+        // « Se déconnecter » in another tab of the browser: the session leaves the store at once,
+        // this tab's monitor only notices at its next tick.
+        _services.GetRequiredService<WebSessionStore>().Remove(session.Id);
+
+        await using var after = scopes.Create();
+        var user = after.ServiceProvider.GetRequiredService<ICurrentUser>();
+        user.IsAuthenticated.Should().BeFalse("« Valider » clicked in the stale tab is refused, not recorded under bio");
+        user.Has(Permissions.Results.BiologicalValidate).Should().BeFalse();
     }
 
     [Fact]
