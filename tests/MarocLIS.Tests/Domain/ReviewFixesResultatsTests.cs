@@ -61,6 +61,38 @@ public sealed class ReviewFixesResultatsTests
         foreach (var result in bench.Results.Where(r => r.HasValue)) result.MarkReported();
     }
 
+    [Fact]
+    public async Task TheValuesEnteredBeforeTheirTubeWasDiscarded_StillCountAsEntered_AndOnlyTheMissingOnesWaitForANewTube()
+    {
+        var bench = new Bench();
+        var potassium = Numeric("K");
+        var sodium = Numeric("NA");
+        var results = bench.AddAnalysis(potassium, sodium);
+
+        var tube = new Sample("2610260099", bench.Order.Id, Guid.NewGuid(), bench.Order.SiteId);
+        bench.Samples.Add(tube);
+        bench.Order.Items.Single().SampleId = tube.Id;
+
+        results[0].EnterNumeric(potassium, 4.2m, Now, Guid.NewGuid()).IsSuccess.Should().BeTrue();
+        tube.Discard(Now, Guid.NewGuid(), "Tube jeté après analyse").IsSuccess.Should().BeTrue();
+
+        var rows = (await bench.Service.OpenAsync(bench.Order.Id)).Value.Rows;
+        var entered = rows.Single(r => r.TestResultId == results[0].Id);
+        var missing = rows.Single(r => r.TestResultId == results[1].Id);
+
+        entered.IsAwaitingSample.Should().BeFalse("the value was measured on the tube before it was thrown away");
+        ResultEntryRules.EditRefusal(entered).Should().BeNull();
+        missing.IsAwaitingSample.Should().BeTrue("nothing can be measured on a discarded tube any more");
+        ResultEntryRules.Progress(rows).Should().Be((1, 1));
+
+        // The screen and the save agree: the measured value can be corrected, the missing one not.
+        var submitted = await bench.Service.SubmitAsync(bench.Order.Id,
+            [new ResultEntry(results[0].Id, "4.3"), new ResultEntry(results[1].Id, "140")]);
+        submitted.Value.Rejected.Should().ContainSingle().Which.ResourceKey.Should().Be("Result_SampleNotReceived");
+        results[0].NumericValue.Should().Be(4.3m);
+        results[1].HasValue.Should().BeFalse();
+    }
+
     // ---- 1. Correcting a released or printed value ---------------------------------------------
 
     [Fact]
@@ -385,6 +417,8 @@ public sealed class ReviewFixesResultatsTests
 
         private readonly Dictionary<Guid, AnalysisTest> _analyses = [];
 
+        public List<Sample> Samples { get; } = [];
+
         public Bench(IPermissionGuard? guard = null)
         {
             Patient = new Patient("P-0000", "BENNANI", "Karim", new DateOnly(1985, 5, 5),
@@ -406,10 +440,15 @@ public sealed class ReviewFixesResultatsTests
                         Task.FromResult(self._analyses.GetValueOrDefault((Guid)args![0]!))
                 }),
                 Stub.Of<IRepository<Patient>>(new() { ["GetByIdAsync"] = _ => Task.FromResult<Patient?>(self.Patient) }),
-                Stub.Of<IRepository<Sample>>(),
+                Stub.Of<IRepository<Sample>>(new()
+                {
+                    ["GetByIdAsync"] = args =>
+                        Task.FromResult(self.Samples.FirstOrDefault(t => t.Id == (Guid)args![0]!))
+                }),
                 Stub.Of<IResultQueries>(new()
                 {
                     ["GetResultsForOrderAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>(self.Results.ToList()),
+                    ["GetCurrentResultsForOrderAsync"] = _ => Task.FromResult<IReadOnlyList<TestResult>>(self.Results.ToList()),
                     ["GetActiveReflexRulesAsync"] = _ => Task.FromResult<IReadOnlyList<ReflexRule>>([]),
                     ["GetPreviousValuesAsync"] = _ => Task.FromResult<IReadOnlyDictionary<Guid, PreviousValue>>(
                         new Dictionary<Guid, PreviousValue>())

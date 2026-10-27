@@ -269,10 +269,12 @@ public sealed class ResultEntryService(
             // are not offered for entry.
             if (item is null || item.IsCancelled) continue;
 
+            // A tube thrown away after its analysis keeps the values measured on it: they still count
+            // as entered and can be checked. Only what was never entered waits for a new tube; those
+            // values used to read « tube pas encore réceptionné » and dropped out of the progress.
             var awaitingSample = item.SampleId is { } tube
                                  && sampleStatuses.TryGetValue(tube, out var tubeStatus)
-                                 && tubeStatus is not (SampleStatus.Received or SampleStatus.InAnalysis
-                                                       or SampleStatus.Stored);
+                                 && WaitsForTube(tubeStatus, result.Status);
 
             rows.Add(new ResultEntryRow
             {
@@ -467,7 +469,7 @@ public sealed class ResultEntryService(
             }
 
             if (owner.SampleId is { } tubeId && await SampleStatusAsync(tubeId) is { } tubeStatus
-                && tubeStatus is not (SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored))
+                && WaitsForTube(tubeStatus, result.Status))
             {
                 rejected.Add(Error.Conflict("Result_SampleNotReceived", parameter.Code));
                 continue;
@@ -953,6 +955,15 @@ public sealed class ResultEntryService(
     /// The tubes not yet received that replace a refused one: asked only when some tube is awaited,
     /// which is rare, in one query.
     /// </summary>
+    /// <summary>
+    /// Whether a value waits on its tube: one not taken in yet, refused, or thrown away. A value
+    /// already entered on a tube discarded after its analysis does not: it was measured, still counts
+    /// as entered and can be corrected; only what was never entered waits for a new tube.
+    /// </summary>
+    private static bool WaitsForTube(SampleStatus tube, TestResultStatus value) =>
+        tube is not (SampleStatus.Received or SampleStatus.InAnalysis or SampleStatus.Stored)
+        && !(tube == SampleStatus.Discarded && value != TestResultStatus.Awaited);
+
     private async Task<HashSet<Guid>> LoadRecollectionsAsync(Dictionary<Guid, SampleStatus> statuses, CancellationToken ct)
     {
         var awaited = statuses
