@@ -188,6 +188,12 @@ public sealed class NonConformityService(
         if (string.IsNullOrWhiteSpace(request.Description.Fr))
             return Result.Failure<string>(Error.Validation("Nc_DescriptionRequired"));
 
+        // The tube and the file come from the request: one of another site, unknown, or a tube of
+        // another file was linked as sent, and the register then pointed at someone else's patient.
+        if ((request.SampleId is not null || request.LabOrderId is not null)
+            && !await queries.AreLinksOnSiteAsync(currentUser.SiteId, request.SampleId, request.LabOrderId, ct))
+            return Result.Failure<string>(Error.Validation("Nc_LinkNotFound"));
+
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
         var reference = await sequences.NextAsync(
@@ -584,4 +590,10 @@ public interface IQualityQueries
     /// <summary>The tube with this barcode, or the tubes of the file with this number, on the site; none when neither.</summary>
     Task<IReadOnlyList<NonConformitySampleChoice>> FindSamplesForNonConformityAsync(Guid siteId, string term,
                                                                                    CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the tube and the file a non-conformity is linked to exist on the site, and the tube is
+    /// of that file when both are given; true when neither is.
+    /// </summary>
+    Task<bool> AreLinksOnSiteAsync(Guid siteId, Guid? sampleId, Guid? labOrderId, CancellationToken ct = default);
 }

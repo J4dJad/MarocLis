@@ -472,5 +472,19 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
 
         return [.. rows.Select(r => new NonConformitySampleChoice(r.Id, r.LabOrderId, r.Barcode, r.AccessionNumber, r.Name, r.Status))];
     }
-}
 
+    public async Task<bool> AreLinksOnSiteAsync(Guid siteId, Guid? sampleId, Guid? labOrderId, CancellationToken ct = default)
+    {
+        if (sampleId is { } tubeId)
+        {
+            var tube = await db.Samples.AsNoTracking().IgnoreQueryFilters()
+                .Where(s => s.Id == tubeId && s.SiteId == siteId)
+                .Select(s => new { s.LabOrderId })
+                .FirstOrDefaultAsync(ct);
+            if (tube is null || (labOrderId is { } fileOfTube && tube.LabOrderId != fileOfTube)) return false;
+        }
+
+        return labOrderId is not { } fileId
+               || await db.LabOrders.AsNoTracking().IgnoreQueryFilters().AnyAsync(o => o.Id == fileId && o.SiteId == siteId, ct);
+    }
+}

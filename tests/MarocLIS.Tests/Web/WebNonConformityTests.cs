@@ -137,6 +137,7 @@ public sealed class WebNonConformityTests : WebScreenContext
                                                  MarocLIS.Domain.Samples.SampleStatus.Rejected);
         _queries.On(nameof(IQualityQueries.FindSamplesForNonConformityAsync),
                     args => (string)args[1]! == "2610-000014" ? new[] { serum, edta } : Array.Empty<NonConformitySampleChoice>());
+        _queries.On(nameof(IQualityQueries.AreLinksOnSiteAsync), args => (Guid?)args[1] == edta.SampleId && (Guid?)args[2] == order);
 
         var page = Render<NonConformities>();
         page.Find("[data-action='NonConformity.OpenNew']").Click();

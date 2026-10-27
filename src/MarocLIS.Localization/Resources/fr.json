@@ -6005,6 +6005,7 @@
   "Nc_NotFound": "Non-conformité introuvable.",
   "Nc_ActionNotFound": "Action introuvable.",
   "Nc_DescriptionRequired": "La description de la non-conformité est obligatoire.",
+  "Nc_LinkNotFound": "Le tube ou le dossier lié est introuvable sur ce site, ou le tube n’appartient pas à ce dossier.",
   "Nc_ActionDescriptionRequired": "La description de l'action est obligatoire.",
 
   "Qc_TargetNotFound": "Cible de contrôle introuvable.",

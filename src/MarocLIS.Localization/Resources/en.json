@@ -6004,6 +6004,7 @@
   "Nc_NotFound": "Non-conformity not found.",
   "Nc_ActionNotFound": "Action not found.",
   "Nc_DescriptionRequired": "The non-conformity description is required.",
+  "Nc_LinkNotFound": "The linked tube or file cannot be found on this site, or the tube is not from that file.",
   "Nc_ActionDescriptionRequired": "The action description is required.",
 
   "Qc_TargetNotFound": "Control target not found.",

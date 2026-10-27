@@ -2,6 +2,8 @@ using FluentAssertions;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Quality;
 using MarocLIS.Domain.Common;
+using MarocLIS.Domain.Orders;
+using MarocLIS.Domain.Samples;
 using MarocLIS.Domain.Quality;
 using MarocLIS.Infrastructure.Persistence;
 using MarocLIS.Infrastructure.Queries;
@@ -101,6 +103,49 @@ public sealed class ReviewFixesCycleC1cQualityDatabaseTests(CycleC1cQualityDatab
     {
         await using var context = Context(user);
         return await step(context);
+    }
+
+    [SqlServerFact]
+    public async Task ANonConformity_IsLinkedOnlyToATubeAndAFileOfTheSite_ThatGoTogether()
+    {
+        var manager = User(Guid.NewGuid());
+        var elsewhere = Guid.NewGuid();
+        var ownOrder = new LabOrder("2610-900001", Guid.NewGuid(), Site, Clock.Now, Guid.NewGuid());
+        var secondOrder = new LabOrder("2610-900003", Guid.NewGuid(), Site, Clock.Now, Guid.NewGuid());
+        var otherOrder = new LabOrder("2610-900002", Guid.NewGuid(), elsewhere, Clock.Now, Guid.NewGuid());
+        var ownTube = new Sample("2610900001", ownOrder.Id, Guid.NewGuid(), Site);
+        var otherTube = new Sample("2610900002", otherOrder.Id, Guid.NewGuid(), elsewhere);
+
+        await using (var context = Context(manager))
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE ord.LabOrders NOCHECK CONSTRAINT ALL; ALTER TABLE smp.Samples NOCHECK CONSTRAINT ALL;");
+            context.AddRange(ownOrder, secondOrder, otherOrder, ownTube, otherTube);
+            await context.SaveChangesAsync();
+        }
+
+        Task<Result<string>> Open(Guid? sampleId, Guid? orderId) => InFreshContextAsync(manager, c => NonConformities(c, manager).OpenAsync(
+            new CreateNonConformityRequest
+            {
+                Category = NonConformityCategory.PreAnalytical,
+                Severity = NonConformitySeverity.Minor,
+                Description = MultilingualText.FromFrench("Tube hémolysé"),
+                SampleId = sampleId,
+                LabOrderId = orderId
+            }));
+
+        (await Open(otherTube.Id, otherOrder.Id)).FirstError.ResourceKey.Should().Be("Nc_LinkNotFound", "that tube is another site's");
+        (await Open(null, otherOrder.Id)).FirstError.ResourceKey.Should().Be("Nc_LinkNotFound");
+        (await Open(Guid.NewGuid(), null)).FirstError.ResourceKey.Should().Be("Nc_LinkNotFound", "no such tube");
+        (await Open(ownTube.Id, secondOrder.Id)).FirstError.ResourceKey.Should().Be("Nc_LinkNotFound", "the tube is not of that file");
+
+        var opened = await Open(ownTube.Id, ownOrder.Id);
+        opened.IsSuccess.Should().BeTrue(string.Join(", ", opened.Errors.Select(e => e.ResourceKey)));
+        (await Open(null, secondOrder.Id)).IsSuccess.Should().BeTrue();
+
+        await using var check = Context(manager);
+        (await check.NonConformities.AsNoTracking().CountAsync(n => n.SampleId == otherTube.Id || n.LabOrderId == otherOrder.Id))
+            .Should().Be(0);
     }
 
     [SqlServerFact]

@@ -6004,6 +6004,7 @@
   "Nc_NotFound": "عدم المطابقة غير موجودة.",
   "Nc_ActionNotFound": "الإجراء غير موجود.",
   "Nc_DescriptionRequired": "وصف عدم المطابقة إلزامي.",
+  "Nc_LinkNotFound": "الأنبوب أو الملف المرتبط غير موجود في هذا الموقع، أو أن الأنبوب لا ينتمي إلى هذا الملف.",
   "Nc_ActionDescriptionRequired": "وصف الإجراء إلزامي.",
 
   "Qc_TargetNotFound": "هدف المراقبة غير موجود.",
