@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using MarocLIS.Domain.Common;
 using MarocLIS.Localization;
@@ -143,5 +145,54 @@ public sealed class PluralTextTests
         Fr("Migration.Undone", 1, 2).Should().Be("1 enregistrement retiré ; 2 conservés car utilisés depuis.");
         Fr("Migration.TablesListed", 1).Should().Be("1 table ou vue trouvée : choisissez celle à lire.");
         En("Migration.RowsRead", 1, 9).Should().Be("1 row, 9 columns — the first 200 shown");
+    }
+
+    /// <summary>
+    /// The texts that may keep a bracket the guard below takes for a pseudo-plural, each with its
+    /// reason. Anything else written « tube(s) », « entr(y/ies) » or « ملف(ات) » is a count to agree
+    /// with the plural token, or a heading to write in the plural.
+    /// </summary>
+    private static readonly Dictionary<string, string> PseudoPluralAllowed = new(StringComparer.Ordinal)
+    {
+        ["Interface.AckTimeout"] = "« (s) » is the unit, seconds, not a plural",
+        ["FamilyStatus.Widowed"] = "« (ة) » is the feminine form of the status, not a plural",
+        ["FamilyStatus.Divorced"] = "« (ة) » is the feminine form of the status, not a plural",
+        ["FamilyStatus.Married"] = "« (ة) » is the feminine form of the status, not a plural"
+    };
+
+    [Theory]
+    [InlineData("fr", @"\((s|es|x|ux|ies|y/ies)\)")]
+    [InlineData("en", @"\((s|es|ies|y/ies)\)")]
+    [InlineData("ar", @"[\u0600-\u06FF]\((ات|ين|ون|أسطر|ة|اختلالات|قيود|أصناف|ًا)\)|\{\d+\}[^.،:{]{0,25}\((نتائج|ملفات|قواعد|صلاحيات|أرقام|أيام|فواتير|فوارق|تعريفات|معايير|مواضيع|تقارير)\)")]
+    public void No_catalogue_text_writes_a_pseudo_plural_outside_the_allowed_list(string language, string pattern)
+    {
+        var path = Path.Combine(MarocLIS.Tests.Web.WebMenuTests.RepositoryRoot(), "src", "MarocLIS.Localization", "Resources", language + ".json");
+        using var catalogue = JsonDocument.Parse(File.ReadAllText(path));
+        var found = new List<string>();
+
+        void Walk(JsonElement element, string prefix)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                var key = prefix.Length == 0 ? property.Name : prefix + "." + property.Name;
+                if (property.Value.ValueKind == JsonValueKind.Object) Walk(property.Value, key);
+                else if (property.Value.ValueKind == JsonValueKind.String && key != "$comment"
+                         && Regex.IsMatch(property.Value.GetString()!, pattern) && !PseudoPluralAllowed.ContainsKey(key))
+                    found.Add($"{key}: {property.Value.GetString()}");
+            }
+        }
+
+        Walk(catalogue.RootElement, "");
+        found.Should().BeEmpty($"a count in {language}.json agrees with {{0:plural:…|…}} instead of « (s) »");
+        PseudoPluralAllowed.Keys.Should().OnlyContain(k => Lookup(catalogue.RootElement, k) != null,
+                                                      "an exception whose text is gone leaves the list");
+    }
+
+    private static string? Lookup(JsonElement root, string key)
+    {
+        var element = root;
+        foreach (var part in key.Split('.'))
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(part, out element)) return null;
+        return element.ValueKind == JsonValueKind.String ? element.GetString() : null;
     }
 }
