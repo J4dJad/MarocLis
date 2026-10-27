@@ -83,6 +83,20 @@ public sealed class MindrayTests
     }
 
     [Fact]
+    public void BsResults_OfATubeReadWithoutItsBarcode_AreNotTakenForTheTubeOfItsRunNumber()
+    {
+        // The barcode was not read: OBR-2 is empty, OBR-3 still holds the run's sample number « 12 ».
+        var noRead = BsResults.Replace("OBR|1|2610260012|12|", "OBR|1||12|", StringComparison.Ordinal);
+
+        var message = Hl7ResultParser.Parse(noRead, Bs);
+
+        message.Specimens.Should().NotContain(s => s.SpecimenId == "12",
+                                              "the run number is no barcode: the results would land on the tube labelled 12");
+        message.HasBlockingIssues.Should().BeTrue("a result without its tube is held, replayable, not imported");
+        message.Issues.Should().Contain(i => i.ResourceKey == "Instruments_MissingSpecimenId");
+    }
+
+    [Fact]
     public void BsControl_GoesToQc_WithItsLotAndLevelReadable()
     {
         var message = Hl7ResultParser.Parse(BsControl, Bs);

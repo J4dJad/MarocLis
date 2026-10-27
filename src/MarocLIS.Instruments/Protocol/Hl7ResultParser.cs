@@ -188,12 +188,19 @@ public static class Hl7ResultParser
                 {
                     Close();
 
+                    // A Mindray link names the field of the barcode, and the field beside it is the
+                    // analyser's own run number (OBR-3 of a BS or a CL): a tube read without its
+                    // barcode must stay without one, not be taken for the tube labelled « 12 ».
+                    var strict = format.IsMindray && !string.IsNullOrWhiteSpace(format.SpecimenIdField);
+
                     var specimenId = ConfiguredSpecimenId(message, format, segment, lastSpm, lastOrc)
-                                     ?? specimenIdFromSpm
-                                     ?? message.Component(segment, 3, 1)
-                                     ?? message.Field(segment, 3)
-                                     ?? message.Component(segment, 2, 1)
-                                     ?? message.Field(segment, 2);
+                                     ?? (strict
+                                         ? null
+                                         : specimenIdFromSpm
+                                           ?? message.Component(segment, 3, 1)
+                                           ?? message.Field(segment, 3)
+                                           ?? message.Component(segment, 2, 1)
+                                           ?? message.Field(segment, 2));
 
                     specimenIdFromSpm = null;
                     lastSpm = null;
