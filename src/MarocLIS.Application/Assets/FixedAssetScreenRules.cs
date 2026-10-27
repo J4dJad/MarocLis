@@ -131,7 +131,7 @@ public static class FixedAssetScreenRules
         return register.Assets.FirstOrDefault(r => r.Asset.Id == kept) ?? register.Assets.FirstOrDefault();
     }
 
-    /// <summary>« Registre des immobilisations 2026 — 4 immobilisation(s) · valeur brute … · 1 équipement(s) mis à disposition ».</summary>
+    /// <summary>« Registre des immobilisations 2026 — 4 immobilisations · valeur brute … · 1 équipement mis à disposition ».</summary>
     public static string Heading(FixedAssetRegister register, ScreenText text, Func<decimal, string> amount)
     {
         ArgumentNullException.ThrowIfNull(register);

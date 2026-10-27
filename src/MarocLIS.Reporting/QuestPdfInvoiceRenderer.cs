@@ -223,7 +223,8 @@ public sealed partial class QuestPdfInvoiceRenderer : IInvoiceRenderer
                                                        wording.Isolate(doc.PatientRecordNumber))).FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.CoveredOrders))
-                    patient.Item().Text(wording.Format("InvoicePrint.Orders", wording.Isolate(doc.CoveredOrders)))
+                    patient.Item().Text(wording.Format("InvoicePrint.Orders", wording.Isolate(doc.CoveredOrders),
+                                                         doc.CoveredOrders.Split(',', StringSplitOptions.RemoveEmptyEntries).Length))
                            .FontSize(8);
 
                 if (!string.IsNullOrWhiteSpace(doc.PrescriberName))

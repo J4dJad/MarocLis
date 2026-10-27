@@ -75,4 +75,26 @@ public sealed class PluralTextTests
         Fr("Print.RowCount", 0).Should().Be("0 ligne");
         En("Print.RowCount", 0).Should().Be("0 rows");
     }
+
+    /// <summary>Invoices, batches, statement lines and entries: « 1 facture sélectionnée », « 2 lignes importées ; 1 déjà présente ».</summary>
+    [Fact]
+    public void The_counts_of_billing_treasury_and_accounting_agree()
+    {
+        Fr("Claim.SelectionSummary", 1, "120,00 DH").Should().Be("1 facture sélectionnée — 120,00 DH");
+        En("Claim.SelectionSummary", 3, "x").Should().Be("3 invoices selected — x");
+        Fr("Claim.PartiallySubmitted", "B-1", 3, 1).Should().Be("Bordereau B-1 transmis avec 3 factures. 1 facture n'a pas été transmise :");
+        En("Claim.PartiallySubmitted", "B-1", 1, 2).Should().Be("Batch B-1 sent with 1 invoice. 2 invoices were not sent:");
+        En("Claim.BatchSummary", 2, "x").Should().StartWith("2 batches");
+        Fr("Treasury.Imported", 2, 1, 0).Should().Be("2 lignes importées ; 1 déjà présente, 0 illisible.");
+        Fr("Treasury.ImportWithInvalid", 1).Should().Be("1 ligne illisible ne sera pas importée. Importer les autres ?");
+        Ar("Treasury.ImportWithInvalid", 4).Should().NotContain("(أسطر)").And.Contain("4");
+        Fr("Treasury.CardBatchLabel", 1).Should().Be("1 paiement par carte");
+        Fr("Accounting.Balanced", 1).Should().StartWith("1 écriture, équilibrée et affectée à un compte");
+        En("Accounting.Balanced", 5).Should().StartWith("5 entries, all balanced");
+        Fr("Accounting_ExportRefused", 1).Should().Contain("1 anomalie à corriger").And.EndWith("Elle est listée ci-dessous.");
+        Fr("Deposit.RefundedPartly", "2610-1", 1, 2).Should().StartWith("Dossier 2610-1 : 1 acompte remboursé sur 2.");
+        Fr("Sequence_FormatFrozenAfterFirstUse", 1L).Should().Contain("1 numéro a déjà été attribué");
+        Fr("InvoicePrint.Orders", "2610-1, 2610-2", 2).Should().Be("Demandes : 2610-1, 2610-2");
+        En("InvoicePrint.Orders", "2610-1", 1).Should().Be("Order: 2610-1");
+    }
 }

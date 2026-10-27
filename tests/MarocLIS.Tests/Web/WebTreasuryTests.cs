@@ -197,7 +197,7 @@ public sealed class WebTreasuryTests : WebScreenContext
 
         page.WaitForAssertion(() => _lines.CallsTo(nameof(IRepository<BankStatementLine>.AddAsync)).Should().Be(2));
         stored.CsvMapping.Should().NotBeNull("the mapping is kept with the account for the next statement");
-        page.WaitForAssertion(() => page.Find("[data-state=recon-message]").TextContent.Should().Contain("2 ligne(s) importée(s)"));
+        page.WaitForAssertion(() => page.Find("[data-state=recon-message]").TextContent.Should().Contain("2 lignes importées"));
     }
 
     [Fact]

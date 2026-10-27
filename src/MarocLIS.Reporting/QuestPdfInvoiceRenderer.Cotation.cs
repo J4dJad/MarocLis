@@ -207,7 +207,7 @@ public sealed partial class QuestPdfInvoiceRenderer
             ["InvoicePrint.ProfessionalTax"] = "Patente",
             ["InvoicePrint.Patient"] = "Patient",
             ["InvoicePrint.RecordNumber"] = "N° de dossier : {0}",
-            ["InvoicePrint.Orders"] = "Demande(s) : {0}",
+            ["InvoicePrint.Orders"] = "{1:plural:Demande|Demandes} : {0}",
             ["InvoicePrint.Prescriber"] = "Prescripteur : {0}",
             ["InvoicePrint.BilledTo"] = "Facturé à",
             ["InvoicePrint.Ice"] = "ICE : {0}",
@@ -244,19 +244,22 @@ public sealed partial class QuestPdfInvoiceRenderer
 
         private readonly Func<string, string> _text;
 
-        private Wording(Func<string, string> text, bool rightToLeft, CultureInfo culture)
+        private Wording(Func<string, string> text, AppLanguage language, CultureInfo culture)
         {
             _text = text;
-            RightToLeft = rightToLeft;
+            Language = language;
+            RightToLeft = language.IsRightToLeft();
             Culture = culture;
         }
 
         /// <summary>The standard invoice's own French text.</summary>
         public static Wording French { get; } =
-            new(key => FrenchTexts[key], rightToLeft: false, CultureInfo.InvariantCulture);
+            new(key => FrenchTexts[key], AppLanguage.French, CultureInfo.InvariantCulture);
 
         public static Wording For(ILocalizer localizer, AppLanguage language) =>
-            new(key => localizer.Get(key, language), language.IsRightToLeft(), language.ToCulture());
+            new(key => localizer.Get(key, language), language, language.ToCulture());
+
+        public AppLanguage Language { get; }
 
         public bool RightToLeft { get; }
 
@@ -264,8 +267,9 @@ public sealed partial class QuestPdfInvoiceRenderer
 
         public string this[string key] => _text(key);
 
+        /// <summary>The text with its arguments, its plural tokens agreed with their counts (« Demandes : … »).</summary>
         public string Format(string key, params object?[] args) =>
-            string.Format(Culture, this[key], args);
+            string.Format(Culture, PluralText.Resolve(this[key], args, Language), args);
 
         /// <summary>A code, a number or a date keeps its own direction inside Arabic text.</summary>
         public string Isolate(string? value) =>

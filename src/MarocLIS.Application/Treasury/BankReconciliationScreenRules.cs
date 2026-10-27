@@ -188,7 +188,11 @@ public static class BankReconciliationScreenRules
     {
         ArgumentNullException.ThrowIfNull(movement);
         ArgumentNullException.ThrowIfNull(text);
-        return movement.Kind == TreasuryMovementKind.CardBatch ? text("Treasury.CardBatchLabel", movement.Label) : movement.Label;
+        // A day's card batch carries its count of payments as its label: given as a number, « 1 paiement par carte ».
+        if (movement.Kind != TreasuryMovementKind.CardBatch) return movement.Label;
+        return int.TryParse(movement.Label, NumberStyles.None, CultureInfo.InvariantCulture, out var payments)
+            ? text("Treasury.CardBatchLabel", payments)
+            : text("Treasury.CardBatchLabel", movement.Label);
     }
 
     /// <summary>A movement as the screen ticks it: its kind and its key, unique among the movements.</summary>
@@ -220,7 +224,7 @@ public static class BankReconciliationScreenRules
         return text("Treasury.OpeningAsOf", Date(summary.OpeningBalanceDate), amount(summary.OpeningBalanceMad));
     }
 
-    /// <summary>« 3 ligne(s) du relevé et 5 mouvement(s) non rapprochés ».</summary>
+    /// <summary>« 3 lignes du relevé et 5 mouvements non rapprochés ».</summary>
     public static string CountsLine(ReconciliationSummary summary, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(summary);
@@ -401,7 +405,7 @@ public static class BankReconciliationScreenRules
         preview is not null && previewed is not null && previewed == current && previewed.Validate().IsSuccess
         && preview.NewCount > 0;
 
-    /// <summary>« 2 ligne(s) illisible(s) ne seront pas importées. Importer les autres ? », or nothing to ask.</summary>
+    /// <summary>« 2 lignes illisibles ne seront pas importées. Importer les autres ? », or nothing to ask.</summary>
     public static string? ImportWithInvalidQuestion(ImportPreview preview, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(preview);
