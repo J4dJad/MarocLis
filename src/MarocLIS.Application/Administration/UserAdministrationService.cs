@@ -297,6 +297,11 @@ public sealed class UserAdministrationService(
         if (await queries.AnyPartnerSiteAsync([.. sites.Distinct()], ct))
             return Result.Failure<Guid>(Error.Validation("User_PartnerSiteNotAccessible"));
 
+        // Nobody opens a site to an account that they cannot work on themselves: a manager of
+        // site B would otherwise create a colleague, or a second account of their own, on site A.
+        if (request.SiteIds.Any(site => !MayGrantSite(site)))
+            return Result.Failure<Guid>(Error.Forbidden("User_SiteNotYoursToGrant"));
+
         var defaultSite = request.DefaultSiteId is { } preferred && sites.Contains(preferred)
             ? preferred
             : sites[0];
@@ -478,6 +483,11 @@ public sealed class UserAdministrationService(
         if (siteIds.Count == 0)
             return Result.Failure(Error.Validation("User_AtLeastOneSiteRequired"));
 
+        // One's own sites are given by another administrator, as one's own qualification is:
+        // otherwise a manager of site B ticks site A on their own row and reads its patients.
+        if (userId == currentUser.UserId)
+            return Result.Failure(Error.Forbidden("User_CannotEditOwnSites"));
+
         var user = await users.GetByIdWithDetailsAsync(userId, ct);
         if (user is null) return Result.Failure(Error.NotFound("User_NotFound"));
 
@@ -485,6 +495,12 @@ public sealed class UserAdministrationService(
 
         if (await queries.AnyPartnerSiteAsync(wanted, ct))
             return Result.Failure(Error.Validation("User_PartnerSiteNotAccessible"));
+
+        // A site is opened only by someone who works on it; the sites the account already has
+        // are kept as they are, whoever edits it.
+        var held = user.SiteAccess.Select(a => a.SiteId).ToHashSet();
+        if (wanted.Any(site => !held.Contains(site) && !MayGrantSite(site)))
+            return Result.Failure(Error.Forbidden("User_SiteNotYoursToGrant"));
 
         var preferred = defaultSiteId is { } candidate && wanted.Contains(candidate)
             ? candidate : wanted[0];
@@ -506,6 +522,10 @@ public sealed class UserAdministrationService(
 
         return Result.Success();
     }
+
+    /// <summary>A site the operator works on themselves, and so may open to another account.</summary>
+    private bool MayGrantSite(Guid siteId) =>
+        siteId == currentUser.SiteId || (currentUser.AccessibleSiteIds?.Contains(siteId) ?? false);
 
     /// <summary>
     /// Activates or deactivates an account. Never deletes: the record is the actor on every audit

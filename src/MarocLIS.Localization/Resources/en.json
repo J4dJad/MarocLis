@@ -7011,5 +7011,7 @@
     "AuditNone": "No entry matches the filters.",
     "PrintersOnWorkstation": "Printers are chosen on each Windows workstation, in Settings › Printers of the installed application. From the browser, documents open as PDF and print on this computer's printer.",
     "LicenceRequestDownloaded": "Request downloaded. Send this file to your MarocLIS supplier."
-  }
+  },
+  "User_CannotEditOwnSites": "You cannot change your own sites. Ask another administrator.",
+  "User_SiteNotYoursToGrant": "You can only give an account access to sites you can access yourself."
 }

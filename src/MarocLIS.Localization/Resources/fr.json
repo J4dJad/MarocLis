@@ -7012,5 +7012,7 @@
     "AuditNone": "Aucune entrée ne correspond aux filtres.",
     "PrintersOnWorkstation": "Les imprimantes se choisissent sur chaque poste Windows, dans Paramètres › Imprimantes de l'application installée. Depuis le navigateur, les documents s'ouvrent en PDF et s'impriment avec l'imprimante de ce poste.",
     "LicenceRequestDownloaded": "Demande téléchargée. Envoyez ce fichier à votre fournisseur MarocLIS."
-  }
+  },
+  "User_CannotEditOwnSites": "Vous ne pouvez pas modifier vos propres sites. Demandez-le à un autre administrateur.",
+  "User_SiteNotYoursToGrant": "Vous ne pouvez ouvrir à un compte que les sites auxquels vous avez vous-même accès."
 }

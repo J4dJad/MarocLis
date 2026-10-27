@@ -44,6 +44,68 @@ public sealed class Fix87mTests
         QuestPdfPayslipRenderer.Deduction(500m).Should().Be("−500,00");
     }
 
+    // ---- A user manager cannot open sites they do not work on ------------------------------------
+
+    [Fact]
+    public async Task AUserManager_CannotChangeTheirOwnSites_NorOpenASiteTheyDoNotWorkOn()
+    {
+        var siteA = Guid.NewGuid();
+        var siteB = Guid.NewGuid();
+        var manager = new AppUser("secb", "Secrétaire B", "hash");
+        var managerId = manager.Id;
+        manager.GrantSiteAccess(siteB, true);
+        var colleague = new AppUser("techb", "Technicien B", "hash");
+        colleague.GrantSiteAccess(siteB, true);
+        var travelling = new AppUser("bio", "Biologiste", "hash");
+        travelling.GrantSiteAccess(siteA, true);
+
+        var accounts = new Dictionary<Guid, AppUser> { [managerId] = manager, [colleague.Id] = colleague, [travelling.Id] = travelling };
+        var saves = 0;
+        var service = new UserAdministrationService(
+            Stub.Of<IRepository<AppUser>>(new()
+            {
+                ["GetByIdWithDetailsAsync"] = a => Task.FromResult(accounts.GetValueOrDefault((Guid)a![0]!)),
+                ["AddAsync"] = a => { var u = (AppUser)a![0]!; accounts[u.Id] = u; return Task.CompletedTask; }
+            }),
+            Stub.Of<IRepository<Role>>(),
+            Stub.Of<IAdministrationQueries>(new()
+            {
+                ["UserNameExistsAsync"] = _ => Task.FromResult(false),
+                ["AnyPartnerSiteAsync"] = _ => Task.FromResult(false)
+            }),
+            Stub.Of<IAuthenticationService>(),
+            Stub.Of<IUnitOfWork>(new() { ["SaveChangesAsync"] = _ => { saves++; return Task.FromResult(1); } }),
+            Stub.Of<IPermissionGuard>(),
+            Stub.Of<ICurrentUser>(new()
+            {
+                ["get_UserId"] = _ => managerId,
+                ["get_SiteId"] = _ => siteB,
+                ["get_AccessibleSiteIds"] = _ => (IReadOnlyList<Guid>)[siteB]
+            }),
+            Stub.Of<ISecurityAuditor>(), Stub.Of<IPasswordHasher>(), new PasswordPolicy(), Stub.Of<IClock>());
+
+        // Her own row: refused, even for a site she has.
+        (await service.SetSiteAccessAsync(managerId, [siteA, siteB], siteA))
+            .FirstError.ResourceKey.Should().Be("User_CannotEditOwnSites");
+        manager.SiteAccess.Select(a => a.SiteId).Should().Equal(siteB);
+
+        // A colleague: site A is not hers to open.
+        (await service.SetSiteAccessAsync(colleague.Id, [siteA, siteB], siteB))
+            .FirstError.ResourceKey.Should().Be("User_SiteNotYoursToGrant");
+        colleague.SiteAccess.Select(a => a.SiteId).Should().Equal(siteB);
+
+        // An account that already works on site A keeps it when she adds her own site B.
+        (await service.SetSiteAccessAsync(travelling.Id, [siteA, siteB], siteA)).IsSuccess.Should().BeTrue();
+        travelling.SiteAccess.Select(a => a.SiteId).Should().BeEquivalentTo([siteA, siteB]);
+
+        // Nor can she create an account on site A.
+        (await service.CreateUserAsync(new CreateUserRequest
+        {
+            UserName = "seca", FullName = "Compte A", InitialPassword = "Motdepasse#2026", SiteIds = [siteA]
+        })).FirstError.ResourceKey.Should().Be("User_SiteNotYoursToGrant");
+        saves.Should().Be(1);
+    }
+
     private class Stub : DispatchProxy
     {
         private Dictionary<string, Func<object?[]?, object?>> _handlers = [];
