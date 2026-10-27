@@ -541,8 +541,13 @@ public interface IQualityQueries
     Task<IReadOnlyList<QcReviewRow>> GetPendingQcReviewAsync(Guid siteId,
                                                               CancellationToken ct = default);
 
-    /// <summary>Accepted values in a window, for establishing the laboratory's own limits.</summary>
+    /// <summary>
+    /// Accepted values in a window, for establishing the laboratory's own limits; with
+    /// <paramref name="includeUnjudged"/>, also the points stored unjudged because the target had
+    /// no limits yet (an unassayed or in-house control), which are its only history.
+    /// </summary>
     Task<IReadOnlyList<decimal>> GetAcceptedValuesAsync(Guid qcTargetId, DateOnly from, DateOnly to,
+                                                         bool includeUnjudged = false,
                                                          CancellationToken ct = default);
 
     /// <summary>

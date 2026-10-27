@@ -487,7 +487,12 @@ public sealed class QualityControlService(
             return Result.Failure<(decimal, decimal, int)>(
                 Error.NotFound("Qc_TargetNotFound", qcTargetId));
 
-        var values = await queries.GetAcceptedValuesAsync(qcTargetId, from, to, ct);
+        // A control with no manufacturer values (unassayed, in-house) has nothing to be judged
+        // against, so every point it ever got is unjudged: counting only accepted points left it
+        // without limits for ever. Its first limits are set from those points; from then on only
+        // accepted points count, as for any other control.
+        var unjudged = target.EffectiveMean is null || target.EffectiveSd is null;
+        var values = await queries.GetAcceptedValuesAsync(qcTargetId, from, to, unjudged, ct);
 
         if (values.Count < QcTarget.MinimumPointsForLaboratoryStatistics)
             return Result.Failure<(decimal, decimal, int)>(

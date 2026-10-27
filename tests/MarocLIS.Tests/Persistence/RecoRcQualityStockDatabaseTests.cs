@@ -236,6 +236,38 @@ public sealed class RecoRcQualityStockDatabaseTests(RecoRcDatabase database) : I
         (await check.QcTargets.AsNoTracking().SingleAsync(t => t.Id == target.Id)).LaboratorySd.Should().BeNull();
     }
 
+    [SqlServerFact]
+    public async Task AControlWithNoManufacturerValues_GetsItsLimitsFromItsOwnPoints_AndIsJudgedFromThen()
+    {
+        var manager = User(Guid.NewGuid());
+        var material = new QcMaterial(Unique("QC"), MultilingualText.FromFrench("Contrôle interne maison"), QcLevel.Normal,
+                                      Clock.Today.AddMonths(6));
+        var target = new QcTarget(material.Id, Guid.NewGuid(), Guid.NewGuid());
+        await using (var seed = Context(manager))
+        {
+            seed.QcMaterials.Add(material);
+            seed.QcTargets.Add(target);
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var c = Context(manager))
+        {
+            for (var i = 0; i < QcTarget.MinimumPointsForLaboratoryStatistics; i++)
+                (await Qc(c, manager).SubmitAsync([new QcEntry(target.Id, 100m + i % 5)])).IsSuccess.Should().BeTrue();
+        }
+
+        var limits = await InFreshContextAsync(manager, c => Qc(c, manager).RecomputeStatisticsAsync(target.Id, Clock.Today, Clock.Today));
+        limits.IsSuccess.Should().BeTrue(Keys(limits));
+        limits.Value.Points.Should().Be(QcTarget.MinimumPointsForLaboratoryStatistics);
+        limits.Value.Mean.Should().Be(102m);
+
+        var next = await InFreshContextAsync(manager, c => Qc(c, manager).SubmitAsync([new QcEntry(target.Id, 102m)]));
+        next.IsSuccess.Should().BeTrue(Keys(next));
+        await using var check = Context(manager);
+        (await check.QcResults.AsNoTracking().SingleAsync(r => r.Id == next.Value.Results.Single().QcResultId))
+            .ZScore.Should().NotBeNull("the control is judged against the limits it now has");
+    }
+
     // ---- 6: a technician declares a non-conformity but does not manage it ----------------------------
 
     [SqlServerFact]

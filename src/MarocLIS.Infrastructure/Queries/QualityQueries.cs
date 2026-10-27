@@ -233,7 +233,8 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<decimal>> GetAcceptedValuesAsync(
-        Guid qcTargetId, DateOnly from, DateOnly to, CancellationToken ct = default)
+        Guid qcTargetId, DateOnly from, DateOnly to, bool includeUnjudged = false,
+        CancellationToken ct = default)
     {
         var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue),
                                         TimeZoneInfo.Local.GetUtcOffset(
@@ -249,7 +250,8 @@ public sealed class QualityQueries(LisDbContext db) : IQualityQueries
         return await db.QcResults.AsNoTracking()
             .Where(r => r.QcTargetId == qcTargetId && !r.IsLotEvaluation
                         && r.MeasuredAt >= start && r.MeasuredAt <= end
-                        && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning))
+                        && (r.Outcome == QcOutcome.Accepted || r.Outcome == QcOutcome.Warning
+                            || (includeUnjudged && r.Outcome == QcOutcome.Pending && r.ZScore == null)))
             .OrderBy(r => r.MeasuredAt)
             .Select(r => r.Value)
             .ToListAsync(ct);
