@@ -377,6 +377,8 @@ public static class RelationsScreenRules
         int? days = null;
         if (!string.IsNullOrWhiteSpace(form.PaymentDays))
         {
+            if (TypedNumber.HasSeparator(form.PaymentDays))
+                return (new FieldRefusal(PartnerPaymentField, "Input_WholeNumberExpected"), null);
             var typed = TypedNumber.Parse(form.PaymentDays);
             if (typed is null or < 0m or > 365m || typed != decimal.Truncate(typed.Value))
                 return (new FieldRefusal(PartnerPaymentField, "Partnership_PaymentTermsOutOfRange"), null);

@@ -396,4 +396,31 @@ public sealed class RelationsLot10RulesTests
         PatientMessagingScreenRules.Check(new SurveyAnswerForm(" z9qz4q ", "4", " Bien ")).Answer.Should().Be(("Z9QZ4Q", 4, "Bien"));
         PatientMessagingScreenRules.AnswerFieldOf("Survey_CodeUnknown").Should().Be(PatientMessagingScreenRules.AnswerCodeField);
     }
+
+    [Fact]
+    public void A_whole_number_typed_with_a_comma_or_a_point_is_refused_rather_than_read_as_one()
+    {
+        var gly = new ReminderTarget(Guid.NewGuid(), false, "GLY", new MultilingualText("Glycémie à jeun"));
+        var rule = PatientMessagingScreenRules.FormFor((ReminderRuleRow?)null, Invariant) with { TargetId = gly.Id };
+        var settings = PatientMessagingScreenRules.FormFor(MessagingSettings.Default, Invariant);
+        PartnershipForm Partner(string days) => new() { PartnerName = "Clinique Al Amal", StartDate = Today, PaymentDays = days };
+
+        // « 1,000 » is a thousand to whoever typed it; read with the decimal comma it was 1, and saved.
+        PatientMessagingScreenRules.Check(rule with { Delay = "1,000" }, [gly], null).Refusal
+            .Should().Be(new FieldRefusal(PatientMessagingScreenRules.RuleDelayField, "Input_WholeNumberExpected"));
+        PatientMessagingScreenRules.Check(rule with { Window = "1.000" }, [gly], null).Refusal
+            .Should().Be(new FieldRefusal(PatientMessagingScreenRules.RuleWindowField, "Input_WholeNumberExpected"));
+        PatientMessagingScreenRules.Check(settings with { Interval = "1,000" }, MessagingSettings.Default).Refusal
+            .Should().Be(new FieldRefusal(PatientMessagingScreenRules.SettingsIntervalField, "Input_WholeNumberExpected"));
+        PatientMessagingScreenRules.Check(new SurveyAnswerForm("Z9QZ4Q", "4,0", null)).Refusal
+            .Should().Be(new FieldRefusal(PatientMessagingScreenRules.AnswerScoreField, "Input_WholeNumberExpected"));
+        RelationsScreenRules.Check(Partner("1,000"), null).Refusal
+            .Should().Be(new FieldRefusal(RelationsScreenRules.PartnerPaymentField, "Input_WholeNumberExpected"));
+
+        // Spaces still group thousands, and a plain figure is read as before.
+        PatientMessagingScreenRules.Check(settings with { Interval = "1 000" }, MessagingSettings.Default).Settings!.SurveyIntervalDays
+            .Should().Be(1000);
+        RelationsScreenRules.Check(Partner("45"), null).Request!.PaymentTermsDays.Should().Be(45);
+        TypedNumber.Parse("1,5").Should().Be(1.5m, "a decimal box still reads the comma as the decimal separator");
+    }
 }

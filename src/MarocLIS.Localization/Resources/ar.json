@@ -6242,6 +6242,7 @@
   "Migration_QueryForbiddenWord": "كلمة ممنوعة في الاستعلام: {0}. القراءة فقط مسموح بها.",
   "Migration_ProfileNameRequired": "اسم الملف التعريفي إلزامي.",
   "Sequence_StartOutOfRange": "يجب أن تكون قيمة البداية عدداً صحيحاً بين 1 و 999999999999.",
+  "Input_WholeNumberExpected": "أدخل عدداً صحيحاً، دون فاصلة أو نقطة: «1000» أو «1 000».",
   "Sequence_StartFrozenAfterFirstUse": "سبق للسلسلة الضريبية أن منحت {0} رقماً: لا يمكن تغيير قيمة بدايتها (تشترط المديرية العامة للضرائب سلسلة زمنية متصلة).",
   "Sequence_StartBelowLastUsed": "آخر رقم ممنوح هو {0}: يجب أن تكون القيمة الموالية أكبر منه.",
 

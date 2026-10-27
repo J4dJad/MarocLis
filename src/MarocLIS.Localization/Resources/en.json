@@ -6242,6 +6242,7 @@
   "Migration_QueryForbiddenWord": "Forbidden word in the query: {0}. Only reading is allowed.",
   "Migration_ProfileNameRequired": "The profile's name is required.",
   "Sequence_StartOutOfRange": "The start value must be a whole number between 1 and 999,999,999,999.",
+  "Input_WholeNumberExpected": "Enter a whole number, without a comma or point: \"1000\" or \"1 000\".",
   "Sequence_StartFrozenAfterFirstUse": "The fiscal series has already allocated {0} {0:plural:number|numbers}: its start value can no longer change (the tax authority requires an unbroken chronological series).",
   "Sequence_StartBelowLastUsed": "The last number allocated is {0}: the next value must be greater.",
 

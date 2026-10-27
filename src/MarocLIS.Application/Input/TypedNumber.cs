@@ -91,6 +91,23 @@ public static class TypedNumber
     }
 
     /// <summary>
+    /// True when a box that takes a whole number holds a comma or a point. The comma is the decimal
+    /// separator here, so « 1,000 » read as 1 and was saved for the thousand that was meant; such a
+    /// box is refused with its own message rather than guessed. Spaces still group thousands.
+    /// </summary>
+    public static bool HasSeparator(string? text) =>
+        text is not null && (text.Contains(',', StringComparison.Ordinal) || text.Contains('.', StringComparison.Ordinal));
+
+    /// <summary>
+    /// A whole number typed in a box that takes nothing else: null for text that is no number, a
+    /// fraction, a figure beyond an int, or one written with a comma or a point (<see cref="HasSeparator"/>).
+    /// </summary>
+    public static int? ParseWhole(string? text) =>
+        !HasSeparator(text) && Parse(text) is { } value && value == decimal.Truncate(value) && Math.Abs(value) <= int.MaxValue
+            ? (int)value
+            : null;
+
+    /// <summary>
     /// True when a box holds text that <see cref="Parse"/> cannot read — a typing slip, a unit typed
     /// with the figure ("10 %"), or a number too large for any column. Such a box is refused on its
     /// field rather than saved as an empty value.

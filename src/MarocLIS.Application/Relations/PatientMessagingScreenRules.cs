@@ -339,8 +339,10 @@ public static class PatientMessagingScreenRules
         ArgumentNullException.ThrowIfNull(targets);
         if (targets.FirstOrDefault(t => t.Id == form.TargetId && t.Id != Guid.Empty) is not { } target)
             return (new FieldRefusal(RuleTargetField, "Reminder_AnalysisOrPanel"), null);
+        if (NotWhole(form.Delay, RuleDelayField) is { } delayRefusal) return (delayRefusal, null);
         if (WholeNumber(form.Delay) is not { } delay || delay is < ReminderRule.MinimumDelayMonths or > ReminderRule.MaximumDelayMonths)
             return (new FieldRefusal(RuleDelayField, "Reminder_DelayOutOfRange"), null);
+        if (NotWhole(form.Window, RuleWindowField) is { } windowRefusal) return (windowRefusal, null);
         if (WholeNumber(form.Window) is not { } window || window is < 1 or > MaximumWindowDays)
             return (new FieldRefusal(RuleWindowField, "Reminder_WindowOutOfRange"), null);
         if (Wording(form.TemplateFr, RuleTemplateFrField) is { } fr) return (fr, null);
@@ -407,6 +409,7 @@ public static class PatientMessagingScreenRules
                                                 : "Survey_TemplateNeedsCode"), null);
         }
 
+        if (NotWhole(form.Interval, SettingsIntervalField) is { } intervalRefusal) return (intervalRefusal, null);
         if (WholeNumber(form.Interval) is not { } interval || interval is < 0 or > MaximumIntervalDays)
             return (new FieldRefusal(SettingsIntervalField, "Survey_IntervalOutOfRange"), null);
 
@@ -440,6 +443,7 @@ public static class PatientMessagingScreenRules
         ArgumentNullException.ThrowIfNull(form);
         if (SurveyCode.Normalise(form.Code) is not { } code)
             return (new FieldRefusal(AnswerCodeField, "Survey_CodeInvalid", form.Code?.Trim() ?? string.Empty), null);
+        if (NotWhole(form.Score, AnswerScoreField) is { } scoreRefusal) return (scoreRefusal, null);
         if (WholeNumber(form.Score) is not { } score || score is < 1 or > 5)
             return (new FieldRefusal(AnswerScoreField, "Survey_ScoreOutOfRange"), null);
         if (form.Comment is { } comment && comment.Trim().Length > SurveyInvitation.CommentMaxLength)
@@ -467,10 +471,11 @@ public static class PatientMessagingScreenRules
         return valid.IsFailure ? FieldRefusal.Of(field, valid.FirstError) : null;
     }
 
-    private static int? WholeNumber(string? typed) =>
-        TypedNumber.Parse(typed) is { } value && value == decimal.Truncate(value) && Math.Abs(value) <= int.MaxValue
-            ? (int)value
-            : null;
+    private static int? WholeNumber(string? typed) => TypedNumber.ParseWhole(typed);
+
+    /// <summary>A whole number written with a comma or a point, refused as such rather than read as « 1 » for « 1,000 ».</summary>
+    private static FieldRefusal? NotWhole(string? typed, string field) =>
+        TypedNumber.HasSeparator(typed) ? new FieldRefusal(field, "Input_WholeNumberExpected") : null;
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

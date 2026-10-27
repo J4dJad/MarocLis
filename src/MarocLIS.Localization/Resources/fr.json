@@ -6243,6 +6243,7 @@
   "Migration_QueryForbiddenWord": "Mot interdit dans la requête : {0}. Seule la lecture est permise.",
   "Migration_ProfileNameRequired": "Le nom du profil est obligatoire.",
   "Sequence_StartOutOfRange": "La valeur de départ doit être un nombre entier entre 1 et 999 999 999 999.",
+  "Input_WholeNumberExpected": "Saisissez un nombre entier, sans virgule ni point : « 1000 » ou « 1 000 ».",
   "Sequence_StartFrozenAfterFirstUse": "La série fiscale a déjà attribué {0} {0:plural:numéro|numéros} : sa valeur de départ ne peut plus changer (série chronologique ininterrompue exigée par la DGI).",
   "Sequence_StartBelowLastUsed": "Le dernier numéro attribué est {0} : la valeur suivante doit lui être supérieure.",
 
