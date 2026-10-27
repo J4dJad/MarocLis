@@ -92,7 +92,7 @@ public static class DataMigrationScreenRules
         return label.Length > MigrationBatch.SourceLabelMaxLength ? label[..MigrationBatch.SourceLabelMaxLength] : label;
     }
 
-    /// <summary>« 120 ligne(s), 9 colonne(s) lues ».</summary>
+    /// <summary>« 120 lignes, 9 colonnes — aperçu des 200 premières ».</summary>
     public static string RowsRead(SourceTable? source, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -171,7 +171,7 @@ public static class DataMigrationScreenRules
         return field.Required && string.IsNullOrEmpty(columns.GetValueOrDefault(field.Key));
     }
 
-    /// <summary>« 8 champ(s) repris sur 18 ».</summary>
+    /// <summary>« 8 champs associés sur 18 ».</summary>
     public static string ColumnsMapped(DataMigrationKind kind, IReadOnlyDictionary<string, string> columns, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(columns);
@@ -253,7 +253,7 @@ public static class DataMigrationScreenRules
         return settled;
     }
 
-    /// <summary>« 6 valeur(s) · 2 sans correspondance », or that no coded column is read.</summary>
+    /// <summary>« 6 valeurs, 2 sans correspondance », or that no coded column is read.</summary>
     public static string CorrespondencesCount(int rows, int missing, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -594,7 +594,7 @@ public static class DataMigrationScreenRules
         return lines;
     }
 
-    /// <summary>« 3 solde(s) · 1 250,00 ».</summary>
+    /// <summary>« 3 créances · 1 250,00 MAD ».</summary>
     public static string BalancesTotal(IReadOnlyList<OpeningBalanceRow> balances, ScreenText text, IFormatProvider? culture = null)
     {
         ArgumentNullException.ThrowIfNull(balances);

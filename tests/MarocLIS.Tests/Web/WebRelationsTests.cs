@@ -296,7 +296,7 @@ public sealed class WebRelationsTests : WebScreenContext
         _gateway.Calls.Single(c => c.Method == nameof(IMessageSender.SendSmsAsync)).Arguments[0].Should().Be("0661234599");
         var logged = (PatientMessage)_messages.Calls.Single(c => c.Method == nameof(IRepository<PatientMessage>.AddAsync)).Arguments[0]!;
         logged.Status.Should().Be(PatientMessageStatus.Failed);
-        page.WaitForAssertion(() => page.Find(".action-bar-status").TextContent.Should().Contain("0 envoyé(s), 1 en échec, 0 ignoré(s)."));
+        page.WaitForAssertion(() => page.Find(".action-bar-status").TextContent.Should().Contain("0 envoyé, 1 en échec, 0 ignoré."));
     }
 
     [Fact]

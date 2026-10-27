@@ -121,4 +121,26 @@ public sealed class PluralTextTests
         Fr("StorageLocations.DeactivateConfirm", "Frigo", 1).Should().EndWith("1 tube rangé ici garde ce lieu.");
         En("StorageLocations.DeactivateConfirm", "Fridge", 5).Should().EndWith("5 tubes stored there keep this location.");
     }
+
+    /// <summary>Staff, relations, administration and the data take-over: « 1 bulletin », « 0,5 jour ouvrable décompté ».</summary>
+    [Fact]
+    public void The_counts_of_staff_relations_administration_and_take_over_agree()
+    {
+        Fr("Leave.WorkingDays", "0,5", 0.5m).Should().Be("0,5 jour ouvrable décompté");
+        Fr("Leave.WorkingDays", "3", 3m).Should().Be("3 jours ouvrables décomptés");
+        En("Leave.CalendarDays", "1", 1m).Should().Be("1 calendar day");
+        Fr("Leave.AwayWarning", 1, "BIO").Should().Be("1 collègue du service BIO absent sur une partie de ces jours");
+        Fr("Payroll.Updated", 1).Should().StartWith("1 nouveau bulletin ;");
+        Fr("Payroll.Updated", 4).Should().StartWith("4 nouveaux bulletins ;");
+        Fr("Planning.CopyWeekDone", 3, 1).Should().Be("3 postes recopiés, 1 ignoré.");
+        En("QualityHr.Planning.Count", 1, 2, 0).Should().Be("1 person · 2 shifts · 0 points to check");
+        Fr("Accident.Heading", 1, 0, 2).Should().Be("1 accident cette année · 0 dossier en cours · 2 déclarations en retard");
+        En("Settlement.NoticeMonths", 1).Should().Be("1 month");
+        Fr("Messaging.CampaignOutcome", 2, 1, 0).Should().Be("2 envoyés, 1 en échec, 0 ignoré.");
+        Fr("Admin.ConfirmPermissionChange", "BIO", 1, 2, 1).Should()
+            .Be("Rôle BIO : 1 droit ajouté, 2 droits retirés. La modification s'applique immédiatement à 1 utilisateur actif. Confirmer ?");
+        Fr("Migration.Undone", 1, 2).Should().Be("1 enregistrement retiré ; 2 conservés car utilisés depuis.");
+        Fr("Migration.TablesListed", 1).Should().Be("1 table ou vue trouvée : choisissez celle à lire.");
+        En("Migration.RowsRead", 1, 9).Should().Be("1 row, 9 columns — the first 200 shown");
+    }
 }

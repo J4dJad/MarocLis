@@ -153,7 +153,7 @@ public static class RelationsScreenRules
 
     public static string Date(DateOnly? date) => date is { } d ? PeriodReport.Date(d) : string.Empty;
 
-    /// <summary>« 3 visite(s) · 1 à prévoir · 2 convention(s) », beside the title.</summary>
+    /// <summary>« 3 visites · 1 à prévoir · 2 conventions », beside the title.</summary>
     public static string Counts(int visits, int due, int partnerships, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(text);

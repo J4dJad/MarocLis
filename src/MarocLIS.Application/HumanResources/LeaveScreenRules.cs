@@ -28,7 +28,7 @@ public sealed record LeaveActions(
     bool ManageHolidays);
 
 /// <summary>What the request form shows as the dates change: the days counted, and the balance or the law's length.</summary>
-/// <param name="Count">« 3 jour(s) ouvrables décomptés ».</param>
+/// <param name="Count">« 3 jours ouvrables décomptés », « 1 jour ouvrable décompté ».</param>
 /// <param name="Balance">The balance left, or the length the law gives the kind; empty when neither applies.</param>
 /// <param name="Over">More days asked than the balance holds: said in the alarm's ink.</param>
 public sealed record LeavePreview(string Count, string Balance, bool Over);
@@ -257,7 +257,7 @@ public static class LeaveScreenRules
     public static LeavePreview Preview(LeaveType type, decimal days, LeaveBalanceRow? person, ScreenText text, IFormatProvider culture)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var count = text(LeaveRules.CountsCalendarDays(type) ? "Leave.CalendarDays" : "Leave.WorkingDays", Days(days, culture));
+        var count = text(LeaveRules.CountsCalendarDays(type) ? "Leave.CalendarDays" : "Leave.WorkingDays", Days(days, culture), days);
 
         if (LeaveRules.DebitsBalance(type) && person is not null)
             return new LeavePreview(count, text("Leave.AvailableBalance", Days(person.Available, culture)), days > person.Available);

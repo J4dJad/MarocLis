@@ -58,12 +58,12 @@ public sealed class HumanResourcesLot9bRulesTests
         var person = new LeaveBalanceRow(Guid.NewGuid(), "M0002", "AÏT OUAHMANE Youssef", 18m, 12m, 6m, 3m, 6m);
 
         LeaveScreenRules.Preview(LeaveType.Annual, 5m, person, Text, Invariant)
-            .Should().Be(new LeavePreview("Leave.WorkingDays(5)", "Leave.AvailableBalance(3)", true));
+            .Should().Be(new LeavePreview("Leave.WorkingDays(5,5)", "Leave.AvailableBalance(3)", true));
         LeaveScreenRules.Preview(LeaveType.Annual, 2m, person, Text, Invariant).Over.Should().BeFalse();
         LeaveScreenRules.Preview(LeaveType.Birth, 3m, person, Text, Invariant)
-            .Should().Be(new LeavePreview("Leave.WorkingDays(3)", "Leave.Entitlement(3)", false));
+            .Should().Be(new LeavePreview("Leave.WorkingDays(3,3)", "Leave.Entitlement(3)", false));
         LeaveScreenRules.Preview(LeaveType.Sick, 4m, null, Text, Invariant)
-            .Should().Be(new LeavePreview("Leave.CalendarDays(4)", string.Empty, false));
+            .Should().Be(new LeavePreview("Leave.CalendarDays(4,4)", string.Empty, false));
 
         LeaveScreenRules.Types(hrTypes: false).Should().NotContain(LeaveType.UnjustifiedAbsence);
         LeaveScreenRules.Types(hrTypes: true).Should().Contain(LeaveType.UnjustifiedAbsence);

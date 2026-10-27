@@ -260,7 +260,7 @@ public static class PatientMessagingScreenRules
         return text("Messaging.ConfirmSend", count);
     }
 
-    /// <summary>« 2 envoyé(s), 1 en échec, 0 ignoré(s). », in orange when one failed or was skipped.</summary>
+    /// <summary>« 2 envoyés, 1 en échec, 0 ignoré. », in orange when one failed or was skipped.</summary>
     public static (string Text, StockInk Ink) Outcome(CampaignOutcome outcome, ScreenText text)
     {
         ArgumentNullException.ThrowIfNull(outcome);

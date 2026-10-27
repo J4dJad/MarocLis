@@ -60,7 +60,7 @@ public sealed class WebDataMigrationTests : WebScreenContext, IDisposable
         var page = Render<DataMigration>();
         page.Find("[data-field=system]").Input(system);
         Upload(page, "patients.csv", Patients);
-        page.WaitForAssertion(() => page.Find("[data-state=status]").TextContent.Should().Contain("3 ligne(s) lue(s)"));
+        page.WaitForAssertion(() => page.Find("[data-state=status]").TextContent.Should().Contain("3 lignes lues"));
         return page;
     }
 
