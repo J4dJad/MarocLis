@@ -2,6 +2,7 @@ using FluentAssertions;
 using MarocLIS.Application;
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Orders;
+using MarocLIS.Application.Patients;
 using MarocLIS.Application.Reports;
 using MarocLIS.Application.Results;
 using MarocLIS.Application.Samples;
@@ -100,7 +101,15 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
 
     private sealed class Renderer : IReportRenderer
     {
-        public byte[] Render(ReportModel model) => [0x25, 0x50, 0x44, 0x46];
+        /// <summary>The last report drawn: what its header printed.</summary>
+        public ReportModel? Last { get; private set; }
+
+        public byte[] Render(ReportModel model)
+        {
+            Last = model;
+            return [0x25, 0x50, 0x44, 0x46];
+        }
+
         public int CountPages(byte[] pdf) => 1;
     }
 
@@ -125,7 +134,7 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
         Granted = granted
     };
 
-    private ServiceProvider Services(Operator user)
+    private ServiceProvider Services(Operator user, Renderer? renderer = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -138,7 +147,7 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
         services.AddMarocLisInfrastructure(configuration);
         services.AddMarocLisApplication(configuration);
         services.AddSingleton<ICurrentUser>(user);
-        services.AddSingleton<IReportRenderer>(new Renderer());
+        services.AddSingleton<IReportRenderer>(renderer ?? new Renderer());
         services.AddSingleton<IFontAvailability, AllFonts>();
         services.AddIsolatedQueries<IResultQueries, ResultQueries>();
         services.AddIsolatedQueries<IValidationQueries, ValidationQueries>();
@@ -389,6 +398,66 @@ public sealed class Cycle1bPreAnalyticalDatabaseTests(Cycle1bScratchDatabase dat
             (await context.LabOrders.AsNoTracking().SingleAsync(o => o.Id == order.OrderId))
                 .Status.Should().Be(LabOrderStatus.Reported);
         }
+    }
+
+    // ---- 1b. A file registered on a duplicate since merged -----------------------------------------
+
+    [SqlServerFact]
+    public async Task A2_AReportOfAFileRegisteredOnAMergedDuplicate_PrintsTheSurvivorsIdentity_AndUsesTheSurvivorsConsents()
+    {
+        var lab = await LabAsync();
+        var renderer = new Renderer();
+        using var provider = Services(OperatorOf(lab), renderer);
+
+        // The duplicate was created at reception with the wrong sex and date of birth.
+        var duplicate = new Patient(Unique("P"), "BENANI", "Karim", new DateOnly(1990, 1, 1), Gender.Female, lab.Site.Id)
+        {
+            SearchKey = PatientSearchKey.Build("BENANI", "Karim")
+        };
+
+        await using (var context = database.Context())
+        {
+            context.Patients.Add(duplicate);
+            context.PatientConsents.Add(new PatientConsent(lab.Patient.Id, ConsentPurpose.ElectronicDelivery,
+                                                           ConsentChannel.WrittenForm, DateTimeOffset.Now.AddDays(-1),
+                                                           lab.Biologist.Id));
+            await context.SaveChangesAsync();
+        }
+
+        var order = await RegisterAsync(provider, duplicate, lab.Glucose);
+        var tube = order.Labels.Should().ContainSingle().Subject;
+
+        (await On<SampleWorkflowService, Result>(provider, s => s.RecordCollectionAsync(
+            [new RecordCollectionRequest { SampleId = tube.SampleId }]))).IsSuccess.Should().BeTrue();
+        (await On<SampleWorkflowService, Result<ReceptionOutcome>>(provider, s => s.ReceiveAsync(
+            [new ReceiveSampleRequest { SampleId = tube.SampleId }]))).Value.Received.Should().Be(1);
+
+        (await On<PatientRegistrationService, Result>(provider,
+                s => s.MergeAsync(duplicate.Id, lab.Patient.Id, "Doublon créé à l'accueil")))
+            .IsSuccess.Should().BeTrue();
+
+        var resultId = (await ResultIdsAsync(order.OrderId)).Should().ContainSingle().Subject;
+        (await On<ResultEntryService, Result<ResultEntryOutcome>>(provider,
+            s => s.SubmitAsync(order.OrderId, [new ResultEntry(resultId, "50")]))).Value.Accepted.Should().Be(1);
+        (await On<ResultEntryService, Result>(provider, s => s.TechnicallyValidateAsync(order.OrderId, [])))
+            .IsSuccess.Should().BeTrue();
+        (await On<ValidationService, Result<ValidationOutcome>>(provider,
+            s => s.ValidateAsync(order.OrderId, [new ValidationDecision(resultId, true)]))).Value.Validated.Should().Be(1);
+
+        var released = await On<ReportReleaseService, Result<ReleasedReport>>(provider, s => s.ReleaseAsync(order.OrderId));
+        released.IsSuccess.Should().BeTrue(released.IsFailure ? released.FirstError.ResourceKey : null);
+
+        var header = renderer.Last!;
+        header.PatientName.Should().Be(lab.Patient.FullName);
+        header.MedicalRecordNumber.Should().Be(lab.Patient.MedicalRecordNumber);
+        header.Gender.Should().Be(Gender.Male);
+        header.DateOfBirth.Should().Be(new DateOnly(1975, 3, 2));
+
+        // The consent to electronic delivery is on the surviving file.
+        var sent = await On<ReportReleaseService, Result<DeliveryOutcome>>(provider, s => s.RecordDeliveryAsync(
+            released.Value.ReportId, DeliveryChannel.Email, ReportRecipientKind.Patient, "BENNANI Karim",
+            "patient@example.invalid"));
+        sent.IsSuccess.Should().BeTrue(sent.IsFailure ? sent.FirstError.ResourceKey : null);
     }
 
     // ---- 2. Refusal, recollection and the recall loop -------------------------------------------

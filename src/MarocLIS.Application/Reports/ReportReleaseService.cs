@@ -3,6 +3,7 @@ using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Administration;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Licensing;
+using MarocLIS.Application.Patients;
 using MarocLIS.Application.Results;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
@@ -250,7 +251,9 @@ public sealed class ReportReleaseService(
         var order = await orders.GetByIdWithDetailsAsync(orderId, ct);
         if (order is null) return Result.Failure<ReleasedReport>(Error.NotFound("Order_NotFound"));
 
-        var patient = await patients.GetByIdAsync(order.PatientId, ct);
+        // A file registered on a duplicate since merged prints the surviving file's identity, the
+        // one its values were interpreted with, not the duplicate's mistyped sex or birth date.
+        var patient = await patients.SurvivorAsync(order.PatientId, ct: ct);
         if (patient is null) return Result.Failure<ReleasedReport>(Error.NotFound("Order_PatientNotFound"));
 
         var site = await sites.GetByIdAsync(order.SiteId, ct);
@@ -513,9 +516,11 @@ public sealed class ReportReleaseService(
         // that did not exist, was withdrawn, or was another patient's.
         if (recipientKind == ReportRecipientKind.AuthorizedThirdParty)
         {
-            var patient = await patients.GetByIdWithDetailsAsync(order.PatientId, ct);
+            // The patient's files, the order's own and the one it was merged into: a consent given
+            // on either is this patient's.
+            var files = await patients.ChainAsync(order.PatientId, withDetails: true, ct);
 
-            if (patient?.Consents.FirstOrDefault(c => c.Id == authorizingConsentId) is not
+            if (files.SelectMany(p => p.Consents).FirstOrDefault(c => c.Id == authorizingConsentId) is not
                 { Purpose: ConsentPurpose.ThirdPartyDisclosure } consent
                 || !consent.IsEffectiveOn(clock.Today))
                 return Result.Failure<DeliveryOutcome>(Error.Regulatory("Report_ThirdPartyConsentInvalid"));
@@ -525,7 +530,9 @@ public sealed class ReportReleaseService(
 
         if (electronic && recipientKind == ReportRecipientKind.Patient)
         {
-            var patient = await patients.GetByIdWithDetailsAsync(order.PatientId, ct);
+            // Asked of the surviving file when the order's was merged: that is where consents are
+            // recorded from then on.
+            var patient = await patients.SurvivorAsync(order.PatientId, withDetails: true, ct);
 
             if (patient is null || !patient.HasConsent(ConsentPurpose.ElectronicDelivery))
                 return Result.Failure<DeliveryOutcome>(Error.Regulatory("Report_ElectronicDeliveryRequiresConsent"));

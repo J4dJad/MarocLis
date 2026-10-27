@@ -1,5 +1,6 @@
 using MarocLIS.Application.Abstractions;
 using MarocLIS.Application.Calculations;
+using MarocLIS.Application.Patients;
 using MarocLIS.Domain.Catalog;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Orders;
@@ -45,21 +46,8 @@ public sealed class ResultPostEntryPipeline(
     /// merge leaves the duplicate's orders where they were, and the duplicate keeps whatever sex or
     /// date of birth was typed on it by mistake; the corrections are made on the survivor.
     /// </summary>
-    public async Task<Patient?> PatientOfAsync(LabOrder order, CancellationToken ct = default)
-    {
-        var patient = await patients.GetByIdAsync(order.PatientId, ct);
-        var visited = new HashSet<Guid>();
-
-        // Bounded by the visited set: a corrupt pointer cycle must not loop forever.
-        while (patient?.MergedIntoPatientId is { } survivorId && visited.Add(patient.Id))
-        {
-            var survivor = await patients.GetByIdAsync(survivorId, ct);
-            if (survivor is null) break;
-            patient = survivor;
-        }
-
-        return patient;
-    }
+    public Task<Patient?> PatientOfAsync(LabOrder order, CancellationToken ct = default) =>
+        patients.SurvivorAsync(order.PatientId, ct: ct);
 
     /// <summary>
     /// The reagent lot in use for each parameter on the site, from the stock (opened, released, in
