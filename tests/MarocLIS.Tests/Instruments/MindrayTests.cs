@@ -378,6 +378,20 @@ public sealed class MindrayTests
     }
 
     [Fact]
+    public async Task AResultMessage_IsStoredOnceByTheSink_NotAlsoAsARawLine()
+    {
+        var sink = new RecordingSink();
+        await using var lis = await LisAsync(Hl7Dialect.MindrayBs, InstrumentDirection.Unidirectional, sink);
+        await using var analyser = await lis.AnalyserAsync(new MindrayInstrumentEmulator(Hl7Dialect.MindrayBs, seed: 9));
+
+        await analyser.ReportAsync("2610260012", [("GLU", 5m, "mmol/L")]);
+
+        sink.Handled.Should().ContainSingle();
+        sink.Raw.Should().NotContain(r => r.Contains("ORU^R01"));
+        await lis.StopAsync();
+    }
+
+    [Fact]
     public void TheSampleTranscript_ReadsInTheTester()
     {
         var bs = MindrayInstrumentEmulator.SampleTranscript(Hl7Dialect.MindrayBs, "TUBE-7", ["GLU", "UREA"]);

@@ -286,7 +286,6 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         }
 
         var raw = string.Join("\r", _sessionRecords);
-        await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, raw, ct);
 
         var message = AstmMessageParser.Parse(_sessionRecords, _config.MessageFormat);
         _sessionRecords.Clear();
@@ -294,6 +293,8 @@ public sealed class AstmInstrumentDriver : IInstrumentDriver
         if (message.Kind == InstrumentMessageKind.Query
             && _config.Direction != InstrumentDirection.Unidirectional)
         {
+            // A query is not a transmission the sink records: kept here, once.
+            await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, raw, ct);
             var orders = await _sink.ResolveQueryAsync(_config.Id, message.QueriedSpecimenIds, ct);
 
             if (orders.Count == 0)
@@ -596,10 +597,17 @@ public sealed class Hl7InstrumentDriver : IInstrumentDriver
 
     private async Task HandleMessageAsync(string text, CancellationToken ct)
     {
-        await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, text, ct);
-
         var parsed = Hl7Message.Parse(text);
         var message = Hl7ResultParser.Parse(text, _config.MessageFormat);
+
+        // Results are recorded by the sink, with their outcome; logging them here as well stored
+        // every transmission twice (one row without status, one with). An acknowledgement and a
+        // query never reach the sink's log, so they are kept here.
+        var recordedBySink = message.Kind != InstrumentMessageKind.Acknowledgement
+                             && !(message.Kind == InstrumentMessageKind.Query
+                                  && (_config.MessageFormat.IsMindray
+                                      || _config.Direction != InstrumentDirection.Unidirectional));
+        if (!recordedBySink) await _sink.LogRawAsync(_config.Id, MessageDirection.Inbound, text, ct);
 
         if (message.Kind == InstrumentMessageKind.Acknowledgement) return;
 
