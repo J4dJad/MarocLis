@@ -53,6 +53,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\FailureMessages.cs" Link="Desktop\FailureMessages.cs" />
     <!-- The per-call query scopes the screens and the analyser host read through. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Composition\IsolatedQueries.cs" Link="Desktop\IsolatedQueries.cs" />
+    <!-- Captions broken at their spaces only. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\TextWrap.cs" Link="Desktop\TextWrap.cs" />
     <!-- The order of the sign-in, the main window and the sign-out. -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\SessionFlow.cs" Link="Desktop\SessionFlow.cs" />
     <!-- The value-axis arithmetic of the hand-drawn charts. -->

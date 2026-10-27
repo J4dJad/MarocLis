@@ -98,7 +98,7 @@ public sealed class UserAdministrationView : LocalizedView
         WireBehaviour();
     }
 
-    public override string Title => T("Nav.Administration");
+    public override string Title => T("Nav.Users");
 
     // ---- Layout ------------------------------------------------------------------------------------
 
@@ -454,6 +454,17 @@ public sealed class UserAdministrationView : LocalizedView
         PermissionGate.Require(Permissions.Administration.ManageUsers, _newUser, _editUser, _siteAccess, _resetPassword, _unlock, _toggleActive);
         PermissionGate.Require(Permissions.Administration.ManageRoles, _assignRoles, _newRole, _toggleRole, _savePermissions);
 
+        // Hidden, as on the web, for a user who may only look: greyed out, they still looked like
+        // buttons that did nothing when clicked.
+        if (PermissionGate.User is { } viewer)
+        {
+            var shown = UserAdministrationRules.ButtonsShown(viewer);
+            foreach (var button in new[] { _newUser, _editUser, _siteAccess, _resetPassword, _unlock, _toggleActive })
+                button.Visible = shown.Accounts;
+            foreach (var button in new[] { _assignRoles, _newRole, _toggleRole, _savePermissions })
+                button.Visible = shown.Roles;
+        }
+
         // The list of a role's rights stays readable, and scrollable, for whoever may only look.
         _permissions.BeforeCheck += (_, e) =>
         {
@@ -529,7 +540,16 @@ public sealed class UserAdministrationView : LocalizedView
         _rolesHeading.Text = T("Nav.Roles");
 
         var captions = new[] { "Admin.Qualification", "Admin.OrderNumber", "Nav.Roles", "Admin.Departments", "Admin.LastLogin" };
-        for (var i = 0; i < _factLabels.Length; i++) _factLabels[i].Caption.Text = T(captions[i]);
+        // Broken at the spaces here: left to Windows, « N° Ordre des médecins » came out as
+        // « N° Ordre des mé | decins » and « Secteurs autorisés » as « Secteurs autorisé | s ».
+        for (var i = 0; i < _factLabels.Length; i++)
+        {
+            var caption = _factLabels[i].Caption;
+            caption.Text = TextWrap.Wrap(T(captions[i]),
+                                         w => TextRenderer.MeasureText(w, caption.Font, Size.Empty,
+                                                                       TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width,
+                                         caption.MaximumSize.Width - 2);
+        }
 
         _usersTab.Text = T("Nav.Users");
         _rolesTab.Text = T("Nav.Roles");

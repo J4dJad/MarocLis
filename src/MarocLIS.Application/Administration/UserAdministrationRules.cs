@@ -86,6 +86,9 @@ public sealed record UserForm
 /// the decisions themselves — who may be deactivated, granted validation, given a site — stay the
 /// service's.
 /// </summary>
+/// <summary>The groups of buttons of the Utilisateurs screen a user is shown.</summary>
+public sealed record UserScreenButtons(bool Accounts, bool Roles);
+
 public static class UserAdministrationRules
 {
     // The lengths of the columns: a longer value was refused by the database with an unexpected
@@ -208,6 +211,19 @@ public static class UserAdministrationRules
             ToggleActive: manage && selected && !own,
             Reactivates: row is { IsActive: false },
             OwnAccount: own);
+    }
+
+    /// <summary>
+    /// Which groups of buttons the Utilisateurs screen shows at all, on every client: the accounts'
+    /// (create, edit, sites, password, unlock, deactivate) with the right to manage accounts, the
+    /// roles' (assign, create, deactivate, save the rights) with the right to manage roles. A user
+    /// who may only look — the quality manager — sees the lists without buttons that do nothing.
+    /// </summary>
+    public static UserScreenButtons ButtonsShown(ICurrentUser user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        return new UserScreenButtons(user.Has(Permissions.Administration.ManageUsers),
+                                     user.Has(Permissions.Administration.ManageRoles));
     }
 
     /// <summary>The security log beside the accounts is the audit trail's, offered with its right.</summary>

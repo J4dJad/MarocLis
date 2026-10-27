@@ -77,6 +77,21 @@ public sealed class AdministrationScreenRulesTests
     }
 
     [Fact]
+    public void TheQualityManager_WhoMayOnlyLook_IsShownNoAccountOrRoleButton()
+    {
+        // demo.qualite: Utilisateurs in the menu (admin.users.view), every button looking active
+        // and « Modifier » doing nothing.
+        var quality = new LicenceTestKit.User(true, Permissions.Administration.ViewUsers, Permissions.Administration.ViewAuditTrail);
+        UserAdministrationRules.ButtonsShown(quality).Should().Be(new UserScreenButtons(Accounts: false, Roles: false));
+
+        UserAdministrationRules.ButtonsShown(new LicenceTestKit.User(true, Permissions.Administration.ViewUsers,
+                                                                     Permissions.Administration.ManageUsers))
+            .Should().Be(new UserScreenButtons(Accounts: true, Roles: false));
+        UserAdministrationRules.ButtonsShown(new LicenceTestKit.User(true, Permissions.Administration.ManageRoles))
+            .Should().Be(new UserScreenButtons(Accounts: false, Roles: true));
+    }
+
+    [Fact]
     public void The_actions_follow_the_two_rights_and_ones_own_account_is_not_deactivated()
     {
         var admin = new LicenceTestKit.User(true, Permissions.Administration.ManageUsers);

@@ -242,21 +242,21 @@
 
     @{ var actions = UserActions; var roleActions = RoleActions; }
     <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")"
-               ShowMore="@(_tab == UsersTab.Users && Context.User.Has(Permissions.Administration.ManageUsers))">
+               ShowMore="@(_tab == UsersTab.Users && Buttons.Accounts)">
         <Secondary>
             @if (_tab == UsersTab.Users)
             {
-                <ActionButton Key="Action.Edit" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                <ActionButton Key="Action.Edit" Hidden="@(!Buttons.Accounts)"
                               Disabled="@(!actions.Edit || _busy)" OnClick="AskEdit" />
                 <ActionButton Key="Admin.RolesButton" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Shield"
-                              Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                              Hidden="@(!Buttons.Roles)"
                               Disabled="@(!actions.AssignRoles || _busy)" OnClick="() => _dialog = UsersDialog.Roles" />
-                <ActionButton Key="Admin.ResetPassword" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                <ActionButton Key="Admin.ResetPassword" Hidden="@(!Buttons.Accounts)"
                               Disabled="@(!actions.ResetPassword || _busy)" OnClick="() => _dialog = UsersDialog.ResetPassword" />
             }
             else if (_tab == UsersTab.Roles)
             {
-                <ActionButton Key="Admin.NewRole" Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                <ActionButton Key="Admin.NewRole" Hidden="@(!Buttons.Roles)"
                               Disabled="@(!roleActions.Create || _busy)" OnClick="() => _dialog = UsersDialog.RoleCode" />
             }
         </Secondary>
@@ -265,14 +265,14 @@
             @if (_tab == UsersTab.Users)
             {
                 <ActionButton Key="Admin.SiteAccessButton" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Building2"
-                              Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                              Hidden="@(!Buttons.Accounts)"
                               Disabled="@(!actions.SiteAccess || _busy)" OnClick="() => _dialog = UsersDialog.Sites" />
-                <ActionButton Key="Admin.Unlock" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                <ActionButton Key="Admin.Unlock" Hidden="@(!Buttons.Accounts)"
                               Disabled="@(!actions.Unlock || _busy)" OnClick="UnlockAsync" />
             }
         </More>
         <Destructive>
-            @if (_tab == UsersTab.Users && Context.User.Has(Permissions.Administration.ManageUsers))
+            @if (_tab == UsersTab.Users && Buttons.Accounts)
             {
                 @* One's own account cannot be deactivated: said up front, rather than refused once the reason is typed. *@
                 <ActionButton Key="@(actions.Reactivates ? "Admin.Reactivate" : "Admin.Deactivate")" Danger="@(!actions.Reactivates)"
@@ -280,7 +280,7 @@
                               Title="@(actions.OwnAccount ? Texts["User_CannotDeactivateSelf"] : null)"
                               Disabled="@(!actions.ToggleActive || _busy)" OnClick="() => _dialog = UsersDialog.ToggleActive" />
             }
-            else if (_tab == UsersTab.Roles && Context.User.Has(Permissions.Administration.ManageRoles))
+            else if (_tab == UsersTab.Roles && Buttons.Roles)
             {
                 @* A built-in role cannot be deactivated: the seeded role that holds admin.* has to stay identifiable. *@
                 <ActionButton Key="@(roleActions.Activates ? "Admin.ActivateRole" : "Admin.DeactivateRole")" Danger="@(!roleActions.Activates)"
@@ -291,12 +291,12 @@
         <Primary>
             @if (_tab == UsersTab.Users)
             {
-                <ActionButton Key="Admin.NewUser" Primary="true" Hidden="@(!Context.User.Has(Permissions.Administration.ManageUsers))"
+                <ActionButton Key="Admin.NewUser" Primary="true" Hidden="@(!Buttons.Accounts)"
                               Disabled="@(!actions.Create || _busy)" OnClick="AskCreateAsync" />
             }
             else if (_tab == UsersTab.Roles)
             {
-                <ActionButton Key="Admin.SavePermissions" Primary="true" Hidden="@(!Context.User.Has(Permissions.Administration.ManageRoles))"
+                <ActionButton Key="Admin.SavePermissions" Primary="true" Hidden="@(!Buttons.Roles)"
                               Disabled="@(!roleActions.SavePermissions || _busy)" OnClick="AskSavePermissions" />
             }
         </Primary>
@@ -399,6 +399,9 @@
     private UserRow? SelectedUser => _users.FirstOrDefault(u => u.UserId == _userId) ?? _users.FirstOrDefault();
 
     private RoleRow? SelectedRole => _roles.FirstOrDefault(r => r.RoleId == _roleId) ?? _roles.FirstOrDefault();
+
+    // The groups of buttons shown at all, by right (shared with the workstation).
+    private UserScreenButtons Buttons => UserAdministrationRules.ButtonsShown(Context.User);
 
     private UserActions UserActions => UserAdministrationRules.Actions(Context.User, SelectedUser);
 
