@@ -333,7 +333,8 @@
         var actions = Actions;
         <ActionBar ShowStatus="false">
             <Secondary>
-                <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.PrintLabels)" OnClick="PrintLabels" />
+                <ActionButton Key="Action.LabelsPdf" Hidden="@(!User.Has(Permissions.Samples.Reprint))"
+                              Disabled="@(!actions.PrintLabels)" OnClick="AskReprintLabels" />
                 <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
                 <ActionButton Key="Order.EditHeader" Disabled="@(!actions.EditHeader)" OnClick="() => _dialog = FileDialog.Header" />
             </Secondary>
@@ -388,10 +389,27 @@
                           OnConfirm="CancelOrderAsync" OnCancel="CloseDialog" />
             break;
 
+        case FileDialog.ReprintLabels:
+            <ReasonPrompt Title="@Texts["Action.LabelsPdf"]" MaxLength="OrderFileRules.ReasonMaxLength"
+                          Prompt="@Texts["Sample.ReprintReasonPrompt"]"
+                          OnConfirm="ReprintLabelsAsync" OnCancel="CloseDialog" />
+            break;
+
         case FileDialog.Message when _message is { } message:
             <Modal Name="file-message" Title="@message.Title" OnCancel="CloseDialog">
-                <ChildContent><p class="info-line">@message.Text</p></ChildContent>
-                <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+                <ChildContent>
+                    @foreach (var line in message.Text.Split('\n'))
+                    {
+                        <p class="info-line">@line</p>
+                    }
+                </ChildContent>
+                <Footer>
+                    @if (message.Labels is { Count: > 0 } labels)
+                    {
+                        <LabelsPdfButton Source="MarocLIS.Web.Printing.NewLabels.AddedAnalyses" Labels="labels" />
+                    }
+                    <ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" />
+                </Footer>
             </Modal>
             break;
     }
@@ -410,9 +428,10 @@
 
     private enum FileTab { Analyses, Tubes, Billing, History }
 
-    private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, Message }
+    private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, ReprintLabels, Message }
 
-    private sealed record Message(string Title, string Text);
+    /// <summary>A message; after analyses are added, the new tubes' labels « Étiquettes (PDF) » downloads.</summary>
+    private sealed record Message(string Title, string Text, IReadOnlyList<SampleLabel>? Labels = null);
 
     private IReadOnlyList<OrderListRow> _rows = [];
     private OrderListFilter _filter = new();
@@ -837,15 +856,23 @@
         var amendment = result.Value;
         var text = Texts.T("Order.AnalysesAdded", amendment.Pricing.Acts.Count, amendment.Pricing.Total.Format(Texts.Language, Texts.Culture));
 
-        // A new tube means a new label, printed by the Windows workstation.
-        if (amendment.Labels.Count > 0) text += " — " + Texts["OrderEntry.LabelsFromWorkstation"];
+        // A new tube means a new label: the workstation prints it with the addition; here it is
+        // downloaded as the label PDF, from the message that opens with the addition.
+        if (amendment.Labels.Count > 0) text += " — " + Texts["OrderEntry.LabelsAsPdf"];
         _status = (text, "normal");
 
         await ActivateAsync();
 
         // Warnings are shown, not swallowed: "added onto a tube already in the laboratory" is a job
         // for somebody, and it is not visible anywhere else.
-        if (amendment.Warnings.Count > 0) Show(Texts["Order.AddAnalyses"], Texts.Describe(amendment.Warnings));
+        if (amendment.Labels.Count > 0)
+        {
+            var lines = new List<string> { text, Texts["OrderEntry.LabelsPdfHint"] };
+            if (amendment.Warnings.Count > 0) lines.Add(Texts.Describe(amendment.Warnings));
+            _message = new Message(Texts["Order.AddAnalyses"], string.Join("\n", lines), amendment.Labels);
+            _dialog = FileDialog.Message;
+        }
+        else if (amendment.Warnings.Count > 0) Show(Texts["Order.AddAnalyses"], Texts.Describe(amendment.Warnings));
     }
 
     private void AskCancelItem()
@@ -946,14 +973,40 @@
     }
 
     /// <summary>
-    /// « Imprimer étiquettes »: the browser cannot reach the label printer, so the labels are
-    /// reprinted from the Windows workstation, where the reprint and its reason are recorded. The
-    /// web records nothing it has not done.
+    /// « Étiquettes (PDF) »: every label of the file again, as the workstation's « Imprimer les
+    /// étiquettes » — against a reason, recorded on each tube (SampleWorkflowService.ReprintLabelsAsync)
+    /// — downloaded as the label PDF, since the browser cannot reach the label printer.
     /// </summary>
-    private void PrintLabels()
+    private void AskReprintLabels()
     {
         if (!Actions.PrintLabels) return;
-        Show(Texts["Action.PrintLabels"], Texts["OrderEntry.LabelsFromWorkstation"]);
+        _dialog = FileDialog.ReprintLabels;
+    }
+
+    private async Task ReprintLabelsAsync(string reason)
+    {
+        _dialog = FileDialog.None;
+        if (_detail is not { } detail || !Actions.PrintLabels) return;
+        var caption = Texts["Action.LabelsPdf"];
+
+        try
+        {
+            var pdf = await Scopes.RunAsync<MarocLIS.Web.Printing.LabelPdfService, Result<MarocLIS.Web.Printing.LabelPdf>>(
+                s => s.ReprintAsync(detail.OrderId, reason));
+            if (pdf.IsFailure)
+            {
+                Show(caption, Texts.Describe(pdf.Errors));
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", pdf.Value.FileName, "application/pdf", pdf.Value.Content);
+            Show(caption, Texts.T("OrderEntry.LabelsDownloaded", pdf.Value.Count) + "\n" + Texts["OrderEntry.LabelsPdfHint"]);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reprinting the labels of {Accession} failed.", detail.AccessionNumber);
+            Show(caption, Texts[WebFailures.KeyFor(ex)]);
+        }
     }
 
     /// <summary>

@@ -25,6 +25,7 @@ public static class IconCatalog
         ["Action.Consult"] = Glyph.Eye,
         ["Action.Edit"] = Glyph.Pencil,
         ["Action.Export"] = Glyph.Download,
+        ["Action.LabelsPdf"] = Glyph.Tag,
         ["Action.Logout"] = Glyph.LogOut,
         ["Action.New"] = Glyph.Plus,
         ["Action.Next"] = Glyph.ChevronRight,

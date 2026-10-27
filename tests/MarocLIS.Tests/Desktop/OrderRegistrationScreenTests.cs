@@ -108,18 +108,18 @@ public sealed class OrderRegistrationScreenTests
         {
             string Text(string key, params object?[] args) => localizer.Format(language, key, args);
 
-            var web = OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsFromWorkstation: true);
-            web.Should().Contain("2610-000015").And.Contain(localizer.Format(language, "OrderEntry.LabelsAtWorkstation"));
+            var web = OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsAsPdf: true);
+            web.Should().Contain("2610-000015").And.Contain(localizer.Format(language, "OrderEntry.LabelsAsPdf"));
             web.Length.Should().BeLessThanOrEqualTo(90, $"two lines of the bar in {language}: « {web} »");
-            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: false, labelsFromWorkstation: true)
+            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: false, labelsAsPdf: true)
                 .Should().EndWith(localizer.Format(language, "OrderEntry.LabelsNotPrinted"));
-            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsFromWorkstation: false)
+            OrderRegistrationRules.RegisteredStatus(Text, "2610-000015", 3, printLabels: true, labelsAsPdf: false)
                 .Should().Be($"{Text("Order.AccessionNumber")} 2610-000015 — {Text("OrderEntry.SampleCount", 3)}", "the workstation prints them: nothing more to say");
         }
 
         OrderRegistrationRules.RegisteredStatus((key, args) => localizer.Format(AppLanguage.French, key, args), "2610-000015", 1,
-                                                printLabels: true, labelsFromWorkstation: true)
-            .Should().Be("N° de dossier 2610-000015 — 1 échantillon — Étiquettes à imprimer au poste Windows");
+                                                printLabels: true, labelsAsPdf: true)
+            .Should().Be("N° de dossier 2610-000015 — 1 échantillon — Étiquettes à télécharger en PDF");
     }
 
     /// <summary>

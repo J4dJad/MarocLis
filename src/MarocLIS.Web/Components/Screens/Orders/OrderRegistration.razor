@@ -354,6 +354,10 @@
             }
         </ChildContent>
         <Footer>
+            @if (info.Labels is { Count: > 0 } labels)
+            {
+                <LabelsPdfButton Source="MarocLIS.Web.Printing.NewLabels.Registration" Labels="labels" />
+            }
             @if (info.OrderId is { } orderId && User.Has(Permissions.Orders.View))
             {
                 <ActionButton Key="OrderEntry.View" OnClick="() => OpenOrder(orderId)" />
@@ -372,7 +376,9 @@
 
     private sealed record PrescriberChoice(Guid Id, string Display);
 
-    private sealed record Info(string Name, string Title, IReadOnlyList<string> Lines, Guid? OrderId = null);
+    /// <summary>A message; after a registration, its number and the labels « Étiquettes (PDF) » downloads.</summary>
+    private sealed record Info(string Name, string Title, IReadOnlyList<string> Lines, Guid? OrderId = null,
+                               IReadOnlyList<SampleLabel>? Labels = null);
 
     private sealed record Confirmation(string Title, string Message, Func<Task> OnYes);
 
@@ -1080,12 +1086,15 @@
             var registered = result.Value;
             ResetForm();
 
-            // The browser cannot reach the counter's label printer: the labels are printed from the
-            // Windows workstation (the file's « Imprimer étiquettes »), whichever button was used.
+            // The browser cannot reach the counter's label printer: « Enregistrer » offers the labels
+            // as the workstation's label PDF (« Étiquettes (PDF) » in the summary), to be printed on
+            // the label printer at 100 %. « Enregistrer sans étiquettes » offers none, as at the
+            // workstation: they are reprinted, with a reason, from the file.
             Notice(OrderRegistrationRules.RegisteredStatus(Texts.T, registered.AccessionNumber, registered.Labels.Count,
-                                                           printLabels, labelsFromWorkstation: true), "normal");
+                                                           printLabels, labelsAsPdf: true), "normal");
 
-            _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId);
+            _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId,
+                             printLabels ? registered.Labels : null);
         }
         catch (Exception ex)
         {
@@ -1119,7 +1128,7 @@
         if (printLabels && registered.Labels.Count > 0)
         {
             lines.Add(string.Empty);
-            lines.Add(Texts["OrderEntry.LabelsFromWorkstation"]);
+            lines.Add(Texts["OrderEntry.LabelsPdfHint"]);
         }
 
         return lines;

@@ -13,7 +13,7 @@
     non-conformities as toggles, the conditions and the decision — and below it the tubes awaiting
     reception, with chips. The verdict, the defects ticked in advance and which button is offered
     are SampleReceptionRules'; the decision is SampleWorkflowService's. The label of a replacement
-    tube is printed by the Windows workstation.
+    tube is downloaded as the workstation's label PDF (« Étiquettes (PDF) »).
 *@
 <div class="screen reception" data-screen="reception">
     <div class="screen-body">
@@ -209,8 +209,19 @@
 
     case ReceptionDialog.Message when _message is { } message:
         <Modal Name="reception-message" Title="@message.Title" OnCancel="CloseDialog">
-            <ChildContent><p class="info-line">@message.Text</p></ChildContent>
-            <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
+            <ChildContent>
+                @foreach (var line in message.Text.Split('\n'))
+                {
+                    <p class="info-line">@line</p>
+                }
+            </ChildContent>
+            <Footer>
+                @if (message.Labels is { Count: > 0 } labels)
+                {
+                    <LabelsPdfButton Source="MarocLIS.Web.Printing.NewLabels.Replacement" Labels="labels" />
+                }
+                <ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" />
+            </Footer>
         </Modal>
         break;
 }
@@ -218,7 +229,8 @@
 @code {
     private enum ReceptionDialog { None, RejectComment, RejectConfirm, Message }
 
-    private sealed record Message(string Title, string Text);
+    /// <summary>A message; after a refusal with a recollection, the replacement's label « Étiquettes (PDF) » downloads.</summary>
+    private sealed record Message(string Title, string Text, IReadOnlyList<MarocLIS.Application.Orders.SampleLabel>? Labels = null);
 
     private IReadOnlyList<SampleReceptionCandidate> _awaiting = [];
     private IReadOnlyList<string> _places = [];
@@ -548,13 +560,22 @@
                 return;
             }
 
-            // A recollection produces a fresh tube with a new barcode; its label is printed by the
-            // Windows workstation, which the browser cannot reach the label printer for.
-            _status = result.Value.ReplacementLabels.Count > 0
-                ? ($"{candidate.Barcode} — {Texts["SampleStatus.Rejected"]} · {Texts["Sample.ReplacementIssued"]} — {Texts["OrderEntry.LabelsFromWorkstation"]}", "abnormal")
+            // A recollection produces a fresh tube with a new barcode — never a reuse of the refused
+            // one. The workstation prints its label at once; the browser, which cannot reach the
+            // label printer, offers it as the label PDF in the message that opens now.
+            var replacements = result.Value.ReplacementLabels;
+            _status = replacements.Count > 0
+                ? ($"{candidate.Barcode} — {Texts["SampleStatus.Rejected"]} · {Texts["Sample.ReplacementIssued"]} — {Texts["OrderEntry.LabelsAsPdf"]}", "abnormal")
                 : ($"{candidate.Barcode} — {Texts["SampleStatus.Rejected"]}", "abnormal");
 
-            if (result.Value.Problems.Count > 0) Show(Texts["Action.Reject"], Texts.Describe(result.Value.Problems));
+            if (replacements.Count > 0)
+            {
+                var lines = new List<string> { _status.Value.Text, Texts["OrderEntry.LabelsPdfHint"] };
+                if (result.Value.Problems.Count > 0) lines.Add(Texts.Describe(result.Value.Problems));
+                _message = new Message(Texts["Action.Reject"], string.Join("\n", lines), replacements);
+                _dialog = ReceptionDialog.Message;
+            }
+            else if (result.Value.Problems.Count > 0) Show(Texts["Action.Reject"], Texts.Describe(result.Value.Problems));
 
             if (ReferenceEquals(_candidate, candidate)) _candidate = null;
             await RefreshAwaitingAsync();

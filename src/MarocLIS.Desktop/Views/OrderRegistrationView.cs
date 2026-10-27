@@ -2473,7 +2473,7 @@ public sealed class OrderRegistrationView : LocalizedView
             ResetForm();
 
             Notice(OrderRegistrationRules.RegisteredStatus(T, registered.AccessionNumber, registered.Labels.Count,
-                                                           printLabels, labelsFromWorkstation: false), UiTheme.Normal);
+                                                           printLabels, labelsAsPdf: false), UiTheme.Normal);
         }
         catch (Exception ex)
         {

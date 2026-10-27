@@ -93,7 +93,7 @@ public sealed class WebOrderFileTests : WebScreenContext
 
         var page = Open();
 
-        foreach (var action in new[] { "Order.AddAnalyses", "Order.EditHeader", "Action.PrintLabels", "Order.PrintReport",
+        foreach (var action in new[] { "Order.AddAnalyses", "Order.EditHeader", "Action.LabelsPdf", "Order.PrintReport",
                                        "Order.CancelOrder", "Order.CancelAnalysis", "Order.RepeatAnalysis" })
             Disabled(page, action).Should().BeTrue(action);
     }
@@ -106,7 +106,7 @@ public sealed class WebOrderFileTests : WebScreenContext
 
         var page = Open();
 
-        foreach (var action in new[] { "Order.AddAnalyses", "Order.EditHeader", "Action.PrintLabels", "Order.PrintReport",
+        foreach (var action in new[] { "Order.AddAnalyses", "Order.EditHeader", "Action.LabelsPdf", "Order.PrintReport",
                                        "Order.CancelOrder", "Order.CancelAnalysis", "Order.RepeatAnalysis" })
             Disabled(page, action).Should().BeFalse(action);
 
@@ -117,14 +117,15 @@ public sealed class WebOrderFileTests : WebScreenContext
     }
 
     [Fact]
-    public void TheLabels_AreLeftToTheWorkstation_AndNothingIsRecorded()
+    public void TheLabelsPdf_AsksTheReasonOfTheReprintFirst()
     {
         SignIn(AppLanguage.French, Permissions.Orders.View, Permissions.Samples.Reprint);
         var page = Open();
 
-        page.Find("[data-action='Action.PrintLabels']").Click();
+        page.Find("[data-action='Action.LabelsPdf']").Click();
 
-        page.Find("[data-modal=file-message]").TextContent.Should().Contain("poste Windows");
+        page.Find("[data-modal=reason]").TextContent.Should().Contain("réimpression");
+        page.FindAll("[data-modal=file-message]").Should().BeEmpty("nothing is reprinted before the reason is given");
     }
 
     [Fact]

@@ -1,0 +1,68 @@
+@using MarocLIS.Application.Orders
+@using MarocLIS.Web.Printing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IJSRuntime JS
+@inject ILogger<LabelsPdfButton> Logger
+
+@*
+    « Étiquettes (PDF) » for the tubes a save has just produced (a registration, analyses added to a
+    file, the replacement of a refused tube): the workstation prints them with the save; the browser
+    downloads the same label PDF, to be printed on the label printer at 100 %. Shown only to whom
+    the save's right belongs (LabelPdfService.RightFor), and checked again by the service. Once: a
+    second copy is a reprint, asked for with its reason from the file or the collection.
+*@
+@if (Context.User.Has(LabelPdfService.RightFor(Source)) && Labels.Count > 0)
+{
+    <ActionButton Key="Action.LabelsPdf" Disabled="@(_downloaded || _busy)" Title="@Texts["OrderEntry.LabelsPdfHint"]"
+                  OnClick="DownloadAsync" />
+    @if (_failure is { } failure)
+    {
+        <span class="message is-warning" role="alert" data-state="labels-failure">@failure</span>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public NewLabels Source { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<SampleLabel> Labels { get; set; } = [];
+
+    private bool _downloaded;
+    private bool _busy;
+    private string? _failure;
+
+    private async Task DownloadAsync()
+    {
+        if (_downloaded || _busy || Labels.Count == 0) return;
+
+        _busy = true;
+        _failure = null;
+
+        try
+        {
+            var labels = Labels;
+            var source = Source;
+            var pdf = await Scopes.RunAsync<LabelPdfService, Result<LabelPdf>>(
+                s => Task.FromResult(s.ForNewTubes(source, labels)));
+
+            if (pdf.IsFailure)
+            {
+                _failure = Texts.Describe(pdf.Errors);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", pdf.Value.FileName, "application/pdf", pdf.Value.Content);
+            _downloaded = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Rendering the labels of {Accession} failed.", Labels[0].AccessionNumber);
+            _failure = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

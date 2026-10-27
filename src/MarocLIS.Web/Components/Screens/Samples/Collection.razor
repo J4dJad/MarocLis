@@ -204,7 +204,8 @@
         var actions = Actions;
         <ActionBar StatusText="@(_status?.Text ?? Remaining)" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
             <Secondary>
-                <ActionButton Key="Action.PrintLabels" Disabled="@(!actions.Reprint)" Shortcut="F8" OnClick="PrintLabels" />
+                <ActionButton Key="Action.LabelsPdf" Hidden="@(!Context.User.Has(MarocLIS.Domain.Identity.Permissions.Samples.Reprint))"
+                              Disabled="@(!actions.Reprint)" Shortcut="F8" OnClick="AskReprintLabels" />
                 <ActionButton Key="Collection.DispatchToBench" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Truck"
                               Disabled="@(!actions.Dispatch)" OnClick="() => RecordAsync(dispatch: true)" />
             </Secondary>
@@ -223,16 +224,26 @@
                        OnYes="() => AnswerFastingAsync(true)" OnNo="() => AnswerFastingAsync(false)" />
         break;
 
+    case CollectionDialog.ReprintLabels:
+        <ReasonPrompt Title="@Texts["Action.LabelsPdf"]" MaxLength="500" Prompt="@Texts["Sample.ReprintReasonPrompt"]"
+                      OnConfirm="ReprintLabelsAsync" OnCancel="CloseDialog" />
+        break;
+
     case CollectionDialog.Message when _message is { } message:
         <Modal Name="collection-message" Title="@message.Title" OnCancel="CloseDialog">
-            <ChildContent><p class="info-line">@message.Text</p></ChildContent>
+            <ChildContent>
+                @foreach (var line in message.Text.Split('\n'))
+                {
+                    <p class="info-line">@line</p>
+                }
+            </ChildContent>
             <Footer><ActionButton Key="Action.Ok" Primary="true" OnClick="CloseDialog" /></Footer>
         </Modal>
         break;
 }
 
 @code {
-    private enum CollectionDialog { None, Fasting, Message }
+    private enum CollectionDialog { None, Fasting, ReprintLabels, Message }
 
     private sealed record Message(string Title, string Text);
 
@@ -505,14 +516,42 @@
     }
 
     /// <summary>
-    /// « Imprimer étiquettes »: the browser cannot reach the label printer, so the labels are
-    /// reprinted from the Windows workstation, where the reprint and its reason are recorded. The
-    /// web records nothing it has not done.
+    /// « Étiquettes (PDF) » (F8): the patient's labels again, as the workstation's « Imprimer les
+    /// étiquettes » — against a reason, recorded on each tube (SampleWorkflowService.ReprintLabelsAsync)
+    /// — downloaded as the label PDF, since the browser cannot reach the label printer.
     /// </summary>
-    private void PrintLabels()
+    private void AskReprintLabels()
     {
-        if (!Actions.Reprint) return;
-        Show(Texts["Action.PrintLabels"], Texts["OrderEntry.LabelsFromWorkstation"]);
+        if (_set.Count == 0 || !Actions.Reprint) return;
+        _dialog = CollectionDialog.ReprintLabels;
+    }
+
+    private async Task ReprintLabelsAsync(string reason)
+    {
+        _dialog = CollectionDialog.None;
+        if (_set.Count == 0 || !Actions.Reprint) return;
+        var order = _set[0];
+        var caption = Texts["Action.LabelsPdf"];
+
+        try
+        {
+            var pdf = await Scopes.RunAsync<MarocLIS.Web.Printing.LabelPdfService, Result<MarocLIS.Web.Printing.LabelPdf>>(
+                s => s.ReprintAsync(order.LabOrderId, reason));
+            if (pdf.IsFailure)
+            {
+                Show(caption, Texts.Describe(pdf.Errors));
+                return;
+            }
+
+            await JS.InvokeVoidAsync("marocLis.download", pdf.Value.FileName, "application/pdf", pdf.Value.Content);
+            _status = (Texts.T("OrderEntry.LabelsDownloaded", pdf.Value.Count), "normal");
+            Show(caption, Texts.T("OrderEntry.LabelsDownloaded", pdf.Value.Count) + "\n" + Texts["OrderEntry.LabelsPdfHint"]);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reprinting the labels of {Accession} failed.", order.AccessionNumber);
+            Show(caption, Texts[WebFailures.KeyFor(ex)]);
+        }
     }
 
     /// <summary>

@@ -66,6 +66,10 @@ public abstract class WebBenchContext : WebScreenContext
         Services.AddScoped<ResultEntryContextService>();
         Services.AddScoped<BenchWorksheetService>();
         Services.AddScoped<ValidationService>();
+
+        // « Étiquettes (PDF) »: the workstation's label renderer, behind the service that checks the right.
+        Services.AddSingleton<MarocLIS.Reporting.ISampleLabelRenderer>(new MarocLIS.Reporting.SampleLabelRenderer(new MarocLIS.Reporting.LabelOptions()));
+        Services.AddScoped<MarocLIS.Web.Printing.LabelPdfService>();
     }
 
     /// <summary>The rights of a technician at the bench.</summary>

@@ -153,7 +153,7 @@ public sealed class ResultScreenRulesTests
                                         "OrderEntry.RegisteredTitle", "OrderEntry.SampleCount", "Result.AwaitingRecollection",
                                         "Result.RecollectionPending", "Result_AwaitingRecollection" })
                 localizer.Has(key, language).Should().BeTrue($"{key} in {language}");
-            var labels = localizer.Format(language, "OrderEntry.LabelsFromWorkstation");
+            var labels = localizer.Format(language, "OrderEntry.LabelsPdfHint");
             labels.Should().Be(labels[..1].ToUpperInvariant() + labels[1..], "the labels line starts a sentence");
         }
     }

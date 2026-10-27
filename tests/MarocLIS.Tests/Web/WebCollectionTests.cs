@@ -16,8 +16,8 @@ namespace MarocLIS.Tests.Web;
 
 /// <summary>
 /// « Prélèvements » in the browser: the patients to draw, the tubes ticked by CollectionRules, the
-/// scanner in the scan box, the fasting question before the draw, the labels left to the
-/// workstation — and a préleveur who types the address of another screen.
+/// scanner in the scan box, the fasting question before the draw, the labels as a PDF against a
+/// reason — and a préleveur who types the address of another screen.
 /// </summary>
 public sealed class WebCollectionTests : WebBenchContext
 {
@@ -96,13 +96,13 @@ public sealed class WebCollectionTests : WebBenchContext
     }
 
     [Fact]
-    public void TheLabels_AreLeftToTheWorkstation_AndNothingIsRecorded()
+    public void TheLabelsPdf_AsksTheReasonOfTheReprintFirst_AndNothingIsRecordedYet()
     {
         SignIn(AppLanguage.French, Collector.Append(Permissions.Samples.Reprint).ToArray());
         var page = Render<Collection>();
 
-        page.Find("[data-action='Action.PrintLabels']").Click();
-        page.Find("[data-modal=collection-message]").TextContent.Should().Contain("poste Windows");
+        page.Find("[data-action='Action.LabelsPdf']").Click();
+        page.Find("[data-modal=reason]").TextContent.Should().Contain("réimpression");
         SampleStore.Calls.Should().BeEmpty();
     }
 

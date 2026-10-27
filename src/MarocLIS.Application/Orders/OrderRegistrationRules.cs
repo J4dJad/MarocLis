@@ -24,19 +24,18 @@ public static class OrderRegistrationRules
 
     /// <summary>
     /// The message of a registered order in the action bar: its number, its samples and, when its
-    /// labels are not printed by this save, where they will be. Short enough for the two lines the bar
-    /// gives it at 1366 px: the reason the browser cannot print them is in the summary that opens
-    /// with it, not repeated here.
+    /// labels are not printed by this save, how they come out. Short enough for the two lines the bar
+    /// gives it at 1366 px: how to print them is in the summary that opens with it, not repeated here.
     /// </summary>
-    /// <param name="labelsFromWorkstation">The save asked for the labels, which this client cannot
-    /// print (the browser): they are printed from the Windows workstation.</param>
+    /// <param name="labelsAsPdf">The save asked for the labels, which this client cannot send to the
+    /// label printer (the browser): they are downloaded as a PDF with « Étiquettes (PDF) ».</param>
     public static string RegisteredStatus(ScreenText text, string accessionNumber, int samples,
-                                          bool printLabels, bool labelsFromWorkstation)
+                                          bool printLabels, bool labelsAsPdf)
     {
         var message = $"{text("Order.AccessionNumber")} {accessionNumber} — " + text("OrderEntry.SampleCount", samples);
         if (samples == 0) return message;
         if (!printLabels) return message + " — " + text("OrderEntry.LabelsNotPrinted");
-        return labelsFromWorkstation ? message + " — " + text("OrderEntry.LabelsAtWorkstation") : message;
+        return labelsAsPdf ? message + " — " + text("OrderEntry.LabelsAsPdf") : message;
     }
 
     /// <summary>

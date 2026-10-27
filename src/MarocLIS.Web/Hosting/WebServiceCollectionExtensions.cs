@@ -78,6 +78,17 @@ public static class WebServiceCollectionExtensions
         services.AddSingleton<Application.HumanResources.IHrDocumentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<Application.HumanResources.IAccidentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<Application.HumanResources.IPayslipRenderer, QuestPdfPayslipRenderer>();
+        // The tube labels: the workstation's 50 × 25 mm label PDF, downloaded with « Étiquettes (PDF) »
+        // to be printed on the label printer at 100 % — the browser cannot reach that printer. The
+        // geometry is the workstation's « Labels » section. Resolving the report renderer first sets
+        // the PDF library's licence and fonts, which the label renderer does not do itself.
+        var labels = configuration.GetSection(LabelOptions.SectionName).Get<LabelOptions>() ?? new LabelOptions();
+        services.AddSingleton<ISampleLabelRenderer>(sp =>
+        {
+            sp.GetRequiredService<IReportRenderer>();
+            return new SampleLabelRenderer(labels);
+        });
+        services.AddScoped<Printing.LabelPdfService>();
 
         // ---- The read side of the screens: the workstation's queries, one per scope. The
         // workstation isolates each call on a context of its own (IsolatedQueries); a page here runs
