@@ -142,6 +142,17 @@ public sealed class WebPrescriptionScanTests : WebScreenContext
         page.Find("[data-state=prescription]").TextContent.Should().MatchRegex("[؀-ۿ]");
     }
 
+    /// <summary>The preview is a document the page builds (blob:); the policy lets it show that, and nothing else.</summary>
+    [Fact]
+    public void ThePagePolicy_LetsThePreviewShow_AndNothingFrameTheApplication()
+    {
+        var policy = MarocLIS.Web.Hosting.WebApplicationExtensions.ContentSecurityPolicy;
+
+        policy.Should().Contain("frame-src blob:;").And.Contain("object-src blob:;")
+              .And.Contain("frame-ancestors 'none'").And.Contain("script-src 'self';");
+        policy.Should().NotContain("frame-src *").And.NotContain("http:").And.NotContain("https:");
+    }
+
     // ---- Nouvelle demande --------------------------------------------------------------------------
 
     [Fact]

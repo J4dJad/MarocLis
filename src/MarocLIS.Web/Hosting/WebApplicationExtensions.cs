@@ -48,6 +48,17 @@ public static class WebApplicationExtensions
     }
 
     /// <summary>
+    /// The policy of every page. The only frame and the only embedded object a page may show are
+    /// documents it built itself in the browser (blob:), such as the scanned prescription shown in
+    /// « Dossier »: a document built so inherits this policy, and the browser's PDF viewer is an
+    /// embedded object. Nothing may frame the application itself.
+    /// </summary>
+    public const string ContentSecurityPolicy =
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+        "font-src 'self'; connect-src 'self'; frame-src blob:; object-src blob:; base-uri 'self'; " +
+        "form-action 'self'; frame-ancestors 'none'";
+
+    /// <summary>
     /// What a page may load and run: its own files and its circuit, nothing from another origin —
     /// the web interface must work inside the laboratory's network with nothing fetched from the
     /// Internet. Inline styles are allowed: Blazor's reconnection dialog sets its own. Nothing a
@@ -61,10 +72,7 @@ public static class WebApplicationExtensions
             headers.XContentTypeOptions = "nosniff";
             headers.XFrameOptions = "DENY";
             headers["Referrer-Policy"] = "no-referrer";
-            headers.ContentSecurityPolicy =
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-                "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; " +
-                "frame-ancestors 'none'";
+            headers.ContentSecurityPolicy = ContentSecurityPolicy;
             headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()";
 
             if (!WebPaths.IsAsset(context.Request.Path))
