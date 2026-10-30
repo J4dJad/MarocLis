@@ -141,7 +141,7 @@
                         @foreach (var (tab, caption) in Tabs(detail))
                         {
                             <button type="button" role="tab" class="tab @(tab == _tab ? "is-selected" : null)" aria-selected="@(tab == _tab ? "true" : "false")"
-                                    data-tab="@tab" @onclick="() => _tab = tab">@caption</button>
+                                    data-tab="@tab" @onclick="() => SelectTabAsync(tab)">@caption</button>
                         }
                     </div>
 
@@ -281,6 +281,22 @@
                                 }
                                 break;
 
+                            case FileTab.Prescription:
+                                <PrescriptionAttachment Attached="detail.HasPrescriptionScan" Pages="_prescriptionFile?.PageCount"
+                                                        CanChange="@PrescriptionScanRules.CanChange(detail, User)"
+                                                        CanView="@PrescriptionScanRules.CanView(detail, User)"
+                                                        Busy="_prescriptionBusy" OnPages="pages => AttachPrescriptionAsync(pages, append: false)"
+                                                        OnAppendPages="pages => AttachPrescriptionAsync(pages, append: true)"
+                                                        OnRefused="PrescriptionRefused"
+                                                        OnView="DownloadPrescriptionAsync" OnRemove="AskRemovePrescription" />
+                                @if (detail.HasPrescriptionScan && PrescriptionScanRules.CanView(detail, User))
+                                {
+                                    @* The PDF in the page, as the browser shows one (its own viewer: pages, zoom, print). *@
+                                    <iframe class="prescription-preview" data-preview="prescription" title="@Texts["Order.PrescriptionScan"]"
+                                            @ref="_previewFrame"></iframe>
+                                }
+                                break;
+
                             case FileTab.History:
                                 @if (_events.Count == 0)
                                 {
@@ -389,6 +405,11 @@
                           OnConfirm="CancelOrderAsync" OnCancel="CloseDialog" />
             break;
 
+        case FileDialog.ConfirmRemovePrescription:
+            <ConfirmPrompt Title="@Texts["Order.PrescriptionScan"]" Message="@Texts["Order.PrescriptionRemoveConfirm"]"
+                           OnYes="RemovePrescriptionAsync" OnNo="CloseDialog" />
+            break;
+
         case FileDialog.ReprintLabels:
             <ReasonPrompt Title="@Texts["Action.LabelsPdf"]" MaxLength="OrderFileRules.ReasonMaxLength"
                           Prompt="@Texts["Sample.ReprintReasonPrompt"]"
@@ -426,9 +447,9 @@
     /// </summary>
     [Parameter] public string? Search { get; set; }
 
-    private enum FileTab { Analyses, Tubes, Billing, History }
+    private enum FileTab { Analyses, Tubes, Billing, Prescription, History }
 
-    private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, ReprintLabels, Message }
+    private enum FileDialog { None, AddAnalyses, Header, CancelItem, RepeatItem, ConfirmCancelOrder, CancelOrderReason, ReprintLabels, ConfirmRemovePrescription, Message }
 
     /// <summary>A message; after analyses are added, the new tubes' labels « Étiquettes (PDF) » downloads.</summary>
     private sealed record Message(string Title, string Text, IReadOnlyList<SampleLabel>? Labels = null);
@@ -443,6 +464,13 @@
     private IReadOnlyList<PaymentRow> _payments = [];
 
     private FileTab _tab = FileTab.Analyses;
+
+    // The scanned prescription: read when its tab is opened (a consultation of the file), shown in
+    // a frame once the page has it.
+    private PrescriptionScanFile? _prescriptionFile;
+    private bool _prescriptionBusy;
+    private bool _previewPending;
+    private ElementReference _previewFrame;
     private FileDialog _dialog;
     private Message? _message;
     private (string Text, string Tone)? _status;
@@ -654,9 +682,11 @@
                 _events = [];
                 _payments = [];
                 _itemId = null;
+                _prescriptionFile = null;
             }
 
             _detail = result.Value;
+            if (_tab == FileTab.Prescription) await LoadPrescriptionAsync(_detail);
             await LoadHistoryAsync(_detail, version);
             await LoadPaymentsAsync(_detail, version);
         }
@@ -784,6 +814,9 @@
         yield return (FileTab.Analyses, Texts.T("OrderFile.TabAnalyses", detail.Items.Count));
         yield return (FileTab.Tubes, Texts.T("OrderFile.TabTubes", detail.Samples.Count));
         yield return (FileTab.Billing, Texts["OrderFile.TabBilling"]);
+        yield return (FileTab.Prescription, detail.HasPrescriptionScan
+            ? $"{Texts["Order.PrescriptionScan"]} ✓"
+            : Texts["Order.PrescriptionScan"]);
         yield return (FileTab.History, Texts["OrderFile.TabHistory"]);
     }
 
@@ -1052,6 +1085,132 @@
             Logger.LogError(ex, "Opening the report of {Accession} failed.", detail.AccessionNumber);
             Show(caption, Texts[WebFailures.KeyFor(ex)]);
         }
+    }
+
+    // ---- The prescription --------------------------------------------------------------------------
+
+    private async Task SelectTabAsync(FileTab tab)
+    {
+        _tab = tab;
+        if (tab == FileTab.Prescription && _detail is { } detail) await LoadPrescriptionAsync(detail);
+    }
+
+    /// <summary>The prescription of the file, for its tab: read once per file, and shown.</summary>
+    private async Task LoadPrescriptionAsync(OrderDetail detail)
+    {
+        if (!PrescriptionScanRules.CanView(detail, User))
+        {
+            _prescriptionFile = null;
+            return;
+        }
+
+        if (_prescriptionFile is null)
+        {
+            try
+            {
+                var orderId = detail.OrderId;
+                var file = await Scopes.RunAsync<PrescriptionScanService, Result<PrescriptionScanFile>>(s => s.GetAsync(orderId));
+                if (_detail?.OrderId != orderId) return;
+                if (file.IsFailure)
+                {
+                    _status = (Texts.Describe(file.Errors), "critical");
+                    return;
+                }
+
+                _prescriptionFile = file.Value;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Loading the prescription of {Accession} failed.", detail.AccessionNumber);
+                _status = (Texts[WebFailures.KeyFor(ex)], "critical");
+                return;
+            }
+        }
+
+        _previewPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_previewPending || _tab != FileTab.Prescription || _prescriptionFile is not { } file) return;
+        _previewPending = false;
+
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.preview", _previewFrame, file.ContentType, file.Content);
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "The prescription preview could not be shown.");
+        }
+    }
+
+    /// <summary>Attaches the files (replacing, or after the pages there), assembled into one PDF.</summary>
+    private async Task AttachPrescriptionAsync(IReadOnlyList<PrescriptionPage> pages, bool append)
+    {
+        if (_detail is not { } detail || _prescriptionBusy || !PrescriptionScanRules.CanChange(detail, User)) return;
+
+        _prescriptionBusy = true;
+        StateHasChanged();
+        try
+        {
+            var orderId = detail.OrderId;
+            var attached = await Scopes.RunAsync<PrescriptionScanService, Result<PrescriptionScanSummary>>(
+                s => s.AttachAsync(orderId, pages, append));
+            if (attached.IsFailure)
+            {
+                Show(Texts["Order.PrescriptionScan"], Texts.Describe(attached.Errors));
+                return;
+            }
+
+            _status = (Texts["Order.PrescriptionSaved"], "normal");
+            _prescriptionFile = null;
+            await LoadDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Attaching the prescription of {Accession} failed.", detail.AccessionNumber);
+            Show(Texts["Order.PrescriptionScan"], Texts[WebFailures.KeyFor(ex)]);
+        }
+        finally
+        {
+            _prescriptionBusy = false;
+        }
+    }
+
+    /// <summary>« Voir »: the PDF handed to the browser, through the download every screen uses.</summary>
+    private async Task DownloadPrescriptionAsync()
+    {
+        if (_detail is not { } detail) return;
+        await LoadPrescriptionAsync(detail);
+        if (_prescriptionFile is { } file)
+            await JS.InvokeVoidAsync("marocLis.download", file.FileName, file.ContentType, file.Content);
+    }
+
+    private void PrescriptionRefused(string message) => Show(Texts["Order.PrescriptionScan"], message);
+
+    private void AskRemovePrescription()
+    {
+        if (!PrescriptionScanRules.CanRemove(_detail, User)) return;
+        _dialog = FileDialog.ConfirmRemovePrescription;
+    }
+
+    private async Task RemovePrescriptionAsync()
+    {
+        _dialog = FileDialog.None;
+        if (_detail is not { } detail) return;
+
+        var orderId = detail.OrderId;
+        var removed = await Scopes.RunAsync<PrescriptionScanService, Result>(s => s.RemoveAsync(orderId));
+        if (removed.IsFailure)
+        {
+            Show(Texts["Order.PrescriptionScan"], Texts.Describe(removed.Errors));
+            return;
+        }
+
+        _status = (Texts["Order.PrescriptionRemoved"], "normal");
+        _prescriptionFile = null;
+        await LoadDetailAsync();
     }
 
     public void Dispose()

@@ -40,6 +40,20 @@
             setTimeout(() => URL.revokeObjectURL(url), 10000);
         },
 
+        // Shows a document the server produced in a frame of the page (the scanned prescription of
+        // « Dossier »), from its bytes, in the browser's own viewer. The address is the browser's,
+        // released once the frame shows another. Plain ES5, as compat.js: Firefox ESR 115 runs it.
+        preview: function (frame, contentType, bytes) {
+            if (!frame) return;
+            var previous = frame.getAttribute("data-object-url");
+            var url = URL.createObjectURL(new Blob([bytes], { type: contentType }));
+            frame.setAttribute("data-object-url", url);
+            frame.src = url;
+            if (previous) {
+                setTimeout(function () { URL.revokeObjectURL(previous); }, 10000);
+            }
+        },
+
         // Copies a number to the clipboard, as a double click on the accession number does on
         // the workstation.
         copy(text) {

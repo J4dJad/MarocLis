@@ -72,6 +72,9 @@ public static class WebServiceCollectionExtensions
         // The purchase order of « Bons de commande », downloaded to be printed or sent, and e-mailed
         // to the supplier through the laboratory's mail account, as at the workstation.
         services.AddSingleton<Application.Inventory.IPurchaseOrderRenderer, QuestPdfPurchaseOrderRenderer>();
+        // The scanned prescription of « Nouvelle demande » and « Dossier »: the photos and PDFs the
+        // browser sends assembled into one PDF, as at the workstation.
+        services.AddSingleton<Application.Orders.IPrescriptionDocumentComposer, QuestPdfPrescriptionComposer>();
         // The HR letters, the receipt for the final settlement, the accident declarations and the
         // payslips, downloaded rather than opened, as the workstation renders them.
         services.AddSingleton<QuestPdfHrDocumentRenderer>();

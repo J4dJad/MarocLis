@@ -17,6 +17,7 @@
 @inject IConfiguration Configuration
 @inject NavigationManager Navigation
 @inject ILogger<OrderRegistration> Logger
+@inject IJSRuntime JS
 
 @*
     « Nouvelle demande », the workstation's OrderRegistrationView: the patient, the request (priority,
@@ -130,6 +131,15 @@
                     <input type="checkbox" data-field="self-pay" checked="@_selfPay" @onchange="SelfPayChanged" />
                     <span>@Texts["OrderEntry.DirectPayment"]</span>
                 </label>
+            </div>
+            @* The prescription, put together here and saved with the request: each file or photo a page. *@
+            <div class="field field-prescription">
+                <span class="field-label">@Texts["Order.PrescriptionScan"]</span>
+                <PrescriptionAttachment Attached="_prescription.HasDocument" Pages="_prescription.PageCount" Appends="true"
+                                        CanChange="@PrescriptionScanRules.CanAttachAtRegistration(User)" CanView="true"
+                                        Busy="_preparingPrescription" OnPages="AddPrescriptionPagesAsync"
+                                        OnRefused="PrescriptionRefused" OnView="ViewPrescriptionAsync"
+                                        OnRemove="AskRemovePrescription" />
             </div>
         </section>
 
@@ -408,6 +418,8 @@
     private OrderQuote? _quote;
     private (string Text, string Tone)? _notice;
     private bool _busy;
+    private readonly PrescriptionDraft _prescription = new();
+    private bool _preparingPrescription;
 
     private bool _newPatient;
     private bool _provisional;
@@ -1071,6 +1083,7 @@
             PatientFasted = _fasting,
             BillDirectlyToPatient = _selfPay
         };
+        request = _prescription.ApplyTo(request);
 
         _busy = true;
         try
@@ -1136,7 +1149,60 @@
 
     // ---- Abandoning the entry ----------------------------------------------------------------------
 
-    private bool HasEntries => OrderBasket.HasEntries(_patient is not null, _basket.Count, _clinical, _prescriberText);
+    private bool HasEntries => OrderBasket.HasEntries(_patient is not null, _basket.Count, _clinical, _prescriberText)
+                               || _prescription.HasDocument;
+
+    // ---- The prescription --------------------------------------------------------------------------
+
+    /// <summary>Adds the files to the prescription being put together: assembled at once, so its pages show.</summary>
+    private async Task AddPrescriptionPagesAsync(IReadOnlyList<PrescriptionPage> pages)
+    {
+        if (_preparingPrescription || !PrescriptionScanRules.CanAttachAtRegistration(User)) return;
+
+        _preparingPrescription = true;
+        StateHasChanged();
+        try
+        {
+            var existing = _prescription.Content;
+            var prepared = await Scopes.RunAsync<PrescriptionScanService, Result<PrescriptionScanFile>>(
+                s => s.PrepareAsync(pages, existing));
+
+            if (prepared.IsFailure)
+            {
+                _info = new Info("prescription", Texts["Order.PrescriptionScan"], [Texts.Describe(prepared.Errors)]);
+                return;
+            }
+
+            _prescription.Keep(prepared.Value);
+            Changed();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Prescription could not be assembled.");
+            _info = new Info("failure", Texts["Order.PrescriptionScan"], [Texts[WebFailures.KeyFor(ex)]]);
+        }
+        finally
+        {
+            _preparingPrescription = false;
+        }
+    }
+
+    private void PrescriptionRefused(string message) =>
+        _info = new Info("prescription", Texts["Order.PrescriptionScan"], [message]);
+
+    /// <summary>« Voir »: the assembled PDF handed to the browser, which opens or keeps it.</summary>
+    private async Task ViewPrescriptionAsync()
+    {
+        if (_prescription.Content is not { } pdf) return;
+        await JS.InvokeVoidAsync("marocLis.download", "Ordonnance.pdf", PrescriptionScanPolicy.PdfContentType, pdf);
+    }
+
+    private void AskRemovePrescription() =>
+        _confirm = new Confirmation(Texts["Order.PrescriptionScan"], Texts["Order.PrescriptionRemoveDraftConfirm"], () =>
+        {
+            _prescription.Clear();
+            return Task.CompletedTask;
+        });
 
     /// <summary>« Annuler la saisie »: asks first when anything was typed, then starts afresh.</summary>
     private void AskCancelEntry()
@@ -1172,6 +1238,7 @@
         _prescriberText = string.Empty;
         _quote = null;
         ++_quoteVersion;
+        _prescription.Clear();
     }
 
     // ---- Plumbing ----------------------------------------------------------------------------------

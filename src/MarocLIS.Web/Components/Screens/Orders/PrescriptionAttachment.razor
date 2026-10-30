@@ -1,0 +1,126 @@
+@using MarocLIS.Application.Orders
+@using MarocLIS.Domain.Common
+@using Microsoft.AspNetCore.Components.Forms
+@inject WebTexts Texts
+
+@*
+    The scanned prescription, on « Nouvelle demande » and on « Dossier »: « Joindre l'ordonnance »
+    (PDF, JPEG, PNG, several files at once, each a page), « Photographier l'ordonnance » (a phone's
+    or a tablet's camera, through the file input's capture), then whether one is attached and how
+    many pages, with « Voir » and « Retirer ». The files are read here, their size checked before
+    they are; their kind, their assembly and their saving are the screen's, through
+    PrescriptionScanService. Without the right to change, only « Voir » is offered.
+*@
+<div class="prescription-strip @(Attached ? "is-attached" : null)" data-card="prescription">
+    @if (CanChange)
+    {
+        <label class="btn btn-secondary @(Busy ? "is-disabled" : null)" data-action="Order.AttachPrescription">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Paperclip" />
+            @Texts[Attached && !Appends ? "Order.ReplacePrescription" : "Order.AttachPrescription"]
+            <InputFile class="file-input" accept="@PrescriptionScanPolicy.AcceptAttribute" multiple disabled="@Busy"
+                       data-input="prescription-files" OnChange="e => FilesChosenAsync(e, append: false)" />
+        </label>
+        @if (Attached && OnAppendPages.HasDelegate)
+        {
+            <label class="btn btn-secondary @(Busy ? "is-disabled" : null)" data-action="Order.AddPrescriptionPages">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" />
+                @Texts["Order.AddPrescriptionPages"]
+                <InputFile class="file-input" accept="@PrescriptionScanPolicy.AcceptAttribute" multiple disabled="@Busy"
+                           data-input="prescription-more" OnChange="e => FilesChosenAsync(e, append: true)" />
+            </label>
+        }
+        <label class="btn btn-secondary @(Busy ? "is-disabled" : null)" data-action="Order.PhotographPrescription">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Camera" />
+            @Texts["Order.PhotographPrescription"]
+            <InputFile class="file-input" accept="image/jpeg,image/png" capture="environment" disabled="@Busy"
+                       data-input="prescription-camera" OnChange="e => FilesChosenAsync(e, append: false)" />
+        </label>
+    }
+    <span class="prescription-state @(Attached ? "normal" : "muted")" data-state="prescription" data-pages="@Pages">
+        @if (Busy)
+        {
+            @Texts["Order.PrescriptionPreparing"]
+        }
+        else if (Attached)
+        {
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Check" />
+            @Texts["Order.PrescriptionAttached"]
+            @if (PrescriptionScanRules.Pages(Pages) is { } pages)
+            {
+                <span class="muted"> · @Texts.T(pages.Key, pages.Count)</span>
+            }
+        }
+        else
+        {
+            @Texts["Order.PrescriptionNone"]
+        }
+    </span>
+    @if (Attached && !Busy)
+    {
+        @if (CanView)
+        {
+            <button type="button" class="link" data-action="Order.ViewPrescription" @onclick="OnView">@Texts["Order.ViewPrescription"]</button>
+        }
+        @if (CanChange)
+        {
+            <button type="button" class="link critical" data-action="Order.RemovePrescription" @onclick="OnRemove">@Texts["Order.RemovePrescription"]</button>
+        }
+    }
+    @if (CanChange && !Attached && ShowHint)
+    {
+        <span class="muted small prescription-hint">@Texts.T("Order.PrescriptionHint", PrescriptionScanPolicy.MaxFileMegabytes, PrescriptionScanPolicy.MaxPages)</span>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Attached { get; set; }
+    [Parameter] public int? Pages { get; set; }
+    [Parameter] public bool CanChange { get; set; }
+    [Parameter] public bool CanView { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool ShowHint { get; set; } = true;
+
+    /// <summary>Whether new files are added after the pages there (« Nouvelle demande ») or replace them.</summary>
+    [Parameter] public bool Appends { get; set; }
+
+    /// <summary>The files chosen, read, each as a page.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<PrescriptionPage>> OnPages { get; set; }
+
+    /// <summary>« Ajouter des pages », offered when given and a prescription is attached: the files go after its pages.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<PrescriptionPage>> OnAppendPages { get; set; }
+
+    /// <summary>A file refused before it was read (too large, too many): the message to show.</summary>
+    [Parameter] public EventCallback<string> OnRefused { get; set; }
+
+    [Parameter] public EventCallback OnView { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private async Task FilesChosenAsync(InputFileChangeEventArgs e, bool append)
+    {
+        if (Busy || !CanChange) return;
+
+        if (e.FileCount > PrescriptionScanPolicy.MaxPages)
+        {
+            await OnRefused.InvokeAsync(Texts.Describe(Error.Validation("Prescription_TooManyPages", PrescriptionScanPolicy.MaxPages)));
+            return;
+        }
+
+        var pages = new List<PrescriptionPage>(e.FileCount);
+        foreach (var file in e.GetMultipleFiles(PrescriptionScanPolicy.MaxPages))
+        {
+            if (file.Size > PrescriptionScanPolicy.MaxFileBytes)
+            {
+                await OnRefused.InvokeAsync(Texts.Describe(Error.Validation("Prescription_FileTooLarge", file.Name,
+                                                                            PrescriptionScanPolicy.MaxFileMegabytes)));
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: PrescriptionScanPolicy.MaxFileBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            pages.Add(new PrescriptionPage(file.Name, buffer.ToArray()));
+        }
+
+        if (pages.Count > 0) await (append ? OnAppendPages : OnPages).InvokeAsync(pages);
+    }
+}

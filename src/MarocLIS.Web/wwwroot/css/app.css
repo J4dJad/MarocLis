@@ -538,6 +538,14 @@ html[dir="rtl"] .grid tr.is-selected td:first-child { box-shadow: inset -3px 0 0
 .form-grid-request { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
 .form-grid-request .field-prescriber, .form-grid-request .field-clinical { grid-column: span 2; }
 .form-grid-request .field-self-pay { min-block-size: var(--control-height); }
+/* The scanned prescription: its buttons, then what is attached, on one line that wraps on a phone. */
+.field-prescription { display: flex; flex-direction: column; gap: 4px; margin-block-start: 12px; }
+.prescription-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prescription-strip .link { margin-inline-start: 0; }
+.prescription-state { display: inline-flex; align-items: center; gap: 4px; }
+.prescription-hint { flex-basis: 100%; }
+.prescription-preview { display: block; inline-size: 100%; block-size: 70vh; min-block-size: 360px; margin-block-start: 12px;
+                        border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-sunken); }
 @media (max-width: 900px) {
     .form-grid-3, .form-grid-request { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
