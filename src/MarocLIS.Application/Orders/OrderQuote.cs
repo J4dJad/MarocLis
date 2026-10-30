@@ -14,6 +14,15 @@ public sealed record OrderQuoteRequest
     public IReadOnlyList<Guid> AnalysisTestIds { get; init; } = [];
     public IReadOnlyList<Guid> TestPanelIds { get; init; } = [];
     public bool BillDirectlyToPatient { get; init; }
+
+    /// <summary>The prescriber chosen: their convention and their rate apply.</summary>
+    public Guid? PrescriberId { get; init; }
+
+    /// <summary>The discount chosen at the counter: a convention, « sans convention », a profile or a rate typed.</summary>
+    public Guid? PartnershipId { get; init; }
+    public bool WithoutConvention { get; init; }
+    public Guid? DiscountProfileId { get; init; }
+    public decimal? DiscountPercent { get; init; }
 }
 
 /// <summary>One tube to draw: its container, colour and nominal volume, and what goes in it.</summary>
@@ -30,12 +39,14 @@ public sealed record TubeToDraw(
 /// with no tariff — so the counter can say so before the clerk presses the button.
 /// </para>
 /// </summary>
+/// <param name="Discount">The discount applied — its source, rate and amount — or null without one.</param>
 public sealed record OrderQuote(
     OrderPricing Pricing,
     MultilingualText? PayerName,
     int AnalysisCount,
     IReadOnlyList<TubeToDraw> Tubes,
-    IReadOnlyList<Error> Problems);
+    IReadOnlyList<Error> Problems,
+    AppliedDiscount? Discount = null);
 
 public interface IOrderQuotes
 {
@@ -58,7 +69,8 @@ public sealed class OrderQuoteService(
     IRepository<Patient> patients,
     IRepository<Payer> payers,
     OrderComposer composer,
-    IClock clock) : IOrderQuotes
+    IClock clock,
+    OrderDiscounts? discounts = null) : IOrderQuotes
 {
     public async Task<Result<OrderQuote>> QuoteAsync(OrderQuoteRequest request, CancellationToken ct = default)
     {
@@ -83,8 +95,30 @@ public sealed class OrderQuoteService(
         if (patient is not null) problems.AddRange(OrderComposer.CheckConsents(patient, selected, today));
         problems.AddRange(OrderComposer.CheckTariffs(selected, coverage.PayerId, today));
 
+        // The discount the save would apply; one the counter may not grant is said, and left out.
+        var discount = OrderDiscountContext.None;
+        if (discounts is not null)
+        {
+            var resolvedDiscount = await discounts.ResolveAsync(new OrderDiscountChoice
+            {
+                PrescriberId = request.PrescriberId,
+                PartnershipId = request.PartnershipId,
+                WithoutConvention = request.WithoutConvention,
+                DiscountProfileId = request.DiscountProfileId,
+                DiscountPercent = request.DiscountPercent
+            }, today, requireReason: false, ct);
+
+            if (resolvedDiscount.IsSuccess) discount = resolvedDiscount.Value;
+            else problems.AddRange(resolvedDiscount.Errors);
+        }
+
         var pricing = ActPricingCalculator.Price(
-            OrderComposer.BuildPricingInputs(selected, coverage.PayerId, today), coverage.Context);
+            OrderComposer.BuildPricingInputs(selected, coverage.PayerId, today, discount.Prices), coverage.Context,
+            discount.Percent);
+
+        var applied = discounts is null
+            ? null
+            : OrderDiscounts.Describe(discount, pricing, await discounts.CapAsync(ct));
 
         MultilingualText? payerName = null;
         if (coverage.PayerId is { } payerId)
@@ -103,6 +137,6 @@ public sealed class OrderQuoteService(
             })
             .ToList();
 
-        return Result.Success(new OrderQuote(pricing, payerName, selected.Count, tubes, problems));
+        return Result.Success(new OrderQuote(pricing, payerName, selected.Count, tubes, problems, applied));
     }
 }

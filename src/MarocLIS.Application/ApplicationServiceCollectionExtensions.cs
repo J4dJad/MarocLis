@@ -35,6 +35,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<Patients.PatientRegistrationService>();
         services.AddScoped<OrderComposer>();
         services.AddScoped<OrderRegistrationService>();
+        // The discount of a request (convention, prescriber, profile, negotiated prices), and the
+        // profiles, the negotiated prices and the report of « Remises ».
+        services.AddScoped<OrderDiscounts>();
+        services.AddScoped<Billing.DiscountService>();
         services.AddScoped<OrderAmendmentService>();
         services.AddScoped<PrescriptionScanService>();
         services.AddScoped<Catalog.CatalogMaintenanceService>();

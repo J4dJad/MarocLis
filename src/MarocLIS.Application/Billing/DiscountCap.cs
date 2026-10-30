@@ -1,4 +1,5 @@
 using MarocLIS.Domain.Common;
+using MarocLIS.Application.Abstractions;
 
 namespace MarocLIS.Application.Billing;
 
@@ -99,4 +100,63 @@ public sealed record DiscountApproval(string UserName, string Password)
     public static bool IsRefusal(string resourceKey) =>
         resourceKey.StartsWith("Approval_", StringComparison.Ordinal)
         || resourceKey is "Invoice_DiscountApprovalRequired" or "Auth_AccountLockedOut";
+}
+
+/// <summary>
+/// The approval on the spot of a discount above the ceiling, wherever it is granted: when an
+/// invoice is issued, and when a request is registered with a discount profile or a rate typed.
+/// Another active user holding <c>billing.discount.approve</c> types their name and password; the
+/// operator's own name is refused before anything is checked, whatever their rights.
+/// </summary>
+public static class DiscountApprovals
+{
+    /// <summary>The refusal of a discount above the ceiling without a valid approval: the ceiling in dirhams.</summary>
+    public static Error Required(DiscountCapSettings cap, decimal gross, AppLanguage language)
+    {
+        ArgumentNullException.ThrowIfNull(cap);
+        return Error.Forbidden("Invoice_DiscountApprovalRequired", Money.Of(cap.CapFor(gross)).Format(language));
+    }
+
+    /// <summary>Checks the approver like a sign-in, without signing them in; a wrong password counts towards their lockout.</summary>
+    public static async Task<Result<ApproverIdentity>> VerifyAsync(
+        IAuthenticationService? authentication, ICurrentUser currentUser,
+        DiscountApproval? approval, Error required, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(currentUser);
+
+        if (approval is null || string.IsNullOrWhiteSpace(approval.UserName) || string.IsNullOrEmpty(approval.Password))
+            return Result.Failure<ApproverIdentity>(required);
+
+        if (string.Equals(approval.UserName.Trim(), currentUser.UserName, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        if (authentication is null) return Result.Failure<ApproverIdentity>(required);
+
+        var verified = await authentication.VerifyApproverAsync(
+            approval.UserName, approval.Password, Domain.Identity.Permissions.Billing.ApproveDiscount, ct);
+
+        if (verified.IsFailure) return verified;
+
+        if (verified.Value.UserId == currentUser.UserId)
+            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
+
+        return verified;
+    }
+
+    /// <summary>What the audit trail says of an approved discount: who, when, how much, under which ceiling.</summary>
+    public static string Describe(ApproverIdentity approver, DiscountCapSettings cap, decimal discount, decimal gross,
+                                  DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(approver);
+        ArgumentNullException.ThrowIfNull(cap);
+
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        var ceiling = cap.MaxAmount is { } max
+            ? $"{cap.MaxPercent.ToString("0.##", fr)} % du brut, maximum {max.ToString("N2", fr)} DH"
+            : $"{cap.MaxPercent.ToString("0.##", fr)} % du brut";
+
+        return $" ; remise de {discount.ToString("N2", fr)} DH au-delà du plafond de "
+               + $"{cap.CapFor(gross).ToString("N2", fr)} DH ({ceiling}) approuvée par "
+               + $"{approver.FullName} ({approver.UserName}) le {at.ToString("dd/MM/yyyy HH:mm", fr)}";
+    }
 }

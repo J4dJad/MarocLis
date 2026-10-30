@@ -519,7 +519,13 @@ public sealed class BillingService(
             : $"Émission de la facture {invoice.Number}";
 
         if (approver is not null)
+        {
+            invoice.DiscountApprovedByUserId = approver.UserId;
             unitOfWork.AuditReason += DescribeApproval(approver, cap, invoice.DiscountAmount, invoice.GrossAmount);
+        }
+
+        if (invoice.DiscountAmount > 0m)
+            unitOfWork.AuditReason += $" ; remise de {invoice.DiscountAmount.ToString("N2", CultureInfo.GetCultureInfo("fr-FR"))} DH : {invoice.DiscountReason}";
 
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
@@ -532,49 +538,17 @@ public sealed class BillingService(
             ? DiscountCapSettings.Default
             : DiscountCapSettings.FromValues(await settingsQueries.GetSettingValuesAsync(DiscountCapSettings.Prefix, ct));
 
-    /// <summary>
-    /// The approval of a discount above the ceiling: another user, active, with the right to
-    /// approve, who typed their password. The operator's own name is refused before anything is
-    /// checked, whatever their rights.
-    /// </summary>
-    private async Task<Result<ApproverIdentity>> ApproveDiscountAsync(
-        DiscountApproval? approval, DiscountCapSettings cap, decimal gross, CancellationToken ct)
-    {
-        if (approval is null || string.IsNullOrWhiteSpace(approval.UserName) || string.IsNullOrEmpty(approval.Password))
-            return Result.Failure<ApproverIdentity>(DiscountApprovalRequired(cap, gross));
-
-        if (string.Equals(approval.UserName.Trim(), currentUser.UserName, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
-
-        if (authentication is null)
-            return Result.Failure<ApproverIdentity>(DiscountApprovalRequired(cap, gross));
-
-        var verified = await authentication.VerifyApproverAsync(
-            approval.UserName, approval.Password, Permissions.Billing.ApproveDiscount, ct);
-
-        if (verified.IsFailure) return verified;
-
-        if (verified.Value.UserId == currentUser.UserId)
-            return Result.Failure<ApproverIdentity>(Error.Forbidden("Approval_SelfNotAllowed"));
-
-        return verified;
-    }
+    /// <summary>The approval of a discount above the ceiling (<see cref="DiscountApprovals"/>).</summary>
+    private Task<Result<ApproverIdentity>> ApproveDiscountAsync(
+        DiscountApproval? approval, DiscountCapSettings cap, decimal gross, CancellationToken ct) =>
+        DiscountApprovals.VerifyAsync(authentication, currentUser, approval, DiscountApprovalRequired(cap, gross), ct);
 
     private Error DiscountApprovalRequired(DiscountCapSettings cap, decimal gross) =>
-        Error.Forbidden("Invoice_DiscountApprovalRequired", Money.Of(cap.CapFor(gross)).Format(currentUser.Language));
+        DiscountApprovals.Required(cap, gross, currentUser.Language);
 
     /// <summary>What the audit trail says of an approved discount: who, when, how much, under which ceiling.</summary>
-    private string DescribeApproval(ApproverIdentity approver, DiscountCapSettings cap, decimal discount, decimal gross)
-    {
-        var fr = CultureInfo.GetCultureInfo("fr-FR");
-        var ceiling = cap.MaxAmount is { } max
-            ? $"{cap.MaxPercent.ToString("0.##", fr)} % du brut, maximum {max.ToString("N2", fr)} DH"
-            : $"{cap.MaxPercent.ToString("0.##", fr)} % du brut";
-
-        return $" ; remise de {discount.ToString("N2", fr)} DH au-delà du plafond de "
-               + $"{cap.CapFor(gross).ToString("N2", fr)} DH ({ceiling}) approuvée par "
-               + $"{approver.FullName} ({approver.UserName}) le {clock.Now.ToString("dd/MM/yyyy HH:mm", fr)}";
-    }
+    private string DescribeApproval(ApproverIdentity approver, DiscountCapSettings cap, decimal discount, decimal gross) =>
+        DiscountApprovals.Describe(approver, cap, discount, gross, clock.Now);
 
     /// <summary>
     /// The reimbursement rate to split an order's lines with when it is invoiced to

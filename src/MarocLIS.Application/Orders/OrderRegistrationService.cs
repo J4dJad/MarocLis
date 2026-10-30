@@ -41,8 +41,23 @@ public sealed record RegisterOrderRequest
     /// <summary>Forces self-pay even when the patient holds a coverage.</summary>
     public bool BillDirectlyToPatient { get; init; }
 
+    /// <summary>A rate typed at the counter, without a profile (<c>billing.discount</c>).</summary>
     public decimal? DiscountPercent { get; init; }
+
+    /// <summary>Why the counter grants its discount: required with a profile or a rate typed.</summary>
     public string? DiscountReason { get; init; }
+
+    /// <summary>A discount profile chosen at the counter (<c>billing.discount</c>); its rate is granted.</summary>
+    public Guid? DiscountProfileId { get; init; }
+
+    /// <summary>A convention chosen at the counter (<c>billing.discount</c>); null lets the prescriber's apply.</summary>
+    public Guid? PartnershipId { get; init; }
+
+    /// <summary>« Sans convention »: the prescriber's convention is not applied.</summary>
+    public bool WithoutConvention { get; init; }
+
+    /// <summary>Another user's name and password, for a counter's discount above the ceiling.</summary>
+    public Billing.DiscountApproval? DiscountApproval { get; init; }
 
     /// <summary>
     /// Null takes the patient's preferred language. Either way a language the laboratory has
@@ -98,7 +113,8 @@ public sealed class OrderRegistrationService(
     IClock clock,
     OrderRegistrationOptions options,
     IActiveLanguages? activeLanguages = null,
-    ILicenceState? licence = null)
+    ILicenceState? licence = null,
+    OrderDiscounts? discounts = null)
 {
     /// <summary>
     /// The language the file's report is written in: the one asked for, else the patient's, and
@@ -164,10 +180,45 @@ public sealed class OrderRegistrationService(
         var tariffFailures = OrderComposer.CheckTariffs(selected, coverage.PayerId, today);
         if (tariffFailures.Count > 0) return Result.Failure<RegisteredOrder>(tariffFailures);
 
+        // The discount: the convention in force, the prescriber's rate, the counter's profile or
+        // rate — the highest, never two together (DiscountRules) — and the negotiated prices.
+        var discount = OrderDiscountContext.None;
+        if (discounts is not null)
+        {
+            var resolvedDiscount = await discounts.ResolveAsync(new OrderDiscountChoice
+            {
+                PrescriberId = request.PrescriberId,
+                PartnershipId = request.PartnershipId,
+                WithoutConvention = request.WithoutConvention,
+                DiscountProfileId = request.DiscountProfileId,
+                DiscountPercent = request.DiscountPercent,
+                DiscountReason = request.DiscountReason
+            }, today, requireReason: true, ct);
+            if (resolvedDiscount.IsFailure) return Result.Failure<RegisteredOrder>(resolvedDiscount.Errors);
+            discount = resolvedDiscount.Value;
+        }
+        else if (request.DiscountPercent is > 0m)
+        {
+            discount = OrderDiscountContext.None with
+            {
+                Applied = new DiscountOffer(Domain.Orders.DiscountSource.Manual, request.DiscountPercent.Value, string.Empty)
+            };
+        }
+
         var pricing = ActPricingCalculator.Price(
-            OrderComposer.BuildPricingInputs(selected, coverage.PayerId, today),
+            OrderComposer.BuildPricingInputs(selected, coverage.PayerId, today, discount.Prices),
             coverage.Context,
-            request.DiscountPercent ?? 0m);
+            discount.Percent);
+
+        // Above the ceiling, another user's approval — checked before the transaction: a wrong
+        // password counts towards that user's lockout, and the count must survive the refusal.
+        ApproverIdentity? approver = null;
+        if (discounts is not null)
+        {
+            var approved = await discounts.ApproveAsync(discount, pricing, request.DiscountApproval, ct);
+            if (approved.IsFailure) return Result.Failure<RegisteredOrder>(approved.Errors);
+            approver = approved.Value;
+        }
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(ct);
 
@@ -204,10 +255,10 @@ public sealed class OrderRegistrationService(
                 ? coverage.Context.ReimbursementRate
                 : null,
             PriorAgreementNumber = coverage.PriorAgreementNumber,
-            DirectBillingAtRegistration = coverage.Context is { IsCovered: true, DirectBilling: true },
-            DiscountPercent = request.DiscountPercent,
-            DiscountReason = request.DiscountReason
+            DirectBillingAtRegistration = coverage.Context is { IsCovered: true, DirectBilling: true }
         };
+
+        OrderDiscounts.Stamp(order, discount, pricing, request.DiscountReason, approver);
 
         // Attach the priced acts as order items, carrying the frozen price and coverage split.
         foreach (var priced in pricing.Acts)
@@ -225,6 +276,19 @@ public sealed class OrderRegistrationService(
         // happened yet at registration.
         order.DueAt = composer.PromisedCompletion(selected, order.IsUrgent);
 
+        // Set before the order is added: the tubes' numbering saves it, and its entry in the audit
+        // trail is to say what was registered — the discount, its source and its approver included.
+        var auditReason = (request.PrescriptionScan is null
+            ? $"Enregistrement du dossier {order.AccessionNumber}"
+            : $"Enregistrement du dossier {order.AccessionNumber}, ordonnance numérisée jointe")
+            + OrderDiscounts.AuditText(order);
+
+        if (approver is not null)
+            auditReason += Billing.DiscountApprovals.Describe(
+                approver, await discounts!.CapAsync(ct), pricing.RateDiscount.Amount, pricing.Gross.Amount, clock.Now);
+
+        unitOfWork.AuditReason = auditReason;
+
         await orders.AddAsync(order, ct);
 
         var labels = await composer.CreateSamplesAsync(order, patient, selected, ct: ct);
@@ -234,9 +298,7 @@ public sealed class OrderRegistrationService(
         // Restart the retention clock on the last act, per the medical-record retention obligation.
         patient.ExtendRetention(today, options.MedicalRecordRetentionYears);
 
-        unitOfWork.AuditReason = request.PrescriptionScan is null
-            ? $"Enregistrement du dossier {order.AccessionNumber}"
-            : $"Enregistrement du dossier {order.AccessionNumber}, ordonnance numérisée jointe";
+        unitOfWork.AuditReason = auditReason;
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 

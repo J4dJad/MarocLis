@@ -111,6 +111,7 @@ public static class WebServiceCollectionExtensions
         services.AddScoped<IBillingQueries, BillingQueries>();
         // The invoice print settings and the discount ceiling of Paramètres › Factures.
         services.AddScoped<IInvoicePrintSettingsQueries, InvoicePrintSettingsQueries>();
+        services.AddScoped<IDiscountQueries, DiscountQueries>();
         services.AddScoped<IMasterDataQueries, MasterDataQueries>();
         // The sample and result screens: the patients to call back, the files to enter and to
         // validate, the bench's pending work and the context of a file being entered.

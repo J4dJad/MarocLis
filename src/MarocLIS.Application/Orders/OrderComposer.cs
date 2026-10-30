@@ -238,8 +238,13 @@ public sealed class OrderComposer(
             .Select(a => Error.Validation("Order_AnalysisWithoutTariff", a.Test.Code))
     ];
 
+    /// <param name="negotiated">
+    /// The prices negotiated in the order's convention. An analysis billed inside a profile sold at a
+    /// package price keeps its share of the package (<see cref="Pricing.DiscountRules"/>).
+    /// </param>
     public static List<ActPricingInput> BuildPricingInputs(IReadOnlyList<SelectedAnalysis> selected,
-                                                     Guid? payerId, DateOnly today)
+                                                     Guid? payerId, DateOnly today,
+                                                     IReadOnlyList<Domain.Relations.PartnershipPrice>? negotiated = null)
     {
         var inputs = new List<ActPricingInput>(selected.Count);
 
@@ -260,6 +265,10 @@ public sealed class OrderComposer(
                 Coefficient = tariff?.Coefficient ?? 0m,
                 LetterKeyValue = tariff?.LetterKeyValue ?? 0m,
                 ChargedUnitPrice = tariff?.Price ?? 0m,
+                NegotiatedUnitPrice = analysis.PanelPackagePrice is null && negotiated is { Count: > 0 }
+                                      && Pricing.DiscountRules.NegotiatedFor(negotiated, analysis.Test.Id, today) is { } deal
+                    ? deal.PriceFor(tariff?.Price ?? 0m)
+                    : null,
                 IsVatExempt = tariff?.IsVatExempt ?? true,
                 VatRate = tariff?.VatRate ?? 0m,
                 TestPanelId = analysis.PanelId

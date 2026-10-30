@@ -338,10 +338,10 @@ public sealed class InboundSubcontractingDatabaseTests(SubcontractingScratchData
         var order = await RegisterAsync(provider, lab, prescriberId);
 
         order.Pricing.Gross.Amount.Should().Be(200m);
-        // Gap: the convention's 15 % is not applied. Nothing reads Partnership.DiscountPercent (nor
-        // Prescriber.DiscountPercent) at registration, and the screen has no discount field.
-        order.Pricing.Discount.Amount.Should().Be(0m);
-        order.Pricing.PayerShare.Amount.Should().Be(200m);
+        // The convention's 15 % applies by itself: the referring laboratory is the order's prescriber,
+        // and the convention is in force with it (DiscountRules).
+        order.Pricing.Discount.Amount.Should().Be(30m);
+        order.Pricing.PayerShare.Amount.Should().Be(170m);
         order.Pricing.PatientShare.Amount.Should().Be(0m);
         order.Pricing.DueAtCounter.Amount.Should().Be(0m);
 
@@ -405,8 +405,8 @@ public sealed class InboundSubcontractingDatabaseTests(SubcontractingScratchData
             invoice.BilledToName.Should().Be("Laboratoire Biolab Rabat");
             invoice.BilledToCity.Should().Be("Rabat");
             invoice.PrescriberName.Should().Be("Laboratoire Biolab Rabat");
-            invoice.TotalAmount.Should().Be(200m);
-            invoice.PayerShareAmount.Should().Be(200m);
+            invoice.TotalAmount.Should().Be(170m);
+            invoice.PayerShareAmount.Should().Be(170m);
             invoice.PatientShareAmount.Should().Be(0m);
             invoice.ClaimStatus.Should().Be(ClaimStatus.Prepared);
             // The payer's 30 days, the convention's own terms are not read.
@@ -426,7 +426,7 @@ public sealed class InboundSubcontractingDatabaseTests(SubcontractingScratchData
         batch.Value.Submitted.Should().Be(1);
 
         var settled = await On<BillingService, Result>(provider, s => s.RecordPayerSettlementAsync(
-            invoiceId.Value, 200m, PayerShortfallHandling.WriteOff, null, "VIR-BIOLAB-0042"));
+            invoiceId.Value, 170m, PayerShortfallHandling.WriteOff, null, "VIR-BIOLAB-0042"));
         settled.IsSuccess.Should().BeTrue(Keys(settled.Errors));
 
         await using (var context = database.Context())
@@ -453,8 +453,8 @@ public sealed class InboundSubcontractingDatabaseTests(SubcontractingScratchData
             var payerCode = (await context.Payers.AsNoTracking().SingleAsync(p => p.Id == payerId)).Code;
             var lines = entries.SelectMany(e => e.Lines).ToList();
 
-            lines.Where(l => l.ThirdParty == payerCode).Sum(l => l.Debit).Should().Be(200m);
-            lines.Where(l => l.ThirdParty == payerCode).Sum(l => l.Credit).Should().Be(200m);
+            lines.Where(l => l.ThirdParty == payerCode).Sum(l => l.Debit).Should().Be(170m);
+            lines.Where(l => l.ThirdParty == payerCode).Sum(l => l.Credit).Should().Be(170m);
             lines.Where(l => l.Account == AccountingSettings.Default.PatientReceivable && l.ThirdParty != payerCode)
                 .Sum(l => l.Debit - l.Credit).Should().Be(0m);
         }

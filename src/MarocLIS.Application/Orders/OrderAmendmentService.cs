@@ -212,7 +212,8 @@ public sealed class OrderAmendmentService(
     IClock clock,
     IRepository<TestResult> results,
     IActiveLanguages? activeLanguages = null,
-    ILicenceState? licence = null)
+    ILicenceState? licence = null,
+    IRepository<Domain.Relations.PartnershipPrice>? partnershipPrices = null)
 {
     // ---- Reading -------------------------------------------------------------------------------
 
@@ -369,8 +370,14 @@ public sealed class OrderAmendmentService(
         var tariffFailures = OrderComposer.CheckTariffs(selected, order.PayerId, today);
         if (tariffFailures.Count > 0) return Result.Failure<OrderAmendment>(tariffFailures);
 
+        // An added analysis is priced like the others: the order's rate, and the negotiated price of
+        // the convention it was registered under, the lower of the two (DiscountRules).
+        IReadOnlyList<Domain.Relations.PartnershipPrice> negotiated = order.PartnershipId is { } conventionId && partnershipPrices is not null
+            ? await partnershipPrices.ListAsync(p => p.PartnershipId == conventionId && !p.IsDeleted, ct)
+            : [];
+
         var pricing = ActPricingCalculator.Price(
-            OrderComposer.BuildPricingInputs(selected, order.PayerId, today),
+            OrderComposer.BuildPricingInputs(selected, order.PayerId, today, negotiated),
             coverage,
             order.DiscountPercent ?? 0m);
 
@@ -389,6 +396,10 @@ public sealed class OrderAmendmentService(
             if (attached.IsFailure) { warnings.Add(attached.FirstError); continue; }
 
             added.Add(attached.Value);
+            order.DiscountAmount += priced.Discount.Amount;
+
+            if (priced.DiscountKind == ActDiscountKind.Negotiated && order.DiscountSource == DiscountSource.None)
+                order.DiscountSource = DiscountSource.Convention;
         }
 
         if (added.Count == 0)
