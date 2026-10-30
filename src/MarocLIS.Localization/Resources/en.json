@@ -3292,6 +3292,7 @@
     "PrescriptionAddMorePages": "Add another page?",
     "PrescriptionAddMorePagesText": "Page added. Scan another page of the prescription?",
     "PrescriptionHint": "PDF, JPEG or PNG — at most {0} MB per file, {1} pages.",
+    "PrescriptionAppendOrReplace": "A prescription is already attached. Add these pages after it?\n(Yes: add them; No: replace the prescription)",
     "Origin": "Origin",
     "Ward": "Ward / unit",
     "Room": "Room / bed",

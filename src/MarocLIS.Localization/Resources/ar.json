@@ -3292,6 +3292,7 @@
     "PrescriptionAddMorePages": "إضافة صفحة أخرى؟",
     "PrescriptionAddMorePagesText": "تمت إضافة الصفحة. هل تريد مسح صفحة أخرى من الوصفة؟",
     "PrescriptionHint": "PDF أو JPEG أو PNG — بحد أقصى {0} ميغابايت للملف و{1} صفحة.",
+    "PrescriptionAppendOrReplace": "توجد وصفة مرفقة مسبقا. هل تريد إضافة هذه الصفحات بعدها؟\n(نعم: إضافتها؛ لا: استبدال الوصفة)",
     "Origin": "المصدر",
     "Ward": "القسم / الوحدة",
     "Room": "الغرفة / السرير",

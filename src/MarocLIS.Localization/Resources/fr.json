@@ -3292,6 +3292,7 @@
     "PrescriptionAddMorePages": "Ajouter une autre page ?",
     "PrescriptionAddMorePagesText": "Page ajoutée. Numériser une autre page de l'ordonnance ?",
     "PrescriptionHint": "PDF, JPEG ou PNG — {0} Mo au plus par fichier, {1} pages au plus.",
+    "PrescriptionAppendOrReplace": "Une ordonnance est déjà jointe. Ajouter ces pages à la suite ?\n(Oui : les ajouter ; Non : remplacer l'ordonnance)",
     "Origin": "Origine",
     "Ward": "Service / unité",
     "Room": "Chambre / lit",

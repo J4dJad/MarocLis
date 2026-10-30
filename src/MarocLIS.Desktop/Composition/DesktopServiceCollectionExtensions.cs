@@ -40,6 +40,9 @@ public static class DesktopServiceCollectionExtensions
         services.AddSingleton<Application.HumanResources.IAccidentRenderer>(sp => sp.GetRequiredService<QuestPdfHrDocumentRenderer>());
         services.AddSingleton<IBenchWorksheetRenderer, QuestPdfBenchWorksheetRenderer>();
         services.AddSingleton<Application.Inventory.IPurchaseOrderRenderer, QuestPdfPurchaseOrderRenderer>();
+        // The scanned prescription: pages assembled into one PDF; the scanner through Windows' WIA.
+        services.AddSingleton<Application.Orders.IPrescriptionDocumentComposer, QuestPdfPrescriptionComposer>();
+        services.AddSingleton<IDocumentScanner, WiaDocumentScanner>();
 
         // Resolved once: the installed font set does not change while the application runs, and the
         // report screen would otherwise pay to enumerate it on every release.

@@ -166,7 +166,7 @@ public sealed class QuestPdfPrescriptionComposer : IPrescriptionDocumentComposer
     /// part is tried alone so the refusal names the PDF that cannot be read (damaged, or protected by
     /// a password).
     /// </summary>
-    private static Result<byte[]> Merge(IReadOnlyList<(string Name, byte[] Pdf)> parts)
+    private static Result<byte[]> Merge(List<(string Name, byte[] Pdf)> parts)
     {
         var folder = Path.Combine(Path.GetTempPath(), "maroclis-ordonnance-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);

@@ -34,7 +34,7 @@ public sealed class PrescriptionScanDesktopTests
 
     private sealed class ThrowingScanner : IDocumentScanner
     {
-        public ScanOutcome AcquirePage() => throw new System.Runtime.InteropServices.COMException("Bourrage papier");
+        public ScanOutcome AcquirePage() => throw new InvalidOperationException("Bourrage papier");
     }
 
     [Fact]

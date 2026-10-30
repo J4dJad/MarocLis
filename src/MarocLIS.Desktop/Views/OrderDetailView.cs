@@ -42,7 +42,9 @@ public sealed class OrderDetailView : LocalizedView
     private const int ListWidth = 300;
     private const int ListRowHeight = 54;
     private const int ItemRowHeight = 46;
-    private const int HeaderCardHeight = 240;
+    // The prescription's strip included (PrescriptionRowHeight).
+    private const int PrescriptionRowHeight = 38;
+    private const int HeaderCardHeight = 240 + PrescriptionRowHeight;
     private const int CancellationHeight = 24;
 
     private readonly OrderAmendmentService _orders;
@@ -59,6 +61,8 @@ public sealed class OrderDetailView : LocalizedView
     private readonly Application.Samples.SampleWorkflowService _samplesWorkflow;
     private readonly Application.Reports.ReportReleaseService _reports;
     private readonly ILogger<OrderDetailView>? _logger;
+    private readonly PrescriptionScanService _prescriptions;
+    private readonly PrescriptionScreenActions _prescriptionActions;
     private readonly ToolTip _tips = new();
 
     // ---- the files (left panel) ----
@@ -91,6 +95,8 @@ public sealed class OrderDetailView : LocalizedView
     private readonly Label[] _factNotes = [new(), new(), new(), new()];
     private readonly FileProgressLine _progress = new();
     private readonly TableLayoutPanel _headerLayout = new();
+    private readonly PrescriptionAttachmentBar _prescriptionBar = new();
+    private int? _prescriptionPages;
 
     // ---- the content card: analyses, tubes, billing, history ----
     private readonly FileTabStrip _tabs = new();
@@ -165,6 +171,7 @@ public sealed class OrderDetailView : LocalizedView
                            ISampleLabelRenderer labels, ILabelPrinter labelPrinter,
                            IDocumentOutput documents, IUserDialogs dialogs,
                            ICurrentUser currentUser, IClock clock,
+                           PrescriptionScanService prescriptions, IDocumentScanner scanner,
                            ILocalizer localizer, ICultureManager cultureManager,
                            ILogger<OrderDetailView>? logger = null)
         : base(localizer, cultureManager)
@@ -183,6 +190,8 @@ public sealed class OrderDetailView : LocalizedView
         _currentUser = currentUser;
         _clock = clock;
         _logger = logger;
+        _prescriptions = prescriptions;
+        _prescriptionActions = new PrescriptionScreenActions(scanner, dialogs, localizer, documents);
 
         BuildLayout();
         WireBehaviour();
@@ -476,7 +485,7 @@ public sealed class OrderDetailView : LocalizedView
 
         _headerLayout.Dock = DockStyle.Fill;
         _headerLayout.ColumnCount = 1;
-        _headerLayout.RowCount = 7;
+        _headerLayout.RowCount = 8;
         _headerLayout.Margin = new Padding(0);
         _headerLayout.BackColor = UiTheme.SurfaceRaised;
         _headerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -487,6 +496,7 @@ public sealed class OrderDetailView : LocalizedView
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 13));
         _headerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _headerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, PrescriptionRowHeight));
 
         // --- number, state, priority, registration ------------------------------------------------
 
@@ -603,6 +613,11 @@ public sealed class OrderDetailView : LocalizedView
         _headerLayout.Controls.Add(facts, 0, 4);
         _headerLayout.Controls.Add(Rule(), 0, 5);
         _headerLayout.Controls.Add(_progress, 0, 6);
+
+        // The scanned prescription: attach, replace, look at, remove.
+        _prescriptionBar.Dock = DockStyle.Fill;
+        _prescriptionBar.Margin = new Padding(0, 6, 0, 0);
+        _headerLayout.Controls.Add(_prescriptionBar, 0, 7);
 
         _headerCard.Controls.Add(_headerLayout);
         return _headerCard;
@@ -993,6 +1008,12 @@ public sealed class OrderDetailView : LocalizedView
         };
 
         _addAnalyses.Click += async (_, _) => await RunBusyAsync(AddAnalysesAsync);
+        _prescriptionBar.ScanRequested += async (_, _) => await RunBusyAsync(() =>
+            AttachPrescriptionAsync(_prescriptionActions.Scan(T("Order.PrescriptionScan"), 0)));
+        _prescriptionBar.AttachRequested += async (_, _) => await RunBusyAsync(() =>
+            AttachPrescriptionAsync(_prescriptionActions.PickFiles(this, T("Order.AttachPrescriptionFile"))));
+        _prescriptionBar.ViewRequested += async (_, _) => await RunBusyAsync(ViewPrescriptionAsync);
+        _prescriptionBar.RemoveRequested += async (_, _) => await RunBusyAsync(RemovePrescriptionAsync);
         _printLabels.Click += async (_, _) => await ReprintLabelsAsync();
         _printReport.Click += async (_, _) => await RunBusyAsync(OpenReportAsync);
         _editHeader.Click += async (_, _) => await RunBusyAsync(EditHeaderAsync);
@@ -1047,6 +1068,8 @@ public sealed class OrderDetailView : LocalizedView
 
     protected override void ApplyTexts()
     {
+        _prescriptionBar.Caption = T("Order.PrescriptionScan");
+        _prescriptionBar.ApplyTexts(Localizer);
         _search.PlaceholderText = T("Order.SearchPlaceholder");
         _search.AccessibleName = T("Order.SearchPlaceholder");
         _chipWeek.Text = T("OrderFile.FilterWeek");
@@ -1245,6 +1268,7 @@ public sealed class OrderDetailView : LocalizedView
             {
                 _events = [];
                 _paymentRows = [];
+                _prescriptionPages = null;
             }
 
             _detail = result.Value;
@@ -2044,6 +2068,76 @@ public sealed class OrderDetailView : LocalizedView
         _cancelItem.Enabled = _itemCancel.Enabled = actions.CancelItem;
         _repeatItem.Enabled = _itemRepeat.Enabled = actions.RepeatItem;
         _more.Enabled = actions.MoreActions;
+
+        _prescriptionBar.ShowAttachment(detail?.HasPrescriptionScan == true, _prescriptionPages);
+        _prescriptionBar.Allow(change: PrescriptionScanRules.CanChange(detail, _currentUser),
+                               view: PrescriptionScanRules.CanView(detail, _currentUser));
+        _prescriptionBar.Visible = detail is not null;
+    }
+
+    // ---- The scanned prescription ----------------------------------------------------------------------
+
+    /// <summary>
+    /// Attaches the scanned or chosen pages. With a prescription already there, the operator says
+    /// whether the pages complete it or replace it.
+    /// </summary>
+    private async Task AttachPrescriptionAsync(IReadOnlyList<PrescriptionPage>? pages)
+    {
+        if (pages is null || _detail is not { } detail || !PrescriptionScanRules.CanChange(detail, _currentUser)) return;
+
+        var append = detail.HasPrescriptionScan
+                     && _dialogs.Confirm(T("Order.PrescriptionAppendOrReplace"), T("Order.PrescriptionScan"));
+
+        _prescriptionBar.Busy = true;
+        _status.ForeColor = UiTheme.TextSecondary;
+        _status.Text = T("Order.PrescriptionPreparing");
+
+        try
+        {
+            // The photos are downscaled off the screen's thread; the assembled PDF is then saved.
+            var prepared = await Task.Run(() => _prescriptions.PrepareAsync(pages));
+            if (prepared.IsFailure) { _dialogs.ShowFailure(prepared, T("Order.PrescriptionScan")); return; }
+
+            var attached = await _prescriptions.AttachAsync(
+                detail.OrderId, [new PrescriptionPage("ordonnance.pdf", prepared.Value.Content)], append);
+            if (attached.IsFailure) { _dialogs.ShowFailure(attached, T("Order.PrescriptionScan")); return; }
+
+            _prescriptionPages = attached.Value.PageCount;
+            _status.ForeColor = UiTheme.Normal;
+            _status.Text = T("Order.PrescriptionSaved");
+            await ActivateAsync();
+        }
+        finally
+        {
+            _prescriptionBar.Busy = false;
+            RefreshActions();
+        }
+    }
+
+    private async Task ViewPrescriptionAsync()
+    {
+        if (_detail is not { } detail || !PrescriptionScanRules.CanView(detail, _currentUser)) return;
+
+        var file = await _prescriptions.GetAsync(detail.OrderId);
+        if (file.IsFailure) { _dialogs.ShowFailure(file, T("Order.PrescriptionScan")); return; }
+
+        _prescriptionPages = file.Value.PageCount;
+        RefreshActions();
+        await _prescriptionActions.ViewAsync(file.Value.Content, T("Order.PrescriptionScan"));
+    }
+
+    private async Task RemovePrescriptionAsync()
+    {
+        if (_detail is not { } detail || !PrescriptionScanRules.CanRemove(detail, _currentUser)) return;
+        if (!_dialogs.Confirm(T("Order.PrescriptionRemoveConfirm"), T("Order.PrescriptionScan"))) return;
+
+        var removed = await _prescriptions.RemoveAsync(detail.OrderId);
+        if (removed.IsFailure) { _dialogs.ShowFailure(removed, T("Order.PrescriptionScan")); return; }
+
+        _prescriptionPages = null;
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = T("Order.PrescriptionRemoved");
+        await ActivateAsync();
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------

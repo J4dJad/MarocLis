@@ -52,6 +52,8 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly Composition.PatientEditorFactory _patientEditor;
     private readonly Application.Administration.MasterDataService _masterDataService;
     private readonly ILogger<OrderRegistrationView>? _logger;
+    private readonly PrescriptionScanService _prescriptions;
+    private readonly PrescriptionScreenActions _prescriptionActions;
 
     // Frame
     private readonly Panel _content = new() { Dock = DockStyle.Fill, AutoScroll = true, Tag = UiTags.OwnLayout };
@@ -93,6 +95,11 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly TextBox _clinicalInfo = UiTheme.Input(420);
     private readonly Label _clinicalInfoLabel = new();
     private readonly CheckBox _selfPay = new();
+
+    // The scanned prescription, assembled before the request exists and saved with it.
+    private readonly Label _prescriptionLabel = new();
+    private readonly PrescriptionAttachmentBar _prescriptionBar = new();
+    private readonly PrescriptionDraft _prescriptionDraft = new();
 
     // Catalogue
     private readonly Panel _work = new() { Dock = DockStyle.Fill, Tag = UiTags.OwnLayout };
@@ -161,6 +168,7 @@ public sealed class OrderRegistrationView : LocalizedView
                                  Application.Administration.MasterDataService masterDataService,
                                  IOrderQuotes quotes, IOrderEntryQueries entryQueries,
                                  INavigationService navigation, LabelPrintOptions labelOptions,
+                                 PrescriptionScanService prescriptions, IDocumentScanner scanner,
                                  ILocalizer localizer, ICultureManager cultureManager,
                                  ILogger<OrderRegistrationView>? logger = null)
         : base(localizer, cultureManager)
@@ -182,6 +190,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _navigation = navigation;
         _labelOptions = labelOptions;
         _logger = logger;
+        _prescriptions = prescriptions;
+        _prescriptionActions = new PrescriptionScreenActions(scanner, dialogs, localizer, documents);
 
         BuildLayout();
         WireBehaviour();
@@ -345,7 +355,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _selfPay.AutoSize = true;
         _selfPay.BackColor = UiTheme.SurfaceRaised;
 
-        foreach (var label in new[] { _priorityLabel, _originLabel, _prescriberLabel, _fastingLabel, _clinicalInfoLabel })
+        foreach (var label in new[] { _priorityLabel, _originLabel, _prescriberLabel, _fastingLabel, _clinicalInfoLabel,
+                                      _prescriptionLabel })
         {
             Caption(label);
             label.BackColor = UiTheme.SurfaceRaised;
@@ -357,7 +368,8 @@ public sealed class OrderRegistrationView : LocalizedView
                  {
                      _priorityLabel, _priority, _originLabel, _origin, _prescriberLabel, _prescriber,
                      _newPrescriber, _fastingLabel, _fastingChoices[0], _fastingChoices[1],
-                     _fastingChoices[2], _clinicalInfoLabel, _clinicalInfo, _selfPay
+                     _fastingChoices[2], _clinicalInfoLabel, _clinicalInfo, _selfPay,
+                     _prescriptionLabel, _prescriptionBar
                  })
         {
             control.TabIndex = order++;
@@ -694,7 +706,11 @@ public sealed class OrderRegistrationView : LocalizedView
                     MoveSelfPay(_patientBand, UiTheme.AccentSubtle);
                     LayoutPatientBand();
                 }
-            })
+            }),
+            // « Numériser l'ordonnance », « Joindre un fichier », and what is attached: on the
+            // request's last row, or a row of its own when the window is narrow.
+            (_prescriptionLabel, _prescriptionBar.PreferredWidth, 0,
+             r => _prescriptionBar.Bounds = new Rectangle(r.X, r.Y, r.Width, FieldHeight))
         };
 
         const int gap = 16;
@@ -1060,6 +1076,23 @@ public sealed class OrderRegistrationView : LocalizedView
         _registerWithoutLabels.Click += async (_, _) => await RunBusyAsync(() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true)));
         _clear.Click += (_, _) => CancelEntry();
 
+        // The prescription: scanned or chosen, assembled at once so the operator sees its pages.
+        _prescriptionBar.Allow(change: PermissionGate.Allows(Permissions.Orders.Create), view: true);
+        _prescriptionBar.ScanRequested += async (_, _) =>
+            await AddPrescriptionPagesAsync(_prescriptionActions.Scan(T("Order.PrescriptionScan"), _prescriptionDraft.PageCount ?? 0));
+        _prescriptionBar.AttachRequested += async (_, _) =>
+            await AddPrescriptionPagesAsync(_prescriptionActions.PickFiles(this, T("Order.AttachPrescriptionFile")));
+        _prescriptionBar.ViewRequested += async (_, _) =>
+        {
+            if (_prescriptionDraft.Content is { } pdf) await _prescriptionActions.ViewAsync(pdf, T("Order.PrescriptionScan"));
+        };
+        _prescriptionBar.RemoveRequested += (_, _) =>
+        {
+            if (!_dialogs.Confirm(T("Order.PrescriptionRemoveDraftConfirm"), T("Order.PrescriptionScan"))) return;
+            _prescriptionDraft.Clear();
+            ShowPrescription();
+        };
+
         ShortcutHints.Attach(_register, "F12");
         ShortcutHints.Attach(_registerWithoutLabels, "F8");
     }
@@ -1123,6 +1156,9 @@ public sealed class OrderRegistrationView : LocalizedView
         _clinicalInfoLabel.Text = T("Order.ClinicalInformation");
         _clinicalInfo.PlaceholderText = T("OrderEntry.ClinicalPlaceholder");
         _selfPay.Text = T("OrderEntry.DirectPayment");
+        _prescriptionLabel.Text = T("Order.PrescriptionScan");
+        _prescriptionBar.ApplyTexts(Localizer);
+        LayoutRequestCard();
 
         _catalogTitle.Text = T("Order.AddAnalyses");
         _catalogHint.Text = T("OrderEntry.TypeHint");
@@ -2445,6 +2481,7 @@ public sealed class OrderRegistrationView : LocalizedView
             PatientFasted = _fasting,
             BillDirectlyToPatient = _selfPay.Checked
         };
+        request = _prescriptionDraft.ApplyTo(request);
 
         _register.Enabled = false;
         _registerWithoutLabels.Enabled = false;
@@ -2528,7 +2565,54 @@ public sealed class OrderRegistrationView : LocalizedView
     // ---- Abandoning the entry ----------------------------------------------------------------------
 
     private bool HasEntries =>
-        OrderBasket.HasEntries(_patient is not null, _basketItems.Count, _clinicalInfo.Text, _prescriber.Text);
+        OrderBasket.HasEntries(_patient is not null, _basketItems.Count, _clinicalInfo.Text, _prescriber.Text)
+        || _prescriptionDraft.HasDocument;
+
+    /// <summary>
+    /// Adds scanned or chosen pages to the prescription being put together, assembled into one PDF
+    /// off the screen's thread: a photo is downscaled, which takes a moment.
+    /// </summary>
+    private async Task AddPrescriptionPagesAsync(IReadOnlyList<PrescriptionPage>? pages)
+    {
+        if (pages is null || pages.Count == 0) return;
+
+        _prescriptionBar.Busy = true;
+        Cursor = Cursors.WaitCursor;
+        Notice(T("Order.PrescriptionPreparing"), UiTheme.TextSecondary);
+
+        try
+        {
+            var existing = _prescriptionDraft.Content;
+            var prepared = await Task.Run(() => _prescriptions.PrepareAsync(pages, existing));
+            if (prepared.IsFailure)
+            {
+                _dialogs.ShowFailure(prepared, T("Order.PrescriptionScan"));
+                return;
+            }
+
+            _prescriptionDraft.Keep(prepared.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Prescription scan could not be assembled.");
+            _dialogs.Error(T(FailureMessages.KeyFor(ex)));
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            _prescriptionBar.Busy = false;
+            ShowPrescription();
+            _notice = null;
+            RefreshReadiness();
+        }
+    }
+
+    private void ShowPrescription()
+    {
+        _prescriptionBar.ShowAttachment(_prescriptionDraft.HasDocument, _prescriptionDraft.PageCount);
+        _prescriptionBar.Allow(change: PermissionGate.Allows(Permissions.Orders.Create), view: true);
+        LayoutRequestCard();
+    }
 
     private bool ConfirmEntryLoss() => !HasEntries || _dialogs.Confirm(T("OrderEntry.ConfirmCancelEntry"));
 
@@ -2554,6 +2638,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _clinicalInfo.Clear();
         SetFasting(true);
         _selfPay.Checked = false;
+        _prescriptionDraft.Clear();
+        ShowPrescription();
 
         if (_priority.Items.Count > 0) _priority.SelectedIndex = 0;
         if (_origin.Items.Count > 0) _origin.SelectedIndex = 0;
