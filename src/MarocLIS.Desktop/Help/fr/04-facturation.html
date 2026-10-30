@@ -635,6 +635,42 @@ Cliquez <strong>Toutes</strong>, ajustez <strong>Du</strong> / <strong>Au</stron
 <div class="diagram"><img src="img/diagramme-cddfb4c0c424e5d2.png" alt="Diagramme"></div>
 
 <hr />
+<h3 id="discounts">Remises</h3>
+<p><strong>À quoi sert cet écran</strong> : le rapport de toutes les remises accordées sur une période : qui l'a accordée, sur quelle demande et pour quel patient, son montant en DH et son taux, sa source (convention, prescripteur, profil, saisie), le motif et, au-delà du plafond, qui l'a approuvée.</p>
+<p><strong>Qui y a accès</strong></p>
+<p>Droit billing.discount.approve (approbation des remises) ou steering.view (pilotage). L'écran est dans le groupe <strong>Facturation</strong> du menu.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Du</strong> / <strong>Au</strong> + <strong>Actualiser</strong> : la période (366 jours au plus).</li>
+<li>Filtres par source (<strong>Toutes les sources</strong>, Convention, Prescripteur, Profil, Saisie) et recherche par référence, patient, motif ou utilisateur.</li>
+<li>Tuiles : total des remises et part du brut, nombre de remises, remises approuvées, remises de convention, remises accordées au guichet.</li>
+<li><strong>Exporter (CSV)</strong> : le tableau filtré, comme les autres rapports.</li>
+</ul>
+<p><strong>Règles de calcul de la remise d'une demande</strong></p>
+<ul>
+<li>À l'enregistrement, la convention en vigueur liée au prescripteur (ou celle choisie au guichet) et le taux du prescripteur s'appliquent d'office : le plus élevé des deux l'emporte, la convention à égalité.</li>
+<li>Une remise du guichet (profil ou taux saisi) remplace le taux d'office si elle est plus élevée ; les taux ne s'additionnent jamais.</li>
+<li>Les <strong>tarifs négociés</strong> de la convention (prix fixe ou pourcentage par analyse, sur une période) priment sur le taux de la demande pour l'analyse concernée lorsqu'ils sont plus avantageux ; le taux ne s'applique alors qu'aux autres analyses.</li>
+<li>Au-delà du plafond de Paramètres › Factures, une remise du guichet doit être approuvée par un autre utilisateur ayant le droit d'approbation. Les remises d'office (convention, prescripteur) n'y sont pas soumises.</li>
+<li>Toute remise est inscrite au journal d'audit avec sa source, son taux, son montant et son motif.</li>
+</ul>
+
+<hr />
+<h3 id="discountprofiles">Profils de remise</h3>
+<p><strong>À quoi sert cet écran</strong> : les remises prédéfinies proposées au guichet (par exemple « Personnel 20 % », « Étudiant 10 % ») : nom, taux, actif ou non, et dates de validité facultatives.</p>
+<p><strong>Qui y a accès</strong></p>
+<p>Droit billing.tariffs.manage (tarifs). L'écran est dans le groupe <strong>Facturation</strong> du menu.</p>
+<p><strong>Fonctionnalités</strong></p>
+<ul>
+<li><strong>Nouveau profil</strong> / <strong>Modifier</strong> : nom (unique), taux (entre 0 et 100 %), actif, <strong>Valable du</strong> / <strong>au</strong>.</li>
+<li>Un profil n'est pas supprimé : décochez <strong>Actif</strong> pour ne plus le proposer.</li>
+</ul>
+<p><strong>Au guichet</strong></p>
+<p>Dans l'enregistrement d'une demande, le bouton <strong>Remise…</strong> (droit billing.discount ; masqué sur le Web et grisé sur le poste sans ce droit) permet de choisir la convention (automatique, une autre, ou sans convention), un profil ou un taux saisi, et le motif, obligatoire. Au-delà du plafond, l'approbateur saisit son identifiant et son mot de passe dans la même fenêtre. Les totaux affichent la remise appliquée et sa source.</p>
+<p><strong>Tarifs négociés</strong></p>
+<p>Dans <strong>Relations</strong>, une convention offre le bouton <strong>Tarifs négociés…</strong> : par analyse, un prix fixe ou un pourcentage, valable à partir d'une date et jusqu'à une date facultative. Deux tarifs de la même analyse ne peuvent se chevaucher. Un tarif retiré demande un motif.</p>
+
+<hr />
 <h3>Messages d'erreur et d'avertissement</h3>
 <p>Messages propres aux écrans de ce chapitre. Les messages communs (droit manquant, nombre illisible, modification simultanée, erreur inattendue, pas de lecteur PDF, numérotation clôturée…) sont expliqués dans <strong>Prise en main › Messages d'erreur communs</strong>.</p>
 <h4>Facturation : émission et avoir</h4>

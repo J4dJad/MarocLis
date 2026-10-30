@@ -83,6 +83,13 @@ public static class NavigationMenu
 
         new("claims", "Nav.Claims", [Permissions.Billing.View]),
 
+        // Who granted which discount, why, and who approved it: read by whoever approves discounts
+        // above the ceiling or steers the laboratory.
+        new("discounts", "Nav.Discounts", [Permissions.Billing.ApproveDiscount, Permissions.Steering.View]),
+
+        // The profiles the front desk grants by name are tariffs, kept with them.
+        new("discountprofiles", "Nav.DiscountProfiles", [Permissions.Billing.ManageTariffs]),
+
         new("group.quality", "Nav.Quality", [Permissions.Quality.View], IsGroupHeader: true),
 
         new("qc", "Nav.QualityControl", [Permissions.Quality.EnterQc,
