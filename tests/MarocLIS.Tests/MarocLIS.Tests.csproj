@@ -65,6 +65,8 @@
     <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\UiTheme.Palette.cs" Link="Desktop\UiTheme.Palette.cs" />
     <!-- The take-over profiles kept on the workstation (« Reprise de données »). -->
     <Compile Include="..\..\src\MarocLIS.Desktop\Views\DataMigrationProfiles.cs" Link="Desktop\DataMigrationProfiles.cs" />
+    <!-- The scanner behind its interface, and the scanning of a prescription's pages. -->
+    <Compile Include="..\..\src\MarocLIS.Desktop\Infrastructure\DocumentScanner.cs" Link="Desktop\DocumentScanner.cs" />
     <!-- The licence generator's keys, register and drafts: no WinForms in them. -->
     <Compile Include="..\..\tools\MarocLIS.LicenseGenerator\Core\*.cs" Link="Licensing\Generator\%(Filename)%(Extension)" />
   </ItemGroup>

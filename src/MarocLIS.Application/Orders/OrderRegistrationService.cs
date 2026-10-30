@@ -123,6 +123,11 @@ public sealed class OrderRegistrationService(
             if (urgent.IsFailure) return Result.Failure<RegisteredOrder>(urgent.FirstError);
         }
 
+        // The prescription comes assembled by PrescriptionScanService.PrepareAsync: one PDF within the
+        // size. Checked again here, because this is where it is written.
+        var scan = PrescriptionScanPolicy.CheckAssembled(request.PrescriptionScan, request.PrescriptionScanContentType);
+        if (scan.IsFailure) return Result.Failure<RegisteredOrder>(scan.FirstError);
+
         var patient = await patients.GetByIdWithDetailsAsync(request.PatientId, ct);
         if (patient is null)
             return Result.Failure<RegisteredOrder>(Error.NotFound("Order_PatientNotFound"));
@@ -181,7 +186,7 @@ public sealed class OrderRegistrationService(
             PrescriberFreeText = request.PrescriberFreeText,
             PrescriptionDate = request.PrescriptionDate,
             PrescriptionScan = request.PrescriptionScan,
-            PrescriptionScanContentType = request.PrescriptionScanContentType,
+            PrescriptionScanContentType = request.PrescriptionScan is null ? null : PrescriptionScanPolicy.PdfContentType,
             Priority = request.Priority,
             Origin = request.Origin,
             WardOrUnit = request.WardOrUnit,
@@ -229,7 +234,9 @@ public sealed class OrderRegistrationService(
         // Restart the retention clock on the last act, per the medical-record retention obligation.
         patient.ExtendRetention(today, options.MedicalRecordRetentionYears);
 
-        unitOfWork.AuditReason = $"Enregistrement du dossier {order.AccessionNumber}";
+        unitOfWork.AuditReason = request.PrescriptionScan is null
+            ? $"Enregistrement du dossier {order.AccessionNumber}"
+            : $"Enregistrement du dossier {order.AccessionNumber}, ordonnance numérisée jointe";
         await unitOfWork.SaveChangesAsync(ct);
         await unitOfWork.CommitAsync(ct);
 

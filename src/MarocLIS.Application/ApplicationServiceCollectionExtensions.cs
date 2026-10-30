@@ -36,6 +36,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<OrderComposer>();
         services.AddScoped<OrderRegistrationService>();
         services.AddScoped<OrderAmendmentService>();
+        services.AddScoped<PrescriptionScanService>();
         services.AddScoped<Catalog.CatalogMaintenanceService>();
         services.AddScoped<Catalog.NationalActService>();
         services.AddScoped<Instruments.InstrumentInterfaceService>();

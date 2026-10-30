@@ -24,4 +24,17 @@ public static class SafeDocumentFile
             ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             _ => null
         };
+
+    /// <summary>
+    /// The content type a file really holds, read from its first bytes: PDF, JPEG or PNG, or null for
+    /// anything else. An extension says what the sender called the file, not what it is: a program
+    /// renamed « ordonnance.pdf » has the extension of a PDF and the bytes of a program.
+    /// </summary>
+    public static string? ContentTypeFromSignature(ReadOnlySpan<byte> content)
+    {
+        if (content.StartsWith("%PDF-"u8)) return "application/pdf";
+        if (content.Length >= 3 && content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF) return "image/jpeg";
+        if (content.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) return "image/png";
+        return null;
+    }
 }

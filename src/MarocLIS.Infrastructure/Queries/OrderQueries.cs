@@ -114,6 +114,8 @@ public sealed class OrderQueries(LisDbContext db, IResultQueries results) : IOrd
                 o.InvoiceId,
                 o.CancelledAt,
                 o.CancellationReason,
+                // Whether a scan is there, not the scan: the file screen fetches it when asked.
+                HasPrescriptionScan = o.PrescriptionScan != null,
                 RegisteredByName = db.Users.Where(u => u.Id == o.RegisteredByUserId)
                                            .Select(u => u.FullName).FirstOrDefault(),
                 Patient = db.Patients.Where(p => p.Id == o.PatientId)
@@ -292,6 +294,7 @@ public sealed class OrderQueries(LisDbContext db, IResultQueries results) : IOrd
                 s.CollectedAt,
                 s.ReceivedAt,
                 s.StorageLocation,
-                s.AnalysisCount))]);
+                s.AnalysisCount))],
+            header.HasPrescriptionScan);
     }
 }

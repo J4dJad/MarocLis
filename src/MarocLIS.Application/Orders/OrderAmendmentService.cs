@@ -51,7 +51,8 @@ public sealed record OrderDetail(
     DateTimeOffset? CancelledAt,
     string? CancellationReason,
     IReadOnlyList<OrderItemDetail> Items,
-    IReadOnlyList<OrderSampleDetail> Samples)
+    IReadOnlyList<OrderSampleDetail> Samples,
+    bool HasPrescriptionScan = false)
 {
     public bool IsCancelled => Status == LabOrderStatus.Cancelled;
 
