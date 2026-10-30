@@ -463,6 +463,8 @@ public sealed partial class MainShellForm : LocalizedForm
         ["bankreconciliation"] = n => n.NavigateToAsync<BankReconciliationView>(),
         ["cashforecast"] = n => n.NavigateToAsync<CashForecastView>(),
         ["cashreview"] = n => n.NavigateToAsync<CashSessionReviewView>(),
+        ["discounts"] = n => n.NavigateToAsync<DiscountsView>(),
+        ["discountprofiles"] = n => n.NavigateToAsync<DiscountProfilesView>(),
         ["costmargin"] = n => n.NavigateToAsync<CostMarginView>(),
         ["users"] = n => n.NavigateToAsync<UserAdministrationView>(),
         ["audit"] = n => n.NavigateToAsync<AuditTrailView>(),

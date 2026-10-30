@@ -268,4 +268,25 @@ public sealed class DiscountScreenRulesTests
             differing.Should().Be(0, "the cell of {0} is its browser mask", glyph);
         }
     }
+    [Fact]
+    public void The_workstation_opens_the_new_screens_and_greys_what_a_right_withholds()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "MarocLIS.sln"))) root = root.Parent;
+        var desktop = Path.Combine(root!.FullName, "src", "MarocLIS.Desktop");
+        string Read(params string[] parts) => File.ReadAllText(Path.Combine([desktop, .. parts]));
+
+        var shell = Read("Forms", "MainShellForm.cs");
+        shell.Should().Contain("[\"discounts\"] = n => n.NavigateToAsync<DiscountsView>()")
+             .And.Contain("[\"discountprofiles\"] = n => n.NavigateToAsync<DiscountProfilesView>()");
+        Read("Composition", "DesktopServiceCollectionExtensions.cs")
+            .Should().Contain("AddTransient<DiscountsView>()").And.Contain("AddTransient<DiscountProfilesView>()");
+
+        // Disabled rather than hidden at the workstation, as PermissionGate does for every screen.
+        Read("Views", "OrderRegistrationView.cs").Should().Contain("PermissionGate.Require(Permissions.Billing.ApplyDiscount, _discountButton)");
+        Read("Views", "DiscountProfilesView.cs").Should().Contain("PermissionGate.Require(Permissions.Billing.ManageTariffs, _new, _edit)");
+        Read("Views", "DiscountDialogs.cs").Should().Contain("PermissionGate.Require(Permissions.Billing.ManageTariffs, add, edit, remove)");
+        Read("Views", "DiscountsView.cs")
+            .Should().Contain("PermissionGate.Require([Permissions.Billing.ApproveDiscount, Permissions.Steering.View], _bar.Compute, _bar.Export)");
+    }
 }

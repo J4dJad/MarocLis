@@ -181,6 +181,8 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<StatisticsView>();
         services.AddTransient<SteeringView>();
         services.AddTransient<PrescriberStatisticsView>();
+        services.AddTransient<DiscountsView>();
+        services.AddTransient<DiscountProfilesView>();
         services.AddTransient<RelationsView>();
         services.AddTransient<PatientMessagingView>();
         services.AddTransient<CostMarginView>();

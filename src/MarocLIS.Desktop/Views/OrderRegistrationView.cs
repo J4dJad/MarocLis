@@ -125,9 +125,11 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly Label _tubesTitle = new() { AutoSize = true };
     private readonly FlowLayoutPanel _tubeList = new() { WrapContents = false, AutoSize = false };
     private readonly Label _tubesCount = new() { AutoSize = true };
-    private readonly TableLayoutPanel _totals = new() { ColumnCount = 2, RowCount = 3 };
+    private readonly TableLayoutPanel _totals = new() { ColumnCount = 2, RowCount = 4 };
     private readonly Label _grossLabel = new() { AutoSize = true };
     private readonly Label _grossValue = new() { AutoSize = true };
+    private readonly Label _discountLabel = new() { AutoSize = true, Visible = false };
+    private readonly Label _discountValue = new() { AutoSize = true, Visible = false };
     private readonly Label _payerLabel = new() { AutoSize = true };
     private readonly Label _payerValue = new() { AutoSize = true };
     private readonly Label _dueLabel = new() { AutoSize = true };
@@ -140,6 +142,10 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly Button _registerWithoutLabels = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _register = UiTheme.PrimaryButton(string.Empty);
 
+    // « Remise… »: the convention, a profile or a rate, greyed without billing.discount.
+    private readonly Button _discountButton = UiTheme.SecondaryButton(string.Empty);
+    private Application.Billing.CounterDiscount _counterDiscount = Application.Billing.CounterDiscount.None;
+
     // State
     private readonly List<CatalogPickerItem> _catalogItems = [];
     private readonly List<CatalogPickerItem> _fullCatalog = [];
@@ -151,6 +157,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private bool? _fasting = true;
     private string _filter = OrderBasket.FilterAll;
     private OrderQuote? _quote;
+    private readonly Application.Billing.DiscountService _discounts;
     private (string Text, Color Colour)? _notice;
     private bool _settingPatientText;
     private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 300 };
@@ -169,6 +176,7 @@ public sealed class OrderRegistrationView : LocalizedView
                                  IOrderQuotes quotes, IOrderEntryQueries entryQueries,
                                  INavigationService navigation, LabelPrintOptions labelOptions,
                                  PrescriptionScanService prescriptions, IDocumentScanner scanner,
+                                 Application.Billing.DiscountService discounts,
                                  ILocalizer localizer, ICultureManager cultureManager,
                                  ILogger<OrderRegistrationView>? logger = null)
         : base(localizer, cultureManager)
@@ -191,6 +199,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _labelOptions = labelOptions;
         _logger = logger;
         _prescriptions = prescriptions;
+        _discounts = discounts;
         _prescriptionActions = new PrescriptionScreenActions(scanner, dialogs, localizer, documents);
 
         BuildLayout();
@@ -445,7 +454,8 @@ public sealed class OrderRegistrationView : LocalizedView
         _totals.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _totals.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _totals.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        _totals.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        _totals.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _totals.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _totals.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         _totals.Paint += (_, e) =>
         {
@@ -453,7 +463,7 @@ public sealed class OrderRegistrationView : LocalizedView
             e.Graphics.DrawLine(pen, 0, 0, _totals.Width, 0);
         };
 
-        foreach (var label in new[] { _grossLabel, _payerLabel })
+        foreach (var label in new[] { _grossLabel, _payerLabel, _discountLabel })
         {
             label.Font = UiTheme.Body;
             label.ForeColor = UiTheme.TextSecondary;
@@ -461,12 +471,13 @@ public sealed class OrderRegistrationView : LocalizedView
 
         _grossValue.Font = UiTheme.Monospace;
         _payerValue.Font = UiTheme.Monospace;
+        _discountValue.Font = UiTheme.Monospace;
         _dueLabel.Font = UiTheme.SectionTitle;
         _dueValue.Font = UiTheme.Mono(14f, FontStyle.Bold);
 
-        foreach (var label in new[] { _grossLabel, _grossValue, _payerLabel, _payerValue, _dueLabel, _dueValue })
+        foreach (var label in new[] { _grossLabel, _grossValue, _discountLabel, _discountValue, _payerLabel, _payerValue, _dueLabel, _dueValue })
         {
-            label.Anchor = label == _grossLabel || label == _payerLabel || label == _dueLabel
+            label.Anchor = label == _grossLabel || label == _payerLabel || label == _dueLabel || label == _discountLabel
                 ? AnchorStyles.Left
                 : AnchorStyles.Right;
             label.Margin = new Padding(0, 2, 0, 2);
@@ -474,10 +485,12 @@ public sealed class OrderRegistrationView : LocalizedView
 
         _totals.Controls.Add(_grossLabel, 0, 0);
         _totals.Controls.Add(_grossValue, 1, 0);
-        _totals.Controls.Add(_payerLabel, 0, 1);
-        _totals.Controls.Add(_payerValue, 1, 1);
-        _totals.Controls.Add(_dueLabel, 0, 2);
-        _totals.Controls.Add(_dueValue, 1, 2);
+        _totals.Controls.Add(_discountLabel, 0, 1);
+        _totals.Controls.Add(_discountValue, 1, 1);
+        _totals.Controls.Add(_payerLabel, 0, 2);
+        _totals.Controls.Add(_payerValue, 1, 2);
+        _totals.Controls.Add(_dueLabel, 0, 3);
+        _totals.Controls.Add(_dueValue, 1, 3);
 
         _basketCard.Controls.AddRange([_basketHeading, _basketCount, _removeAll, _basket, _tubes, _totals]);
         _basketCard.Resize += (_, _) => LayoutBasketCard();
@@ -502,13 +515,15 @@ public sealed class OrderRegistrationView : LocalizedView
         _registerWithoutLabels.Height = 34;
         ButtonIcons.Set(_registerWithoutLabels, Glyph.Tag, always: true);
         _register.Height = 34;
+        _discountButton.Height = 34;
+        ButtonIcons.Set(_discountButton, Glyph.BadgePercent, always: true);
 
         _status.Font = UiTheme.Body;
         _status.ForeColor = UiTheme.TextSecondary;
         _status.TextAlign = ContentAlignment.MiddleRight;
         _status.BackColor = UiTheme.SurfaceRaised;
 
-        _actionBar.Controls.AddRange([_clear, _status, _registerWithoutLabels, _register]);
+        _actionBar.Controls.AddRange([_clear, _status, _discountButton, _registerWithoutLabels, _register]);
         _actionBar.Resize += (_, _) => LayoutActionBar();
 
         // --- assembly ------------------------------------------------------------------------------
@@ -853,7 +868,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _removeAll.Bounds = new Rectangle(CardPadding + width - removeWidth, y - 2, removeWidth, 28);
         y = _basketHeading.Bottom + 8;
 
-        const int totalsHeight = 76;
+        var totalsHeight = _discountLabel.Visible ? 98 : 76;
         var tubesHeight = TubesHeight();
 
         var totalsTop = height - CardPadding - totalsHeight;
@@ -894,7 +909,9 @@ public sealed class OrderRegistrationView : LocalizedView
         _register.Bounds = new Rectangle(width - 20 - registerWidth, top, registerWidth, 34);
         var printWidth = ButtonWidth(_registerWithoutLabels, "F8", icon: true);
         _registerWithoutLabels.Bounds = new Rectangle(_register.Left - 8 - printWidth, top, printWidth, 34);
-        _status.Bounds = new Rectangle(_clear.Right + 12, top, Math.Max(0, _registerWithoutLabels.Left - 12 - _clear.Right - 12), 34);
+        var discountWidth = ButtonWidth(_discountButton, icon: true);
+        _discountButton.Bounds = new Rectangle(_registerWithoutLabels.Left - 8 - discountWidth, top, discountWidth, 34);
+        _status.Bounds = new Rectangle(_clear.Right + 12, top, Math.Max(0, _discountButton.Left - 12 - _clear.Right - 12), 34);
     }
 
     /// <summary>
@@ -976,12 +993,15 @@ public sealed class OrderRegistrationView : LocalizedView
         PermissionGate.Require(Permissions.Patients.Create, _emergencyPatient);
         PermissionGate.Require(Permissions.Orders.Create, _register);
         PermissionGate.Require(Permissions.Orders.Create, _registerWithoutLabels);
+        PermissionGate.Require(Permissions.Billing.ApplyDiscount, _discountButton);
+        _discountButton.Click += async (_, _) => await AskDiscountAsync();
         PermissionGate.Require([Permissions.Catalog.Manage, Permissions.Orders.Create], _newPrescriber);
         _newPrescriber.Click += async (_, _) => await CreatePrescriberAsync();
 
         _origin.SelectedIndexChanged += (_, _) => { ApplyPrescriberCaption(); Changed(); };
-        _prescriber.TextChanged += (_, _) => Changed();
-        _prescriber.SelectedIndexChanged += (_, _) => Changed();
+        // The prescriber's convention and rate apply by themselves: the total follows the doctor.
+        _prescriber.TextChanged += (_, _) => { Changed(); RequestQuote(); };
+        _prescriber.SelectedIndexChanged += (_, _) => { Changed(); RequestQuote(); };
 
         for (var i = 0; i < _fastingChoices.Length; i++)
         {
@@ -1175,6 +1195,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _clear.Text = T("OrderEntry.CancelEntry");
         _registerWithoutLabels.Text = T("OrderEntry.SaveWithoutLabels");
         _register.Text = T("Action.Save");
+        _discountButton.Text = T("Discounts.Grant");
         _clear.Padding = new Padding(10, 0, ShortcutHints.Width(EscapeHint), 0);
 
         FillEnumCombo(_priority, Enum.GetValues<OrderPriority>(), p => T($"Priority.{p}"));
@@ -1961,7 +1982,12 @@ public sealed class OrderRegistrationView : LocalizedView
                 PatientId = PatientId,
                 AnalysisTestIds = _basketItems.AnalysisTestIds,
                 TestPanelIds = _basketItems.TestPanelIds,
-                BillDirectlyToPatient = _selfPay.Checked
+                BillDirectlyToPatient = _selfPay.Checked,
+                PrescriberId = ChosenPrescriber()?.Id,
+                PartnershipId = _counterDiscount.PartnershipId,
+                WithoutConvention = _counterDiscount.WithoutConvention,
+                DiscountProfileId = _counterDiscount.ProfileId,
+                DiscountPercent = _counterDiscount.Percent
             });
 
             if (version != _quoteVersion) return;
@@ -1998,7 +2024,20 @@ public sealed class OrderRegistrationView : LocalizedView
         var count = quote?.AnalysisCount ?? 0;
 
         _grossLabel.Text = T("OrderEntry.GrossFor", count);
-        _grossValue.Text = total.Format(language);
+        var discount = quote?.Pricing.Discount ?? Money.Zero;
+        _grossValue.Text = (total + discount).Format(language);
+
+        // The discount and its source, for everyone at the counter: « Remise — convention … (10 %) ».
+        if (Application.Billing.DiscountScreenRules.CounterLine(quote?.Discount, T, System.Globalization.CultureInfo.CurrentCulture) is { } line)
+        {
+            _discountLabel.Text = line;
+            _discountValue.Text = "− " + discount.Format(language);
+            _discountLabel.Visible = _discountValue.Visible = true;
+        }
+        else
+        {
+            _discountLabel.Visible = _discountValue.Visible = false;
+        }
 
         // The payer's line only when a payer covers the request: no payer, the patient pays it all.
         if (quote?.PayerName is { } payer)
@@ -2041,6 +2080,7 @@ public sealed class OrderRegistrationView : LocalizedView
         var hasAnalyses = !_basketItems.IsEmpty;
         _register.Enabled = hasPatient && hasAnalyses;
         _registerWithoutLabels.Enabled = hasPatient && hasAnalyses;
+        _discountButton.Enabled = hasAnalyses;
 
         if (_notice is { } notice)
         {
@@ -2081,6 +2121,23 @@ public sealed class OrderRegistrationView : LocalizedView
     }
 
     /// <summary>The clerk changed something: last action's message gives way to the readiness.</summary>
+    /// <summary>« Remise… »: the convention, a profile or a rate, with its reason and, beyond the ceiling, its approver.</summary>
+    private async Task AskDiscountAsync()
+    {
+        if (PermissionGate.IsBlocked(_discountButton) || _basketItems.IsEmpty) return;
+
+        var options = await _discounts.GetCounterOptionsAsync();
+        if (options.IsFailure) { _dialogs.ShowFailure(options, _discountButton.Text); return; }
+
+        var gross = _quote is { } quote ? (quote.Pricing.Total + quote.Pricing.Discount).Amount : 0m;
+        var chosen = DiscountDialogs.AskCounter(this, Localizer, _dialogs, options.Value, _counterDiscount, gross);
+        if (chosen is null) return;
+
+        _counterDiscount = chosen;
+        Changed();
+        await RefreshQuoteAsync();
+    }
+
     private void Changed()
     {
         _notice = null;
@@ -2479,7 +2536,13 @@ public sealed class OrderRegistrationView : LocalizedView
             ClinicalInformation = string.IsNullOrWhiteSpace(_clinicalInfo.Text)
                 ? null : _clinicalInfo.Text.Trim(),
             PatientFasted = _fasting,
-            BillDirectlyToPatient = _selfPay.Checked
+            BillDirectlyToPatient = _selfPay.Checked,
+            PartnershipId = _counterDiscount.PartnershipId,
+            WithoutConvention = _counterDiscount.WithoutConvention,
+            DiscountProfileId = _counterDiscount.ProfileId,
+            DiscountPercent = _counterDiscount.Percent,
+            DiscountReason = _counterDiscount.Reason,
+            DiscountApproval = _counterDiscount.Approval
         };
         request = _prescriptionDraft.ApplyTo(request);
 
@@ -2640,6 +2703,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _selfPay.Checked = false;
         _prescriptionDraft.Clear();
         ShowPrescription();
+        _counterDiscount = Application.Billing.CounterDiscount.None;
 
         if (_priority.Items.Count > 0) _priority.SelectedIndex = 0;
         if (_origin.Items.Count > 0) _origin.SelectedIndex = 0;

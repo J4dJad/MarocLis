@@ -24,6 +24,8 @@ public sealed class RelationsView : LocalizedView
     private readonly IDocumentOutput _output;
     private readonly IUserDialogs _dialogs;
     private readonly ILogger<RelationsView>? _logger;
+    private readonly Application.Billing.DiscountService _discounts;
+    private readonly MarocLIS.Infrastructure.Queries.ICatalogQueries _catalog;
 
     private readonly PeriodBar _bar;
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
@@ -45,6 +47,7 @@ public sealed class RelationsView : LocalizedView
     private readonly ToolStripMenuItem _deleteVisit = Pilotage.MenuItem("Action.Delete");
     private readonly ToolStripMenuItem _attach = Pilotage.MenuItem();
     private readonly ToolStripMenuItem _openFile = Pilotage.MenuItem();
+    private readonly ToolStripMenuItem _prices = Pilotage.MenuItem("Discounts.Prices");
     private readonly CheckBox _inactive = new() { AutoSize = true };
     private readonly Label _notice = new()
     {
@@ -61,7 +64,8 @@ public sealed class RelationsView : LocalizedView
     private IReadOnlyList<PartnershipRow> _partnershipRows = [];
 
     public RelationsView(RelationsService relations, ICurrentUser currentUser, IDocumentOutput output,
-                         IUserDialogs dialogs, ILocalizer localizer, ICultureManager cultureManager,
+                         IUserDialogs dialogs, Application.Billing.DiscountService discounts,
+                         MarocLIS.Infrastructure.Queries.ICatalogQueries catalog, ILocalizer localizer, ICultureManager cultureManager,
                          ILogger<RelationsView>? logger = null)
         : base(localizer, cultureManager)
     {
@@ -70,6 +74,8 @@ public sealed class RelationsView : LocalizedView
         _output = output;
         _dialogs = dialogs;
         _logger = logger;
+        _discounts = discounts;
+        _catalog = catalog;
         _bar = new PeriodBar(localizer, primaryCompute: false);
         _more = Pilotage.MoreButton(_moreMenu);
         Padding = new Padding(24, 16, 24, 16);
@@ -124,7 +130,7 @@ public sealed class RelationsView : LocalizedView
             button.Visible = manage;
         _deleteVisit.Available = _attach.Available = manage;
 
-        _moreMenu.Items.AddRange([_deleteVisit, _attach, _openFile]);
+        _moreMenu.Items.AddRange([_deleteVisit, _attach, _openFile, _prices]);
         _bar.Extra.Controls.AddRange([_editVisit, _editPartnership, _more]);
         _bar.Lead.Controls.AddRange([_newVisit, _newPartnership]);
         // The tick box goes at the end of the notice line: beside the dates it ran off a
@@ -157,6 +163,11 @@ public sealed class RelationsView : LocalizedView
         _partnerships.CellDoubleClick += async (_, _) => { if (manage && SelectedPartnership is { } p) await EditPartnershipAsync(p.Id); };
         _attach.Click += async (_, _) => await AttachAsync();
         _openFile.Click += async (_, _) => await OpenFileAsync();
+        _prices.Click += async (_, _) =>
+        {
+            if (SelectedPartnership is { } p)
+                await DiscountDialogs.ShowPricesAsync(this, Localizer, _dialogs, _discounts, _catalog, _currentUser, p.Id, p.PartnerName);
+        };
     }
 
     public override string Title => T("Nav.Relations");
@@ -188,6 +199,10 @@ public sealed class RelationsView : LocalizedView
         _editPartnership.Enabled = actions.EditPartnership;
         _attach.Enabled = actions.Attach;
         _openFile.Enabled = actions.OpenFile;
+
+        // The negotiated prices of the convention selected: read with the conventions, greyed without them.
+        _prices.Available = OnPartnerships;
+        _prices.Enabled = SelectedPartnership is not null && Application.Billing.DiscountScreenRules.CanSeePrices(_currentUser.Has);
         Pilotage.SyncMore(_more, _moreMenu);
     }
 
@@ -206,6 +221,7 @@ public sealed class RelationsView : LocalizedView
         _editPartnership.Text = T("Action.Edit");
         _attach.Text = T("Relations.AttachDocument");
         _openFile.Text = T("Relations.OpenDocument");
+        _prices.Text = T("Discounts.Prices");
         _inactive.Text = T("Relations.ShowInactive");
         _more.Text = T("ResultEntry.MoreActions");
         _notice.Text = T("Relations.FollowUpNotice");
