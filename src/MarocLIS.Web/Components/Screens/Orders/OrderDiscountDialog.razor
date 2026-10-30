@@ -1,0 +1,134 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Common
+@inject WebTexts Texts
+
+@*
+    « Remise… » at the counter, the workstation's OrderDiscountDialog: the convention the request is
+    priced under (the prescriber's, another one in force, or none), the counter's own discount (a
+    profile or a rate typed) with its reason, the estimate on the request's gross and, beyond the
+    ceiling, the approver's name and password. Read and checked by DiscountScreenRules.ReadCounter;
+    the save checks it all again (OrderDiscounts).
+*@
+<Modal Name="order-discount" Title="@Texts["Discounts.DialogTitle"]" Hint="@Texts["Discounts.DialogHint"]" OnCancel="OnCancel">
+    <ChildContent>
+        <div class="form-grid form-grid-2">
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Discounts.Convention"]</span>
+                <select class="input" data-field="discount-convention" @bind="_convention">
+                    <option value="@DiscountScreenRules.AutomaticConvention">@Texts["Discounts.AutomaticConvention"]</option>
+                    <option value="@DiscountScreenRules.NoConvention">@Texts["Discounts.NoConvention"]</option>
+                    @foreach (var c in Options.Conventions)
+                    {
+                        <option value="@c.Id">@DiscountScreenRules.ConventionOption(c, Texts.Culture)</option>
+                    }
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Discounts.Profile"]</span>
+                <select class="input" data-field="discount-profile" @bind="_profile">
+                    <option value="">@Texts["Discounts.NoProfile"]</option>
+                    @foreach (var p in Options.Profiles)
+                    {
+                        <option value="@p.Id">@DiscountScreenRules.ProfileOption(p, Texts.Culture)</option>
+                    }
+                    <option value="@DiscountScreenRules.ManualProfile">@Texts["Discounts.ManualRate"]</option>
+                </select>
+            </label>
+            <label class="field">
+                <span class="field-label">@Texts["Discounts.Percent"]</span>
+                <input class="input mono num @Refused(DiscountScreenRules.CounterPercentField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                       maxlength="8" data-field="@DiscountScreenRules.CounterPercentField" disabled="@(_profile != DiscountScreenRules.ManualProfile)"
+                       value="@PercentShown" @oninput="e => _percent = e.Value?.ToString()" />
+                <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.CounterPercentField" />
+            </label>
+            <label class="field field-span-all">
+                <span class="field-label">@Texts["Discounts.Reason"]@(Granting ? " *" : null)</span>
+                <input class="input @Refused(DiscountScreenRules.CounterReasonField)" type="text" autocomplete="off"
+                       maxlength="@BillingScreenRules.DiscountReasonMaxLength" data-field="@DiscountScreenRules.CounterReasonField"
+                       @bind="_reason" @bind:event="oninput" />
+                <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.CounterReasonField" />
+            </label>
+        </div>
+
+        @if (Rate is { } rate && Gross > 0m)
+        {
+            <p class="small muted" data-state="estimate">
+                @Texts.T("Discounts.Estimate", Money.Of(Money.Round(Gross * rate / 100m)).Format(Texts.Language, Texts.Culture),
+                         Money.Of(Gross).Format(Texts.Language, Texts.Culture))
+            </p>
+        }
+
+        @if (NeedsApproval)
+        {
+            <p class="strong" data-state="approval">@Texts["Billing.DiscountApprovalHeading"]</p>
+            <div class="form-grid form-grid-2">
+                <label class="field">
+                    <span class="field-label">@Texts["Billing.DiscountApprover"]</span>
+                    <input class="input @Refused(DiscountScreenRules.ApproverField)" dir="ltr" autocomplete="off" data-field="@DiscountScreenRules.ApproverField"
+                           maxlength="@DiscountEntry.ApproverMaxLength" @bind="_approver" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.ApproverField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Billing.DiscountApproverPassword"]</span>
+                    <input class="input @Refused(DiscountScreenRules.ApproverPasswordField)" type="password" dir="ltr" autocomplete="new-password"
+                           data-field="@DiscountScreenRules.ApproverPasswordField" maxlength="@DiscountEntry.ApproverPasswordMaxLength"
+                           @bind="_password" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.ApproverPasswordField" />
+                </label>
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        <ActionButton Key="Action.Cancel" OnClick="OnCancel" />
+        <ActionButton Key="Action.Apply" Primary="true" OnClick="ApplyAsync" />
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public CounterDiscountOptions Options { get; set; } = default!;
+
+    /// <summary>What was chosen before, to start from.</summary>
+    [Parameter] public CounterDiscount Current { get; set; } = CounterDiscount.None;
+
+    /// <summary>The request's gross, which the ceiling and the estimate are reckoned on.</summary>
+    [Parameter] public decimal Gross { get; set; }
+
+    [Parameter] public EventCallback<CounterDiscount> OnApply { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string _convention = DiscountScreenRules.AutomaticConvention;
+    private string _profile = string.Empty;
+    private string? _percent, _reason, _approver, _password;
+    private FieldRefusal? _refusal;
+
+    private decimal? Rate => DiscountScreenRules.CounterPercent(_profile, Options.Profiles, _percent);
+
+    private bool Granting => _profile.Length > 0;
+
+    private bool NeedsApproval => DiscountScreenRules.NeedsApproval(Rate, Gross, Options.Cap);
+
+    // A profile's rate is shown in the box, greyed; a rate typed stays as typed.
+    private string? PercentShown =>
+        _profile == DiscountScreenRules.ManualProfile ? _percent
+        : Rate is { } rate ? rate.ToString("0.##", Texts.Culture) : null;
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    protected override void OnInitialized()
+    {
+        _convention = DiscountScreenRules.ConventionChoice(Current);
+        _profile = DiscountScreenRules.ProfileChoice(Current);
+        _percent = Current.Percent is { } percent ? percent.ToString("0.##", Texts.Culture) : null;
+        _reason = Current.Reason;
+        _approver = Current.Approval?.UserName;
+    }
+
+    private Task ApplyAsync()
+    {
+        var (discount, refusal) = DiscountScreenRules.ReadCounter(_convention, _profile, Options.Profiles, _percent, _reason,
+                                                                  _approver, _password, Gross, Options.Cap);
+        _refusal = refusal;
+        return discount is null ? Task.CompletedTask : OnApply.InvokeAsync(discount);
+    }
+}

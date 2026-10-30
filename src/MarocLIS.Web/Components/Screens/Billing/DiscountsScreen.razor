@@ -1,0 +1,145 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@using MarocLIS.Domain.Orders
+@using MarocLIS.Web.Components.Screens.Steering
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IJSRuntime JS
+@inject ILogger<DiscountsScreen> Logger
+
+@*
+    « Remises », the workstation's DiscountsView: every discount granted over a period — on a request
+    at registration (convention, prescriber, profile or rate typed) or on an invoice when it was
+    issued — with who granted it, the request and the patient, its rate and its amount in DH, its
+    source, its reason and, beyond the ceiling, who approved it. Filtered by source and by a text,
+    summed in key figures, downloaded as CSV. What is shown is DiscountScreenRules'; the reading is
+    DiscountService's, for billing.discount.approve or steering.view.
+*@
+<div class="screen report-screen" data-screen="discounts">
+    @{ var shown = Shown; var actions = DiscountScreenRules.Actions(Context.User.Has, shown); }
+    <PeriodFilters State="_period" Prefix="discounts" PeriodField="@DiscountScreenRules.PeriodField" Refusal="_refusal"
+                   Heading="@Heading" OnChosen="LoadAsync" />
+
+    <div class="list-tools has-search" data-tools="sources">
+        <div class="search-box">
+            <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Search" />
+            <input class="input" type="search" placeholder="@Texts["Discounts.SearchPlaceholder"]" aria-label="@Texts["Discounts.SearchPlaceholder"]"
+                   data-field="discount-search" autocomplete="off" maxlength="100" @bind="_search" @bind:event="oninput" />
+        </div>
+        <div class="chips" role="group">
+            @foreach (var source in DiscountScreenRules.SourceFilters)
+            {
+                var pressed = source == _source;
+                <button type="button" class="chip @(pressed ? "is-pressed" : null)" aria-pressed="@(pressed ? "true" : "false")"
+                        data-chip="@(source?.ToString() ?? "all")" @onclick="() => _source = source">
+                    @Texts[DiscountScreenRules.FilterKey(source)]
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="screen-body">
+        @if (_rows is not null)
+        {
+            <ReportTiles Tiles="DiscountScreenRules.Tiles(shown, Texts.T, Mad, Texts.Culture)" />
+        }
+
+        <section class="card card-flush report-card" data-card="discounts">
+            <ReportTable Name="discounts" Columns="DiscountScreenRules.Columns" Rows="DiscountScreenRules.Rows(shown, Texts.T, Mad, Texts.Culture)"
+                         Identifier="DiscountScreenRules.IsIdentifier" Computed="@(_rows is not null)" />
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Statistics.ExportCsv" Disabled="@(!actions.Export || _busy)" OnClick="CsvAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Statistics.Compute" Primary="true" Disabled="@(!actions.Compute || _busy)" OnClick="LoadAsync" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@code {
+    private PeriodState _period = default!;
+    private IReadOnlyList<DiscountReportRow>? _rows;
+    private DiscountSource? _source;
+    private string? _search;
+    private FieldRefusal? _refusal;
+    private (string Text, string Tone)? _status;
+    private bool _busy;
+    private (DateOnly From, DateOnly To)? _computed;
+
+    private IReadOnlyList<DiscountReportRow> Shown => DiscountScreenRules.Filter(_rows, _source, _search);
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string Heading =>
+        _computed is { } period
+            ? $"{Texts["Discounts.Title"]} — {PeriodReport.Period(period.From, period.To)}"
+            : Texts["Discounts.Title"];
+
+    protected override Task OnInitializedAsync()
+    {
+        _period = new PeriodState(Clock.Today);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (from, to) = (_period.From, _period.To);
+            var result = await Scopes.RunAsync<DiscountService, Result<IReadOnlyList<DiscountReportRow>>>(s => s.GetReportAsync(from, to));
+            if (result.IsFailure)
+            {
+                var error = result.FirstError;
+                if (DiscountScreenRules.FieldOf(error.ResourceKey) is { } field) _refusal = FieldRefusal.Of(field, error);
+                else _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _refusal = null;
+            _status = null;
+            _rows = result.Value;
+            _computed = (from, to);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the discounts granted failed.");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CsvAsync()
+    {
+        if (_computed is not { } period) return;
+        var csv = DiscountScreenRules.Csv(Shown, Texts.T, Mad, Texts.Culture);
+        if (csv is null)
+        {
+            _status = (Texts["App.NoData"], "muted");
+            return;
+        }
+
+        var name = DiscountScreenRules.FileName(period.From, period.To);
+        try
+        {
+            await JS.InvokeVoidAsync("marocLis.download", name, "text/csv", csv);
+            _status = (Texts.T("Web.StockDownloaded", name), "muted");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The tab is gone: nothing to hand the file to.
+        }
+    }
+}

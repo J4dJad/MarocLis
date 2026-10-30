@@ -4,6 +4,7 @@ using FluentAssertions;
 using MarocLIS.Application.Billing;
 using MarocLIS.Application.Inventory;
 using MarocLIS.Application.Orders;
+using MarocLIS.Desktop.Infrastructure;
 using MarocLIS.Domain.Common;
 using MarocLIS.Domain.Identity;
 using MarocLIS.Domain.Orders;
@@ -238,5 +239,33 @@ public sealed class DiscountScreenRulesTests
         DiscountScreenRules.FileName(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31)).Should().Be("remises-20261001-20261031.csv");
         DiscountScreenRules.FilterKey(null).Should().Be("Discounts.AllSources");
         DiscountScreenRules.FilterKey(DiscountSource.Manual).Should().Be("Discounts.Source.Manual");
+    }
+    [Fact]
+    public void The_new_screens_and_buttons_have_their_icons_and_no_icon_was_lost()
+    {
+        IconCatalog.Navigation["discounts"].Should().Be(Glyph.BadgePercent);
+        IconCatalog.Navigation["discountprofiles"].Should().Be(Glyph.Tags);
+        IconCatalog.Actions["Discounts.Grant"].Should().Be(Glyph.BadgePercent);
+        IconCatalog.Actions["Discounts.Prices"].Should().Be(Glyph.Tags);
+
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "MarocLIS.sln"))) root = root.Parent;
+        var icons = Path.Combine(root!.FullName, "src", "MarocLIS.Web", "wwwroot", "icons");
+        Enum.GetValues<Glyph>().Where(g => !File.Exists(Path.Combine(icons, g + ".png")))
+            .Should().BeEmpty("every glyph has its mask for the browser");
+
+        using var sheet = SkiaSharp.SKBitmap.Decode(Path.Combine(root.FullName, "src", "MarocLIS.Desktop", "Resources", "Icons", "icons.png"));
+        var ordered = Enum.GetValues<Glyph>().Distinct().OrderBy(g => (int)g).ToList();
+        sheet.Height.Should().Be((ordered.Count + 15) / 16 * 64);
+        foreach (var glyph in new[] { Glyph.Activity, Glyph.BadgePercent, Glyph.Tags, Glyph.Tag, Glyph.X })
+        {
+            var index = ordered.IndexOf(glyph);
+            using var png = SkiaSharp.SKBitmap.Decode(Path.Combine(icons, glyph + ".png"));
+            var differing = 0;
+            for (var y = 0; y < 64; y++)
+                for (var x = 0; x < 64; x++)
+                    if (sheet.GetPixel(index % 16 * 64 + x, index / 16 * 64 + y).Alpha != png.GetPixel(x, y).Alpha) differing++;
+            differing.Should().Be(0, "the cell of {0} is its browser mask", glyph);
+        }
     }
 }

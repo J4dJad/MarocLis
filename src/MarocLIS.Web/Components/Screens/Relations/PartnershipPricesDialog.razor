@@ -1,0 +1,294 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Catalog
+@using MarocLIS.Application.Input
+@using MarocLIS.Domain.Common
+@using MarocLIS.Infrastructure.Queries
+@using MarocLIS.Web.Components.Screens.Steering
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject ILogger<PartnershipPricesDialog> Logger
+
+@*
+    « Tarifs négociés » of a convention, the workstation's PartnershipPricesDialog: per analysis, a
+    price in dirhams or a rate off the list price, from a date and until another, beside the list
+    price and the price the convention's patients pay today. Read with the conventions; added,
+    changed and withdrawn (with a reason) by whom may manage the tariffs, the buttons hidden for
+    others. What is shown and checked is DiscountScreenRules'; what is saved, DiscountService's.
+*@
+@switch (_mode)
+{
+    case Mode.List:
+        <Modal Name="partnership-prices" Title="@Texts.T("Discounts.PricesTitle", PartnerName)" Hint="@Texts["Discounts.PricesIntro"]"
+               Large="true" OnCancel="OnClose">
+            <ChildContent>
+                <div class="card card-flush">
+                    <ReportTable Name="partnership-prices" Columns="DiscountScreenRules.PriceColumns"
+                                 Rows="DiscountScreenRules.PriceRows(_prices, Texts.T, Mad, Texts.Language, Texts.Culture)"
+                                 Identifier="@(c => c == "code")" Computed="_loaded" Selected="_selected" OnRowClick="i => _selected = i"
+                                 OnRowDoubleClick="EditAt" />
+                </div>
+                @if (_message is { } message)
+                {
+                    <p class="message @(message.Critical ? "is-critical" : "is-info") text-full" role="status" data-state="prices-message">@message.Text</p>
+                }
+            </ChildContent>
+            <Footer>
+                <ActionButton Key="Discounts.RemovePrice" Danger="true" Hidden="@(!Manage)" Disabled="@(Selected is null || _busy)"
+                              OnClick="() => _mode = Mode.Remove" />
+                <ActionButton Key="Discounts.EditPrice" Hidden="@(!Manage)" Disabled="@(Selected is null || _busy)" OnClick="() => EditAt(_selected ?? -1)" />
+                <ActionButton Key="Discounts.NewPrice" Hidden="@(!Manage)" Disabled="_busy" OnClick="() => Open(null)" />
+                <ActionButton Key="Action.Close" Primary="true" OnClick="OnClose" />
+            </Footer>
+        </Modal>
+        break;
+
+    case Mode.Edit:
+        <Modal Name="partnership-price" Title="@Texts[_editing is null ? "Discounts.NewPrice" : "Discounts.EditPrice"]"
+               Hint="@Texts["Discounts.PriceEditorTitle"]" OnCancel="BackToList">
+            <ChildContent>
+                <div class="form-grid form-grid-2">
+                    <label class="field field-span-all">
+                        <span class="field-label">@Texts["Discounts.Analysis"]</span>
+                        @if (_editing is { } row)
+                        {
+                            <input class="input" type="text" readonly="readonly" data-field="@DiscountScreenRules.PriceAnalysisField"
+                                   value="@($"{row.AnalysisCode} — {row.AnalysisName.For(Texts.Language)}")" />
+                        }
+                        else
+                        {
+                            <input class="input @Refused(DiscountScreenRules.PriceAnalysisField)" type="search" autocomplete="off" maxlength="60"
+                                   data-field="price-analysis-search" placeholder="@Texts["Discounts.Analysis"]"
+                                   value="@_term" @oninput="SearchAsync" />
+                            <select class="input" data-field="@DiscountScreenRules.PriceAnalysisField" @bind="_analysis">
+                                <option value="@Guid.Empty">—</option>
+                                @foreach (var a in _found)
+                                {
+                                    <option value="@a.Id">@($"{a.Code} — {a.Name.For(Texts.Language)} ({Mad(a.Price)})")</option>
+                                }
+                            </select>
+                        }
+                        <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.PriceAnalysisField" />
+                    </label>
+                    <div class="field field-span-all">
+                        <span class="field-label">@Texts["Discounts.Value"]</span>
+                        <div class="chips" role="group">
+                            <button type="button" class="chip @(_fixed ? "is-pressed" : null)" aria-pressed="@(_fixed ? "true" : "false")"
+                                    data-chip="fixed" @onclick="() => _fixed = true">@Texts["Discounts.FixedPrice"]</button>
+                            <button type="button" class="chip @(!_fixed ? "is-pressed" : null)" aria-pressed="@(!_fixed ? "true" : "false")"
+                                    data-chip="rate" @onclick="() => _fixed = false">@Texts["Discounts.RatePrice"]</button>
+                        </div>
+                    </div>
+                    <label class="field">
+                        <span class="field-label">@Texts[_fixed ? "Discounts.FixedPrice" : "Discounts.RatePrice"]</span>
+                        <input class="input mono num @Refused(DiscountScreenRules.PriceValueField)" type="text" inputmode="decimal" dir="ltr" autocomplete="off"
+                               maxlength="12" data-field="@DiscountScreenRules.PriceValueField" @bind="_value" @bind:event="oninput" />
+                        <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.PriceValueField" />
+                    </label>
+                    <div></div>
+                    <label class="field">
+                        <span class="field-label">@Texts["Discounts.ValidFrom"]</span>
+                        <input class="input input-date" type="date" data-field="price-from" @bind="_from" @bind:format="yyyy-MM-dd" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Discounts.ValidUntil"]</span>
+                        <input class="input input-date @Refused(DiscountScreenRules.PriceUntilField)" type="date" data-field="@DiscountScreenRules.PriceUntilField"
+                               @bind="_until" @bind:format="yyyy-MM-dd" />
+                        <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.PriceUntilField" />
+                    </label>
+                </div>
+                @if (_dialogRefusal is { Length: > 0 } refused)
+                {
+                    <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+                }
+            </ChildContent>
+            <Footer>
+                <ActionButton Key="Action.Cancel" OnClick="BackToList" />
+                <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="SaveAsync" />
+            </Footer>
+        </Modal>
+        break;
+
+    case Mode.Remove when Selected is { } removed:
+        <ReasonPrompt Title="@Texts["Discounts.RemovePrice"]"
+                      Prompt="@($"{Texts["Discounts.RemovePriceReason"]} — {removed.AnalysisCode} {removed.AnalysisName.For(Texts.Language)}")"
+                      MaxLength="300" OnConfirm="RemoveAsync" OnCancel="BackToList" />
+        break;
+}
+
+@code {
+    private enum Mode { List, Edit, Remove }
+
+    [Parameter, EditorRequired] public Guid PartnershipId { get; set; }
+    [Parameter, EditorRequired] public string PartnerName { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Mode _mode = Mode.List;
+    private IReadOnlyList<PartnershipPriceRow> _prices = [];
+    private int? _selected;
+    private bool _loaded, _busy;
+    private (string Text, bool Critical)? _message;
+
+    private PartnershipPriceRow? _editing;
+    private IReadOnlyList<CatalogPickerItem> _found = [];
+    private string _term = string.Empty;
+    private Guid _analysis;
+    private bool _fixed = true;
+    private string? _value;
+    private DateOnly _from;
+    private DateOnly? _until;
+    private FieldRefusal? _refusal;
+    private string? _dialogRefusal;
+
+    private bool Manage => DiscountScreenRules.CanManage(Context.User.Has);
+
+    private PartnershipPriceRow? Selected => _selected is { } i && i >= 0 && i < _prices.Count ? _prices[i] : null;
+
+    private string Mad(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await Scopes.RunAsync<DiscountService, Result<IReadOnlyList<PartnershipPriceRow>>>(s => s.GetPricesAsync(PartnershipId));
+            if (result.IsFailure)
+            {
+                _message = (Texts.Describe(result.Errors), true);
+                return;
+            }
+
+            _prices = result.Value;
+            _loaded = true;
+            if (_selected >= _prices.Count) _selected = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the negotiated prices failed.");
+            _message = (Texts[WebFailures.KeyFor(ex)], true);
+        }
+    }
+
+    private void EditAt(int index)
+    {
+        if (!Manage || index < 0 || index >= _prices.Count) return;
+        _selected = index;
+        Open(_prices[index]);
+    }
+
+    private void Open(PartnershipPriceRow? row)
+    {
+        var form = DiscountScreenRules.PriceFormFor(row, Clock.Today, Texts.Culture);
+        _editing = row;
+        _analysis = form.AnalysisTestId ?? Guid.Empty;
+        _fixed = form.IsFixedPrice;
+        _value = form.Value;
+        _from = form.ValidFrom;
+        _until = form.ValidUntil;
+        _term = string.Empty;
+        _found = [];
+        _refusal = null;
+        _dialogRefusal = null;
+        _mode = Mode.Edit;
+    }
+
+    private void BackToList() => _mode = Mode.List;
+
+    private async Task SearchAsync(ChangeEventArgs e)
+    {
+        _term = e.Value?.ToString() ?? string.Empty;
+        if (_term.Trim().Length == 0)
+        {
+            _found = [];
+            return;
+        }
+
+        try
+        {
+            var term = _term.Trim();
+            var found = await Scopes.RunAsync<ICatalogQueries, IReadOnlyList<CatalogPickerItem>>(q => q.SearchPickerAsync(term, null, Clock.Today, 20));
+            _found = [.. found.Where(f => !f.IsPanel)];
+            if (_found.Count > 0 && _found.All(f => f.Id != _analysis)) _analysis = _found[0].Id;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Searching the catalogue failed.");
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy) return;
+        var form = new PartnershipPriceForm
+        {
+            AnalysisTestId = _analysis == Guid.Empty ? null : _analysis,
+            IsFixedPrice = _fixed,
+            Value = _value,
+            ValidFrom = _from,
+            ValidUntil = _until
+        };
+        var (refusal, request) = DiscountScreenRules.Check(form, PartnershipId, _editing?.Id);
+        _refusal = refusal;
+        if (request is null) return;
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<DiscountService, Result<Guid>>(s => s.SavePriceAsync(request));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                var field = DiscountScreenRules.FieldOf(error.ResourceKey);
+                _refusal = field is null ? null : FieldRefusal.Of(field, error);
+                _dialogRefusal = field is null ? Texts.Describe(saved.Errors) : null;
+                return;
+            }
+
+            _mode = Mode.List;
+            _message = (Texts["Discounts.PriceSaved"], false);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a negotiated price failed.");
+            _dialogRefusal = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync(string reason)
+    {
+        if (Selected is not { } price || _busy) return;
+        _busy = true;
+        try
+        {
+            var removed = await Scopes.RunAsync<DiscountService, Result>(s => s.RemovePriceAsync(price.Id, reason));
+            _mode = Mode.List;
+            if (removed.IsFailure)
+            {
+                _message = (Texts.Describe(removed.Errors), true);
+                return;
+            }
+
+            _selected = null;
+            _message = (Texts["Discounts.PriceRemoved"], false);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Removing a negotiated price failed.");
+            _message = (Texts[WebFailures.KeyFor(ex)], true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

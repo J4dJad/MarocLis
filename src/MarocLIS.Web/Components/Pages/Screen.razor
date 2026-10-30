@@ -127,6 +127,14 @@
             <MarocLIS.Web.Components.Screens.Billing.CashReview />
             break;
 
+        case ScreenDecision.Open when Key == "discounts":
+            <MarocLIS.Web.Components.Screens.Billing.DiscountsScreen />
+            break;
+
+        case ScreenDecision.Open when Key == "discountprofiles":
+            <MarocLIS.Web.Components.Screens.Billing.DiscountProfilesScreen />
+            break;
+
         case ScreenDecision.Open when Key == "users":
             <MarocLIS.Web.Components.Screens.Admin.UserAdministration />
             break;

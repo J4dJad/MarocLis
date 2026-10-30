@@ -184,6 +184,8 @@
             <ActionButton Key="Action.Refresh" Disabled="_busy" OnClick="LoadAsync" />
         </Secondary>
         <More>
+            <ActionButton Key="Discounts.Prices" Hidden="@(_tab != RelationsTab.Partnerships || !MarocLIS.Application.Billing.DiscountScreenRules.CanSeePrices(Context.User.Has))"
+                          Disabled="@(SelectedPartnership is null || _busy)" OnClick="() => Ask(Prompt.Prices)" />
             <ActionButton Key="Relations.AttachDocument" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FilePlus" Hidden="@(!actions.PartnershipActions)"
                           Disabled="@(!actions.Attach || _busy)" OnClick="() => Ask(Prompt.Attach)" />
             <ActionButton Key="Relations.OpenDocument" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.FileSearch"
@@ -217,6 +219,10 @@
                            Refusal="@_dialogRefusal" FieldRefusal="_fieldRefusal" Busy="_busy" OnSave="SavePartnershipAsync" OnCancel="ClosePrompt" />
         break;
 
+    case Prompt.Prices when SelectedPartnership is { } priced:
+        <PartnershipPricesDialog PartnershipId="priced.Id" PartnerName="@priced.PartnerName" OnClose="ClosePrompt" />
+        break;
+
     case Prompt.Delete when SelectedVisit is { } visit:
         <ReasonPrompt Title="@Texts["Action.Delete"]" Prompt="@RelationsScreenRules.DeletePrompt(visit, Texts.T)"
                       MaxLength="RelationsService.DeletionReasonMaxLength" OnConfirm="DeleteVisitAsync" OnCancel="ClosePrompt" />
@@ -245,7 +251,7 @@
 }
 
 @code {
-    private enum Prompt { None, Visit, Partnership, Delete, Attach }
+    private enum Prompt { None, Visit, Partnership, Delete, Attach, Prices }
 
     private PeriodState _period = default!;
     private RelationsTab _tab = RelationsTab.Visits;

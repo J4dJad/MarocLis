@@ -1,6 +1,7 @@
 @using System.Globalization
 @using MarocLIS.Application.Abstractions
 @using MarocLIS.Application.Administration
+@using MarocLIS.Application.Billing
 @using MarocLIS.Application.Catalog
 @using MarocLIS.Application.Orders
 @using MarocLIS.Application.Patients
@@ -295,7 +296,12 @@
 
                 <dl class="totals" data-state="totals">
                     <dt>@Texts.T("OrderEntry.GrossFor", _quote?.AnalysisCount ?? 0)</dt>
-                    <dd class="num" data-total="gross">@((_quote?.Pricing.Total ?? Money.Zero).Format(Texts.Language, Texts.Culture))</dd>
+                    <dd class="num" data-total="gross">@(((_quote?.Pricing.Total ?? Money.Zero) + (_quote?.Pricing.Discount ?? Money.Zero)).Format(Texts.Language, Texts.Culture))</dd>
+                    @if (DiscountScreenRules.CounterLine(_quote?.Discount, Texts.T, Texts.Culture) is { } discountLine)
+                    {
+                        <dt data-state="discount-line">@discountLine</dt>
+                        <dd class="num" data-total="discount">− @(_quote!.Pricing.Discount.Format(Texts.Language, Texts.Culture))</dd>
+                    }
                     @if (_quote?.PayerName is { } payer)
                     {
                         <dt>@Texts.T("OrderEntry.PayerShareOf", payer.For(Texts.Language))</dt>
@@ -311,6 +317,8 @@
 
     <ActionBar StatusText="@StatusText" StatusClass="@StatusClass">
         <Secondary>
+            <ActionButton Key="Discounts.Grant" Hidden="@(!DiscountScreenRules.CanGrant(User.Has))"
+                          Class="@(_discount.IsEmpty ? null : "is-pressed")" Disabled="@(_busy || _basket.IsEmpty)" OnClick="OpenDiscountAsync" />
             <ActionButton Key="OrderEntry.SaveWithoutLabels" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Tag"
                           Disabled="@(!CanRegister || !User.Has(Permissions.Orders.Create))"
                           OnClick="() => RegisterAsync(OrderRegistrationRules.PrintsLabels(withoutLabels: true))" />
@@ -340,6 +348,12 @@
 {
     <NewPrescriberDialog TypedName="@(ChosenPrescriber() is null ? _prescriberText : null)"
                          OnCreated="PrescriberCreatedAsync" OnCancel="() => _newPrescriber = false" />
+}
+
+@if (_discountDialog && _discountOptions is { } discountOptions)
+{
+    <OrderDiscountDialog Options="discountOptions" Current="_discount" Gross="DiscountGross"
+                         OnApply="ApplyDiscount" OnCancel="() => _discountDialog = false" />
 }
 
 @if (_confirm is { } confirm)
@@ -416,6 +430,9 @@
     private bool _selfPay;
 
     private OrderQuote? _quote;
+    private CounterDiscount _discount = CounterDiscount.None;
+    private CounterDiscountOptions? _discountOptions;
+    private bool _discountDialog;
     private (string Text, string Tone)? _notice;
     private bool _busy;
     private readonly PrescriptionDraft _prescription = new();
@@ -744,6 +761,9 @@
     {
         _prescriberText = e.Value?.ToString() ?? string.Empty;
         Changed();
+
+        // The prescriber's convention and rate apply by themselves: the total follows the doctor.
+        RequestQuote();
     }
 
     private void ClinicalChanged(ChangeEventArgs e)
@@ -782,6 +802,7 @@
         await LoadPrescribersAsync();
         if (_prescribers.FirstOrDefault(p => p.Id == id) is { } created) _prescriberText = created.Display;
         Changed();
+        RequestQuote();
     }
 
     // ---- Catalogue ---------------------------------------------------------------------------------
@@ -1000,7 +1021,12 @@
                 PatientId = _patient?.Id,
                 AnalysisTestIds = _basket.AnalysisTestIds,
                 TestPanelIds = _basket.TestPanelIds,
-                BillDirectlyToPatient = _selfPay
+                BillDirectlyToPatient = _selfPay,
+                PrescriberId = ChosenPrescriber()?.Id,
+                PartnershipId = _discount.PartnershipId,
+                WithoutConvention = _discount.WithoutConvention,
+                DiscountProfileId = _discount.ProfileId,
+                DiscountPercent = _discount.Percent
             };
             var quoted = await Scopes.RunAsync<IOrderQuotes, Result<OrderQuote>>(q => q.QuoteAsync(request));
 
@@ -1081,7 +1107,13 @@
             PrescriberFreeText = prescriber is null && prescriberText.Length > 0 ? prescriberText : null,
             ClinicalInformation = string.IsNullOrWhiteSpace(_clinical) ? null : _clinical.Trim(),
             PatientFasted = _fasting,
-            BillDirectlyToPatient = _selfPay
+            BillDirectlyToPatient = _selfPay,
+            PartnershipId = _discount.PartnershipId,
+            WithoutConvention = _discount.WithoutConvention,
+            DiscountProfileId = _discount.ProfileId,
+            DiscountPercent = _discount.Percent,
+            DiscountReason = _discount.Reason,
+            DiscountApproval = _discount.Approval
         };
         request = _prescription.ApplyTo(request);
 
@@ -1239,6 +1271,43 @@
         _quote = null;
         ++_quoteVersion;
         _prescription.Clear();
+        _discount = CounterDiscount.None;
+    }
+
+    // ---- Discount ----------------------------------------------------------------------------------
+
+    /// <summary>The gross the counter's rate and the ceiling are reckoned on.</summary>
+    private decimal DiscountGross => _quote is { } quote ? (quote.Pricing.Total + quote.Pricing.Discount).Amount : 0m;
+
+    /// <summary>« Remise… »: the profiles, the conventions in force and the ceiling, read when the dialog opens.</summary>
+    private async Task OpenDiscountAsync()
+    {
+        if (!DiscountScreenRules.CanGrant(User.Has) || _busy) return;
+        try
+        {
+            var options = await Scopes.RunAsync<DiscountService, Result<CounterDiscountOptions>>(s => s.GetCounterOptionsAsync());
+            if (options.IsFailure)
+            {
+                Notice(Texts.Describe(options.Errors), "critical");
+                return;
+            }
+
+            _discountOptions = options.Value;
+            _discountDialog = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the discount options failed.");
+            Notice(Texts[WebFailures.KeyFor(ex)], "critical");
+        }
+    }
+
+    private async Task ApplyDiscount(CounterDiscount discount)
+    {
+        _discount = discount;
+        _discountDialog = false;
+        Changed();
+        await RefreshQuoteAsync();
     }
 
     // ---- Plumbing ----------------------------------------------------------------------------------

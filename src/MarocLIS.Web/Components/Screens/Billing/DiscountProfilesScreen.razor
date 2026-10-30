@@ -1,0 +1,196 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Steering
+@using MarocLIS.Domain.Common
+@using MarocLIS.Web.Components.Screens.Steering
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<DiscountProfilesScreen> Logger
+
+@*
+    « Profils de remise », the workstation's DiscountProfilesView: the discounts the counter may pick
+    (« Personnel 50 % », « Étudiant 10 % »), with their rate, their dates and whether they are offered
+    today. Created and changed by whom may manage the tariffs (billing.tariffs.manage); a profile is
+    switched off, never deleted, so the discounts granted with it keep their name. What is shown and
+    checked is DiscountScreenRules'; what is saved and journalled, DiscountService's.
+*@
+<div class="screen report-screen" data-screen="discountprofiles">
+    @{ var manage = DiscountScreenRules.CanManage(Context.User.Has); }
+    <div class="list-tools" data-tools="intro">
+        <span class="small muted text-full" data-state="intro">@Texts["Discounts.ProfilesIntro"]</span>
+    </div>
+
+    <div class="screen-body">
+        <section class="card card-flush report-card" data-card="discountprofiles">
+            <ReportTable Name="discountprofiles" Columns="DiscountScreenRules.ProfileColumns"
+                         Rows="DiscountScreenRules.ProfileRows(_profiles, Texts.T, Texts.Culture)" Computed="_loaded"
+                         Selected="_selected" OnRowClick="Select" OnRowDoubleClick="EditAt" />
+        </section>
+    </div>
+
+    <ActionBar StatusText="@_status?.Text" StatusClass="@($"is-{_status?.Tone ?? "muted"}")">
+        <Secondary>
+            <ActionButton Key="Discounts.EditProfile" Hidden="@(!manage)" Disabled="@(_selected is null || _busy)" OnClick="() => EditAt(_selected ?? -1)" />
+            <ActionButton Key="Action.Refresh" Disabled="_busy" OnClick="LoadAsync" />
+        </Secondary>
+        <Primary>
+            <ActionButton Key="Discounts.NewProfile" Primary="true" Hidden="@(!manage)" Disabled="_busy" OnClick="() => Open(null)" />
+        </Primary>
+    </ActionBar>
+</div>
+
+@if (_editing)
+{
+    <Modal Name="discount-profile" Title="@Texts[_editingRow is null ? "Discounts.NewProfile" : "Discounts.EditProfile"]"
+           Hint="@Texts["Discounts.ProfileEditorTitle"]" OnCancel="Close">
+        <ChildContent>
+            <div class="form-grid form-grid-2">
+                <label class="field field-span-all">
+                    <span class="field-label">@Texts["Discounts.Name"]</span>
+                    <input class="input @Refused(DiscountScreenRules.ProfileNameField)" type="text" autocomplete="off"
+                           maxlength="@MarocLIS.Domain.Billing.DiscountProfile.NameMaxLength" data-field="@DiscountScreenRules.ProfileNameField"
+                           @bind="_name" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.ProfileNameField" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Discounts.Percent"]</span>
+                    <input class="input mono num @Refused(DiscountScreenRules.ProfilePercentField)" type="text" inputmode="decimal" dir="ltr"
+                           autocomplete="off" maxlength="8" data-field="@DiscountScreenRules.ProfilePercentField" @bind="_percent" @bind:event="oninput" />
+                    <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.ProfilePercentField" />
+                </label>
+                <label class="field-check field-align-end">
+                    <input type="checkbox" data-field="profile-active" @bind="_active" />
+                    <span>@Texts["Discounts.Active"]</span>
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Discounts.ValidFrom"]</span>
+                    <input class="input input-date" type="date" data-field="profile-from" @bind="_from" @bind:format="yyyy-MM-dd" />
+                </label>
+                <label class="field">
+                    <span class="field-label">@Texts["Discounts.ValidUntil"]</span>
+                    <input class="input input-date @Refused(DiscountScreenRules.ProfileUntilField)" type="date" data-field="@DiscountScreenRules.ProfileUntilField"
+                           @bind="_until" @bind:format="yyyy-MM-dd" />
+                    <FieldMessage Refusal="_refusal" Field="@DiscountScreenRules.ProfileUntilField" />
+                </label>
+            </div>
+            @if (_dialogRefusal is { Length: > 0 } refused)
+            {
+                <p class="message is-critical text-full" role="alert" data-state="refusal">@refused</p>
+            }
+        </ChildContent>
+        <Footer>
+            <ActionButton Key="Action.Cancel" OnClick="Close" />
+            <ActionButton Key="Action.Save" Primary="true" Disabled="_busy" OnClick="SaveAsync" />
+        </Footer>
+    </Modal>
+}
+
+@code {
+    private IReadOnlyList<DiscountProfileRow> _profiles = [];
+    private int? _selected;
+    private bool _loaded, _busy, _editing;
+    private (string Text, string Tone)? _status;
+
+    private DiscountProfileRow? _editingRow;
+    private string _name = string.Empty;
+    private string? _percent;
+    private bool _active = true;
+    private DateOnly? _from, _until;
+    private FieldRefusal? _refusal;
+    private string? _dialogRefusal;
+
+    private string? Refused(string field) => _refusal?.Field == field ? "is-refused" : null;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await Scopes.RunAsync<DiscountService, Result<IReadOnlyList<DiscountProfileRow>>>(s => s.GetProfilesAsync());
+            if (result.IsFailure)
+            {
+                _status = (Texts.Describe(result.Errors), "critical");
+                return;
+            }
+
+            _profiles = result.Value;
+            _loaded = true;
+            if (_selected >= _profiles.Count) _selected = null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the discount profiles failed.");
+            _status = (Texts[WebFailures.KeyFor(ex)], "critical");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Select(int index) => _selected = index;
+
+    private void EditAt(int index)
+    {
+        if (!DiscountScreenRules.CanManage(Context.User.Has) || index < 0 || index >= _profiles.Count) return;
+        _selected = index;
+        Open(_profiles[index]);
+    }
+
+    private void Open(DiscountProfileRow? row)
+    {
+        var form = DiscountScreenRules.FormFor(row, Texts.Culture);
+        _editingRow = row;
+        _name = form.Name;
+        _percent = form.Percent;
+        _active = form.IsActive;
+        _from = form.ValidFrom;
+        _until = form.ValidUntil;
+        _refusal = null;
+        _dialogRefusal = null;
+        _editing = true;
+    }
+
+    private void Close() => _editing = false;
+
+    private async Task SaveAsync()
+    {
+        if (_busy) return;
+        var form = new DiscountProfileForm { Name = _name, Percent = _percent, IsActive = _active, ValidFrom = _from, ValidUntil = _until };
+        var (refusal, request) = DiscountScreenRules.Check(form, _editingRow?.Id);
+        _refusal = refusal;
+        if (request is null) return;
+
+        _busy = true;
+        try
+        {
+            var saved = await Scopes.RunAsync<DiscountService, Result<Guid>>(s => s.SaveProfileAsync(request));
+            if (saved.IsFailure)
+            {
+                var error = saved.FirstError;
+                var field = DiscountScreenRules.FieldOf(error.ResourceKey);
+                _refusal = field is null ? null : FieldRefusal.Of(field, error);
+                _dialogRefusal = field is null ? Texts.Describe(saved.Errors) : null;
+                return;
+            }
+
+            _editing = false;
+            _status = (Texts["Discounts.ProfileSaved"], "normal");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving a discount profile failed.");
+            _dialogRefusal = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await LoadAsync();
+    }
+}
