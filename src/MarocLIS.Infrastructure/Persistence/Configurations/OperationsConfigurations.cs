@@ -10,6 +10,18 @@ namespace MarocLIS.Infrastructure.Persistence.Configurations;
 
 // ---- Billing -----------------------------------------------------------------------------------
 
+public sealed class DiscountProfileConfiguration : IEntityTypeConfiguration<DiscountProfile>
+{
+    public void Configure(EntityTypeBuilder<DiscountProfile> builder)
+    {
+        builder.ToTable("DiscountProfiles", "bil");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Name).HasMaxLength(DiscountProfile.NameMaxLength).IsRequired();
+        builder.Property(e => e.Percent).HasColumnType("decimal(5,2)");
+        builder.HasIndex(e => e.Name).IsUnique().HasDatabaseName("UX_DiscountProfiles_Name");
+    }
+}
+
 public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 {
     public void Configure(EntityTypeBuilder<Invoice> builder)

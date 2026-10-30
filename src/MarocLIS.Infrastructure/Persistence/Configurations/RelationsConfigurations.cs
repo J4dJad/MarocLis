@@ -41,6 +41,19 @@ public sealed class PartnershipConfiguration : IEntityTypeConfiguration<Partners
     }
 }
 
+public sealed class PartnershipPriceConfiguration : IEntityTypeConfiguration<PartnershipPrice>
+{
+    public void Configure(EntityTypeBuilder<PartnershipPrice> builder)
+    {
+        builder.ToTable("PartnershipPrices", "rel");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.FixedPrice).HasColumnType("decimal(18,2)");
+        builder.Property(e => e.DiscountPercent).HasColumnType("decimal(5,2)");
+        builder.Property(e => e.DeletionReason).HasMaxLength(500);
+        builder.HasIndex(e => new { e.PartnershipId, e.AnalysisTestId, e.ValidFrom }).HasDatabaseName("IX_PartnershipPrices_Partnership");
+    }
+}
+
 public sealed class PartnershipDocumentConfiguration : IEntityTypeConfiguration<PartnershipDocument>
 {
     public void Configure(EntityTypeBuilder<PartnershipDocument> builder)

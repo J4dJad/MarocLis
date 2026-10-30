@@ -35,6 +35,13 @@ public sealed record ActPricingInput
     /// </summary>
     public decimal ChargedUnitPrice { get; init; }
 
+    /// <summary>
+    /// The unit price negotiated in the convention the order is priced under, when it has one for
+    /// this analysis. Charged instead of <see cref="ChargedUnitPrice"/> unless the order's rate gives
+    /// the patient less to pay (<see cref="ActPricingCalculator"/>): the two never add up.
+    /// </summary>
+    public decimal? NegotiatedUnitPrice { get; init; }
+
     /// <summary>Biology acts are VAT-exempt in Morocco; non-exempt items carry their own rate.</summary>
     public bool IsVatExempt { get; init; } = true;
     public decimal VatRate { get; init; }
@@ -78,8 +85,11 @@ public sealed record PricedAct
     /// <summary>Quantity × charged unit price.</summary>
     public Money Gross { get; init; }
 
-    /// <summary>Share of an order-level discount allocated to this act.</summary>
+    /// <summary>Share of an order-level discount allocated to this act, or what its negotiated price takes off.</summary>
     public Money Discount { get; init; }
+
+    /// <summary>What <see cref="Discount"/> is: the negotiated price, the order's rate, or nothing.</summary>
+    public ActDiscountKind DiscountKind { get; init; }
 
     public Money Net { get; init; }
     public Money Vat { get; init; }
@@ -100,6 +110,18 @@ public sealed record PricedAct
     public decimal? AppliedRate { get; init; }
 }
 
+/// <summary>Where an act's discount comes from.</summary>
+public enum ActDiscountKind
+{
+    None = 0,
+
+    /// <summary>The convention's negotiated price, lower than the list price less the order's rate.</summary>
+    Negotiated = 1,
+
+    /// <summary>The order's rate (or fixed amount), spread over the acts it applies to.</summary>
+    Rate = 2
+}
+
 /// <summary>The priced order as a whole.</summary>
 public sealed record OrderPricing
 {
@@ -107,6 +129,16 @@ public sealed record OrderPricing
 
     public Money Gross { get; init; }
     public Money Discount { get; init; }
+
+    /// <summary>The part of <see cref="Discount"/> the negotiated prices give.</summary>
+    public Money NegotiatedDiscount { get; init; }
+
+    /// <summary>
+    /// The part of <see cref="Discount"/> the order's rate gives: what the discount ceiling is
+    /// checked against when the rate is the counter's (a profile or a rate typed).
+    /// </summary>
+    public Money RateDiscount { get; init; }
+
     public Money Net { get; init; }
     public Money Vat { get; init; }
     public Money Total { get; init; }
@@ -126,7 +158,9 @@ public sealed record OrderPricing
 /// </para>
 /// <list type="number">
 /// <item>Gross is quantity × the laboratory's charged price.</item>
-/// <item>An order-level discount is spread across the acts in proportion to their gross amount,
+/// <item>An act with a price negotiated in the order's convention costs the lower of that price and
+/// its gross less the order's rate — never both (<see cref="DiscountRules"/>).</item>
+/// <item>An order-level discount is spread across the other acts in proportion to their gross amount,
 /// with the rounding remainder allocated to the last act rather than lost.</item>
 /// <item>VAT applies only to non-exempt acts; medical biology is exempt in Morocco.</item>
 /// <item>The payer's share is its rate applied to the <em>reference</em> base — coefficient ×
@@ -156,11 +190,38 @@ public static class ActPricingCalculator
 
         var gross = Money.Of(grossPerAct.Sum(m => m.Amount));
 
-        var discountTotal = fixedDiscountAmount is { } fixedAmount
-            ? Money.Of(Math.Clamp(fixedAmount, 0m, gross.Amount))
-            : Money.Of(gross.Amount * Math.Clamp(orderDiscountPercent, 0m, 100m) / 100m);
+        var rate = Math.Clamp(orderDiscountPercent, 0m, 100m);
 
-        var discountPerAct = AllocateProportionally(discountTotal, grossPerAct);
+        // A negotiated price and the order's rate are never added: each act takes whichever leaves
+        // the patient less to pay, the negotiated price when they come to the same (it needs no
+        // approval). A negotiated price above the list price is not charged.
+        var kinds = new ActDiscountKind[chargeable.Count];
+        var negotiatedPerAct = new Money[chargeable.Count];
+        for (var i = 0; i < chargeable.Count; i++)
+        {
+            negotiatedPerAct[i] = Money.Zero;
+            if (chargeable[i].NegotiatedUnitPrice is not { } negotiated) continue;
+
+            var negotiatedNet = Money.Round(Math.Max(0m, negotiated) * chargeable[i].Quantity);
+            var byRate = fixedDiscountAmount is null ? grossPerAct[i].Amount * (1m - rate / 100m) : grossPerAct[i].Amount;
+            if (negotiatedNet < grossPerAct[i].Amount && negotiatedNet <= byRate)
+            {
+                kinds[i] = ActDiscountKind.Negotiated;
+                negotiatedPerAct[i] = Money.Of(grossPerAct[i].Amount - negotiatedNet);
+            }
+        }
+
+        // The order's rate (or fixed amount) is spread over the acts it applies to only.
+        var rateWeights = grossPerAct.Select((g, i) => kinds[i] == ActDiscountKind.Negotiated ? Money.Zero : g).ToArray();
+        var rateBase = rateWeights.Sum(w => w.Amount);
+
+        var rateTotal = fixedDiscountAmount is { } fixedAmount
+            ? Money.Of(Math.Clamp(fixedAmount, 0m, rateBase))
+            : Money.Of(rateBase * rate / 100m);
+
+        var ratePerAct = AllocateProportionally(rateTotal, rateWeights);
+        var negotiatedTotal = Money.Of(negotiatedPerAct.Sum(m => m.Amount));
+        var discountTotal = rateTotal + negotiatedTotal;
 
         var priced = new List<PricedAct>(chargeable.Count);
 
@@ -168,7 +229,8 @@ public static class ActPricingCalculator
         {
             var act = chargeable[i];
             var actGross = grossPerAct[i];
-            var actDiscount = discountPerAct[i];
+            var actDiscount = kinds[i] == ActDiscountKind.Negotiated ? negotiatedPerAct[i] : ratePerAct[i];
+            if (kinds[i] == ActDiscountKind.None && !actDiscount.IsZero) kinds[i] = ActDiscountKind.Rate;
             var net = actGross - actDiscount;
             var vat = act.IsVatExempt ? Money.Zero : Money.Of(net.Amount * act.VatRate);
             // actTotal, not total: the order total below carries that name, and the per-act and
@@ -197,6 +259,7 @@ public static class ActPricingCalculator
                 Input = act,
                 Gross = actGross,
                 Discount = actDiscount,
+                DiscountKind = kinds[i],
                 Net = net,
                 Vat = vat,
                 Total = actTotal,
@@ -219,6 +282,8 @@ public static class ActPricingCalculator
             Acts = priced,
             Gross = gross,
             Discount = discountTotal,
+            NegotiatedDiscount = negotiatedTotal,
+            RateDiscount = rateTotal,
             Net = netTotal,
             Vat = vatTotal,
             Total = total,

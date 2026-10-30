@@ -710,6 +710,54 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.ToTable("Deposits", "bil");
                 });
 
+            modelBuilder.Entity("MarocLIS.Domain.Billing.DiscountProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal>("Percent")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly?>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidUntil")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DiscountProfiles_Name");
+
+                    b.ToTable("DiscountProfiles", "bil");
+                });
+
             modelBuilder.Entity("MarocLIS.Domain.Billing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -788,6 +836,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("DiscountApprovedByUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("DiscountReason")
                         .HasMaxLength(300)
@@ -6265,12 +6316,24 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("DirectBillingAtRegistration")
                         .HasColumnType("bit");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("DiscountApprovedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal?>("DiscountPercent")
                         .HasColumnType("decimal(18,6)");
+
+                    b.Property<Guid?>("DiscountProfileId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("DiscountReason")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("DiscountSource")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset?>("DueAt")
                         .HasColumnType("datetimeoffset(3)");
@@ -6302,6 +6365,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Origin")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("PartnershipId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("PatientCoverageId")
                         .HasColumnType("uniqueidentifier");
@@ -6385,6 +6451,9 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PatientId", "RegisteredAt")
                         .HasDatabaseName("IX_LabOrders_Patient_History");
+
+                    b.HasIndex("SiteId", "DiscountSource", "RegisteredAt")
+                        .HasDatabaseName("IX_LabOrders_Discount");
 
                     b.HasIndex("SiteId", "Status", "Priority", "RegisteredAt")
                         .HasDatabaseName("IX_LabOrders_Worklist");
@@ -8337,6 +8406,67 @@ namespace MarocLIS.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_PartnershipDocuments_Partnership");
 
                     b.ToTable("PartnershipDocuments", "rel");
+                });
+
+            modelBuilder.Entity("MarocLIS.Domain.Relations.PartnershipPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AnalysisTestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DeletionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("DiscountPercent")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal?>("FixedPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PartnershipId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidUntil")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PartnershipId", "AnalysisTestId", "ValidFrom")
+                        .HasDatabaseName("IX_PartnershipPrices_Partnership");
+
+                    b.ToTable("PartnershipPrices", "rel");
                 });
 
             modelBuilder.Entity("MarocLIS.Domain.Relations.PatientMessage", b =>

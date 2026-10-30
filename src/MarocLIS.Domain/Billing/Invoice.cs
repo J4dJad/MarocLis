@@ -71,6 +71,9 @@ public sealed class Invoice : AuditableAggregateRoot, ISiteScoped
     public decimal DiscountAmount { get; private set; }
     public string? DiscountReason { get; set; }
 
+    /// <summary>Who approved a discount above the ceiling when the invoice was issued.</summary>
+    public Guid? DiscountApprovedByUserId { get; set; }
+
     /// <summary>Taxable base after discount.</summary>
     public decimal NetAmount { get; private set; }
 

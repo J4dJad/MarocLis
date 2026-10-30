@@ -203,6 +203,9 @@ public sealed class LabOrderConfiguration : IEntityTypeConfiguration<LabOrder>
         builder.Property(e => e.PrescriptionScan).HasColumnType("varbinary(max)");
         builder.Property(e => e.PrescriptionScanContentType).HasMaxLength(100);
         builder.Property(e => e.DiscountPercent).HasColumnType("decimal(6,3)");
+        builder.Property(e => e.DiscountAmount).HasColumnType("decimal(18,2)");
+        // The discounts report reads the period's discounted orders.
+        builder.HasIndex(e => new { e.SiteId, e.DiscountSource, e.RegisteredAt }).HasDatabaseName("IX_LabOrders_Discount");
         builder.Property(e => e.ReimbursementRateAtRegistration).HasColumnType("decimal(6,4)");
         builder.Property(e => e.DirectBillingAtRegistration);
 

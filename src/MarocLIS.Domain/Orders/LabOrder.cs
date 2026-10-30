@@ -103,6 +103,21 @@ public sealed class LabOrder : AuditableAggregateRoot, ISoftDeletable, ISiteScop
     public decimal? DiscountPercent { get; set; }
     public string? DiscountReason { get; set; }
 
+    /// <summary>Where the discount came from: a convention, the prescriber, a profile, a rate typed.</summary>
+    public DiscountSource DiscountSource { get; set; }
+
+    /// <summary>The discount in dirhams, every analysis of the order together (negotiated prices included).</summary>
+    public decimal DiscountAmount { get; set; }
+
+    /// <summary>The convention the order was priced under: its rate and its negotiated prices.</summary>
+    public Guid? PartnershipId { get; set; }
+
+    /// <summary>The discount profile chosen at the counter, when one was.</summary>
+    public Guid? DiscountProfileId { get; set; }
+
+    /// <summary>Who approved a discount above the ceiling, with their name and password at the counter.</summary>
+    public Guid? DiscountApprovedByUserId { get; set; }
+
     public Guid? InvoiceId { get; set; }
 
     // ---- Lifecycle timestamps used for turnaround reporting -----------------------------------

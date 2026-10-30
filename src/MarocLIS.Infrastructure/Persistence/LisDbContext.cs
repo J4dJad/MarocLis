@@ -141,6 +141,7 @@ public class LisDbContext : DbContext
     // ---- Billing ------------------------------------------------------------------------------
 
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<DiscountProfile> DiscountProfiles => Set<DiscountProfile>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
@@ -217,6 +218,7 @@ public class LisDbContext : DbContext
     public DbSet<Domain.Relations.DelegateVisit> DelegateVisits => Set<Domain.Relations.DelegateVisit>();
     public DbSet<Domain.Relations.Partnership> Partnerships => Set<Domain.Relations.Partnership>();
     public DbSet<Domain.Relations.PartnershipDocument> PartnershipDocuments => Set<Domain.Relations.PartnershipDocument>();
+    public DbSet<Domain.Relations.PartnershipPrice> PartnershipPrices => Set<Domain.Relations.PartnershipPrice>();
     public DbSet<Domain.Relations.ReminderRule> ReminderRules => Set<Domain.Relations.ReminderRule>();
     public DbSet<Domain.Relations.PatientMessage> PatientMessages => Set<Domain.Relations.PatientMessage>();
     public DbSet<Domain.Relations.SurveyInvitation> SurveyInvitations => Set<Domain.Relations.SurveyInvitation>();
