@@ -1,0 +1,100 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<TillBanner> Logger
+
+@*
+    The till at the start of the counter's shift: to whoever takes payments with no till open, a line
+    saying so with its opening float and « Ouvrir la caisse », so cash is not refused at the first
+    patient. A till left open at another site is said too (it is closed there). Nothing is shown to a
+    user who takes no payment. When it is offered and the opening are CounterCollectionRules' and
+    CashDeskRules'; the opening is BillingService's, as « Caisse » opens it.
+*@
+@if (_state is TillState.NotOpen && CounterCollectionRules.OffersTillOpening(TillState.NotOpen, Context.User.Has))
+{
+    <div class="message is-abnormal till-banner" role="status" data-state="till-closed">
+        <span class="till-banner-text"><Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.LockOpen" /> @Texts["Collect.TillNotOpen"]</span>
+        <label class="field field-inline">
+            <span class="field-label">@Texts["Payment.OpeningFloat"]</span>
+            <input class="input num mono input-short" dir="ltr" inputmode="decimal" data-field="till-float" maxlength="@CashDeskRules.AmountMaxLength"
+                   @bind="_float" @bind:event="oninput" @onkeydown="KeyAsync" />
+        </label>
+        <ActionButton Key="Payment.OpenSession" Disabled="@_busy" OnClick="OpenAsync" />
+        <FieldMessage Refusal="_refusal" Field="float" />
+    </div>
+}
+else if (_state is TillState.OpenElsewhere)
+{
+    <p class="message is-abnormal" role="status" data-state="till-elsewhere">@Texts["CashSession_OpenOnAnotherSite"]</p>
+}
+else if (_opened is { } opened)
+{
+    <p class="message is-normal" role="status" data-state="till-opened">@opened</p>
+}
+
+@code {
+    /// <summary>Said once the till is open, so the panel that asked can take cash.</summary>
+    [Parameter] public EventCallback OnOpened { get; set; }
+
+    private TillState? _state;
+    private string _float = "0";
+    private string? _opened;
+    private FieldRefusal? _refusal;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CounterCollectionRules.CanCollect(Context.User.Has)) return;
+
+        try
+        {
+            var state = await Scopes.RunAsync<CounterCollectionService, Result<TillState>>(s => s.GetTillStateAsync());
+            _state = state.IsSuccess ? state.Value : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the till failed.");
+        }
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await OpenAsync();
+    }
+
+    private async Task OpenAsync()
+    {
+        if (_busy) return;
+
+        _refusal = CashDeskRules.CheckOpening(_float);
+        if (_refusal is not null) return;
+
+        _busy = true;
+        try
+        {
+            var opening = TypedNumber.Parse(_float) ?? 0m;
+            var result = await Scopes.RunAsync<BillingService, Result<Guid>>(s => s.OpenCashSessionAsync(opening));
+
+            if (result.IsFailure)
+            {
+                _refusal = new FieldRefusal("float", result.FirstError.ResourceKey);
+                return;
+            }
+
+            _state = TillState.Open;
+            _opened = Texts.T("Collect.TillOpened", Money.Of(opening).Format(Texts.Language, Texts.Culture));
+            await OnOpened.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Opening the till failed.");
+            _refusal = new FieldRefusal("float", WebFailures.KeyFor(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

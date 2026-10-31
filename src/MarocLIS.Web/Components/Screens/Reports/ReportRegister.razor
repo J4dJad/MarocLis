@@ -202,6 +202,10 @@
                     <dt>@Texts["Report.Delivery"]</dt><dd>—</dd>
                     <dt>@Texts["Report.Payment"]</dt><dd class="@(pending.Payment is { IsSettled: false } ? "abnormal" : null)" data-state="payment">@PaymentDetail(pending.Payment)</dd>
                 </dl>
+                @if (CounterCollectionRules.Offers(pending.Payment, Context.User.Has))
+                {
+                    <ActionButton Key="Collect.Action" Disabled="@_busy" OnClick="() => _collect = pending.LabOrderId" />
+                }
                 @if (!final)
                 {
                     <p class="small muted">@Texts["Report.PartialNote"]</p>
@@ -220,6 +224,10 @@
                     <dt>@Texts["Report.Delivery"]</dt><dd>@DeliveryText(version)</dd>
                     <dt>@Texts["Report.Payment"]</dt><dd class="@(version.Payment is { IsSettled: false } ? "abnormal" : null)" data-state="payment">@PaymentDetail(version.Payment)</dd>
                 </dl>
+                @if (CounterCollectionRules.Offers(version.Payment, Context.User.Has))
+                {
+                    <ActionButton Key="Collect.Action" Disabled="@_busy" OnClick="() => _collect = version.LabOrderId" />
+                }
                 @if (version.HasStoredPdf)
                 {
                     <ActionButton Key="Report.OpenPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Download" Disabled="@(!Actions.Reprint || _busy)" OnClick="AskReprint" />
@@ -253,6 +261,12 @@
     </ActionBar>
 </div>
 
+@if (_collect is { } collecting)
+{
+    @* « Encaissement » at the report counter: the balance taken before the report is handed over. *@
+    <MarocLIS.Web.Components.Screens.Billing.CollectPanel OrderId="collecting" OnClosed="CollectedAsync" />
+}
+
 @switch (_dialog)
 {
     case ReportDialog.Issue when SelectedPending is { } waiting:
@@ -284,6 +298,18 @@
 }
 
 @code {
+    private Guid? _collect;
+
+    /// <summary>The panel closed: what was taken said, and the lists read again with the new payment status.</summary>
+    private async Task CollectedAsync(CollectionDone? done)
+    {
+        _collect = null;
+        if (done is null) return;
+
+        await ActivateAsync();
+        _status = (MarocLIS.Web.Components.Screens.Billing.CollectPanel.Say(Texts, done), "normal");
+    }
+
     private enum ReportDialog { None, Issue, UnpaidReprint, UnpaidDelivery, Delivery, Amend, Message }
 
     private sealed record Message(string Title, string Text);

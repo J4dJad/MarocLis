@@ -1456,3 +1456,14 @@ html[dir=rtl] .planning-grid .planning-name .list-name { text-align: right; }
 :is([data-screen=prescriberstats], [data-screen=relations], [data-screen=patientmessaging], [data-modal=prescriber-drill]) .grid :is(th, td):last-child { padding-inline-end: 22px; }
 html[dir=rtl] :is([data-screen=prescriberstats], [data-screen=relations], [data-screen=patientmessaging], [data-modal=prescriber-drill]) .grid :is(th, td):last-child { padding-left: 22px; padding-right: 8px; }
 @media (max-width: 1100px) { .relation-file-body { grid-template-columns: minmax(0, 1fr); } .relation-file-text { border: 0; padding: 0; } .relation-facts { grid-template-columns: max-content minmax(0, 1fr); } }
+
+/* « Encaissement »: the figures beside the amount due, the change on cash, the till offered at the start. */
+.collect-figures { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-block-end: 8px; }
+.collect-due { display: flex; flex-direction: column; align-items: flex-end; padding: 8px 14px; border-radius: var(--radius); background: var(--surface-sunken); }
+.collect-due .tile-value { font-size: 28px; }
+.collect-change { margin: 8px 0 0; min-block-size: 1.4em; font-size: 18px; }
+.till-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block-end: 12px; }
+.till-banner-text { flex: 1 1 260px; }
+.input-short { inline-size: 110px; }
+.cell-actions { text-align: end; white-space: nowrap; }
+.cell-actions .btn { padding-block: 2px; }

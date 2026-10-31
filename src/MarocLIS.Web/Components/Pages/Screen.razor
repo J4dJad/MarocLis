@@ -115,6 +115,10 @@
             <MarocLIS.Web.Components.Screens.Billing.BillingDesk Search="@Recherche" />
             break;
 
+        case ScreenDecision.Open when Key == "tocollect":
+            <MarocLIS.Web.Components.Screens.Billing.CollectionQueue />
+            break;
+
         case ScreenDecision.Open when Key == "cash":
             <MarocLIS.Web.Components.Screens.Billing.CashDesk />
             break;

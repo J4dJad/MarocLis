@@ -349,6 +349,9 @@
         var actions = Actions;
         <ActionBar ShowStatus="false">
             <Secondary>
+                @* « Encaissement » on the file, prefilled with what the patient still owes. *@
+                <ActionButton Key="Collect.Action" Hidden="@(!CounterCollectionRules.CanCollect(User.Has))"
+                              Disabled="@(_detail.Status == LabOrderStatus.Cancelled)" OnClick="() => _collecting = true" />
                 <ActionButton Key="Action.LabelsPdf" Hidden="@(!User.Has(Permissions.Samples.Reprint))"
                               Disabled="@(!actions.PrintLabels)" OnClick="AskReprintLabels" />
                 <ActionButton Key="Order.PrintReport" Disabled="@(!actions.PrintReport)" OnClick="OpenReportAsync" />
@@ -366,6 +369,11 @@
         </ActionBar>
     }
 </div>
+
+@if (_collecting && _detail is { } collected)
+{
+    <MarocLIS.Web.Components.Screens.Billing.CollectPanel OrderId="collected.OrderId" OnClosed="CollectedAsync" />
+}
 
 @if (_detail is { } open)
 {
@@ -481,6 +489,18 @@
     private Guid? _openedFor;
 
     private ICurrentUser User => Context.User;
+
+    private bool _collecting;
+
+    /// <summary>The panel closed: what was taken said, and the file read again (its payments, its invoice).</summary>
+    private async Task CollectedAsync(CollectionDone? done)
+    {
+        _collecting = false;
+        if (done is null) return;
+
+        _status = (MarocLIS.Web.Components.Screens.Billing.CollectPanel.Say(Texts, done), "normal");
+        await LoadDetailAsync();
+    }
 
     private IReadOnlyList<OrderListRow> Shown => OrderFileRules.Filter(_rows, _filter, Clock.Now);
 

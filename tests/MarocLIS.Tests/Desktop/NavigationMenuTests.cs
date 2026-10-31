@@ -26,7 +26,7 @@ public sealed class NavigationMenuTests
             "group.reception", "patients", "orders", "orderdetail",
             "group.technical", "collection", "reception", "recollections", "serumbank", "subcontracting",
             "entry", "validation", "reports",
-            "group.billing", "billing", "cash", "claims", "discounts", "discountprofiles",
+            "group.billing", "billing", "tocollect", "cash", "claims", "discounts", "discountprofiles",
             "group.quality", "qc", "nonconformities", "eqa", "documents",
             "group.logistics", "inventory", "purchaseorders", "quotes", "supplierinvoices", "supplierevaluation",
             "consumption", "inventorycounts", "temperatures", "equipment", "contracts",
@@ -42,7 +42,7 @@ public sealed class NavigationMenuTests
         NavigationMenu.Entries.Select(e => e.Key).Should().OnlyHaveUniqueItems();
         NavigationMenu.GroupOf("collection").Should().Be("group.technical");
         NavigationMenu.GroupOf("dashboard").Should().BeNull();
-        NavigationMenu.GroupEntries("group.billing").Select(e => e.Key).Should().Equal("billing", "cash", "claims", "discounts", "discountprofiles");
+        NavigationMenu.GroupEntries("group.billing").Select(e => e.Key).Should().Equal("billing", "tocollect", "cash", "claims", "discounts", "discountprofiles");
     }
 
     [Fact]

@@ -79,6 +79,9 @@ public static class NavigationMenu
 
         new("billing", "Nav.Billing", [Permissions.Billing.View]),
 
+        // The counter's queue: today's files still owing, one click from « Encaissement ».
+        new("tocollect", "Nav.ToCollect", [Permissions.Billing.RecordPayment]),
+
         new("cash", "Nav.CashDesk", [Permissions.Billing.RecordPayment]),
 
         new("claims", "Nav.Claims", [Permissions.Billing.View]),

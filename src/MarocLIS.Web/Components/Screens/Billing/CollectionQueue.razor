@@ -1,0 +1,129 @@
+@using System.Globalization
+@using MarocLIS.Application.Billing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject ILogger<CollectionQueue> Logger
+
+@*
+    « À encaisser », the workstation's CollectionQueueView: the site's files of the day on which the
+    patient still owes something, oldest first, one click opening « Encaissement » on the file. The
+    till is offered at the top when none is open. What is listed is CounterCollectionService's (the
+    report counter's own payment status), for billing.payment.record.
+*@
+<div class="screen collect-queue" data-screen="tocollect">
+    <div class="list-tools">
+        <span class="muted" data-state="queue-total">@TotalText</span>
+        <span class="list-tools-end">
+            <ActionButton Key="Action.Refresh" Text="" Title="@Texts["Action.Refresh"]" Disabled="@_busy" OnClick="LoadAsync" />
+        </span>
+    </div>
+
+    <div class="screen-body">
+        <p class="page-lead">@Texts["Collect.QueueIntro"]</p>
+        <TillBanner />
+
+        @if (_rows is null)
+        {
+            <p class="muted">@(_failure ?? Texts["Web.Loading"])</p>
+        }
+        else if (_rows.Count == 0)
+        {
+            <div class="card card-empty" data-state="queue-empty">
+                <Icon Glyph="MarocLIS.Desktop.Infrastructure.Glyph.CircleCheck" Class="icon-large" />
+                <p>@Texts["Collect.QueueEmpty"]</p>
+            </div>
+        }
+        else
+        {
+            <section class="card card-flush" data-card="queue">
+                <table class="grid grid-select" data-grid="tocollect">
+                    <thead>
+                        <tr>
+                            <th>@Texts["Collect.Column.time"]</th>
+                            <th>@Texts["Collect.Column.reference"]</th>
+                            <th>@Texts["Collect.Column.patient"]</th>
+                            <th>@Texts["Collect.Column.state"]</th>
+                            <th class="num">@Texts["Collect.Column.paid"]</th>
+                            <th class="num">@Texts["Collect.Column.due"]</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr data-row="@row.AccessionNumber" @onclick="() => _open = row.LabOrderId">
+                                <td class="mono">@row.RegisteredAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)</td>
+                                <td class="mono strong">@row.AccessionNumber</td>
+                                <td>@row.PatientName</td>
+                                <td>
+                                    <Pill Text="@StateText(row)" Tone="@(row.State == MarocLIS.Application.Billing.OrderPaymentState.NotInvoiced ? "Waiting" : "Warning")" />
+                                </td>
+                                <td class="num mono">@(row.AlreadyPaid > 0m ? Amount(row.AlreadyPaid) : "—")</td>
+                                <td class="num mono strong accent">@Amount(row.Due)</td>
+                                <td class="cell-actions">
+                                    <ActionButton Key="Collect.Action" OnClick="() => _open = row.LabOrderId" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+    </div>
+</div>
+
+@if (_open is { } orderId)
+{
+    <CollectPanel OrderId="orderId" OnClosed="ClosedAsync" />
+}
+
+@code {
+    private IReadOnlyList<CollectionQueueRow>? _rows;
+    private Guid? _open;
+    private string? _failure;
+    private bool _busy;
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string TotalText => _rows is { Count: > 0 } rows
+        ? Texts.T("Collect.QueueTotal", rows.Count, Amount(CounterCollectionRules.QueueTotal(rows)))
+        : string.Empty;
+
+    private string StateText(CollectionQueueRow row) =>
+        row.InvoiceNumber is { } number ? $"{Texts[CounterCollectionRules.StateKey(row.State)]} · {number}" : Texts[CounterCollectionRules.StateKey(row.State)];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Scopes.RunAsync<CounterCollectionService, Result<IReadOnlyList<CollectionQueueRow>>>(s => s.GetQueueAsync());
+            if (result.IsFailure)
+            {
+                _failure = Texts.Describe(result.Errors);
+                _rows = null;
+                return;
+            }
+
+            _rows = result.Value;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading the collection queue failed.");
+            _failure = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClosedAsync(CollectionDone? done)
+    {
+        _open = null;
+        if (done is not null) await LoadAsync();
+    }
+}

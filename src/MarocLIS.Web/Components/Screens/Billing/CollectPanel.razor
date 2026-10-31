@@ -1,0 +1,343 @@
+@using MarocLIS.Application.Billing
+@using MarocLIS.Application.Input
+@using MarocLIS.Application.Orders
+@using MarocLIS.Domain.Billing
+@inject WebTexts Texts
+@inject SessionContext Context
+@inject UserScopes Scopes
+@inject IClock Clock
+@inject IInvoiceRenderer InvoiceRenderer
+@inject IJSRuntime JS
+@inject ILogger<CollectPanel> Logger
+
+@*
+    « Encaissement », where the patient is: at the end of « Nouvelle demande », on the file, at the
+    report counter and from « À encaisser ». The patient's share as computed (after the payer and
+    the discounts), what was already paid and what is due, then « Tout payer » (F9), « Acompte »
+    (F10, its amount editable) or « Plus tard » (Échap). The method opens on the user's last one;
+    cash shows the change to give back. Done, the receipt (PDF) is offered beside the labels.
+    The money is CounterCollectionService's — the invoicing service, the deposits and the
+    settlements of « Facturation », nothing of its own; the checks are CounterCollectionRules'.
+*@
+<Modal Name="collect" Title="@Title" Wide="true" OnCancel="CloseAsync">
+    <ChildContent>
+        @foreach (var line in IntroLines)
+        {
+            <p class="muted small info-line">@line</p>
+        }
+
+        @if (_balance is not { } balance)
+        {
+            <p class="muted" data-state="loading">@(_failure ?? Texts["Web.Loading"])</p>
+        }
+        else if (_done is { } done)
+        {
+            <p class="message is-normal" role="status" data-state="done">@DoneText(done)</p>
+            @if (_changeGiven is { } change && change > 0m)
+            {
+                <p class="strong accent collect-change" data-state="change-given">@Texts.T("Collect.ChangeGiven", Amount(change))</p>
+            }
+        }
+        else
+        {
+            <div class="collect-figures">
+                <dl class="facts facts-compact" data-state="figures">
+                    <dt>@Texts["Collect.Total"]</dt><dd class="num mono">@Amount(balance.Total)</dd>
+                    @if (balance.Discount > 0m)
+                    {
+                        <dt>@Texts["Collect.Discount"]</dt><dd class="num mono">− @Amount(balance.Discount)</dd>
+                    }
+                    @if (balance.PayerShare > 0m)
+                    {
+                        <dt>@Texts["Collect.PayerShare"]</dt><dd class="num mono">− @Amount(balance.PayerShare)</dd>
+                    }
+                    @if (balance.AlreadyPaid > 0m)
+                    {
+                        <dt>@Texts["Collect.AlreadyPaid"]</dt><dd class="num mono" data-state="paid">− @Amount(balance.AlreadyPaid)</dd>
+                    }
+                </dl>
+                <div class="tile collect-due">
+                    <span class="field-label">@Texts["Collect.Due"]</span>
+                    <span class="tile-value accent mono" data-state="due">@Amount(balance.Due)</span>
+                </div>
+            </div>
+            <p class="muted small" data-state="invoice">@InvoiceNote(balance)</p>
+
+            @if (balance.Due <= 0m)
+            {
+                <p class="message is-info" data-state="nothing-due">@Texts["Collect.NothingDue"]</p>
+            }
+            else
+            {
+                @if (_method == PaymentMethod.Cash)
+                {
+                    <TillBanner OnOpened="StateHasChanged" />
+                }
+
+                <div class="form-grid">
+                    <label class="field">
+                        <span class="field-label">@Texts["Payment.Method"]</span>
+                        <select class="input" data-field="method" @onchange="MethodChanged">
+                            @foreach (var method in BillingScreenRules.CounterMethods)
+                            {
+                                <option value="@method" selected="@(method == _method)">@Texts[$"PaymentMethod.{method}"]</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">@Texts["Collect.DepositAmount"]</span>
+                        <input class="input num mono strong" dir="ltr" inputmode="decimal" data-field="deposit-amount" maxlength="@CashDeskRules.AmountMaxLength"
+                               @bind="_amount" @bind:event="oninput" />
+                        <FieldMessage Refusal="_refusal" Field="amount" />
+                    </label>
+                    @if (_method == PaymentMethod.Cash)
+                    {
+                        <label class="field">
+                            <span class="field-label">@Texts["Collect.Tendered"]</span>
+                            <input class="input num mono" dir="ltr" inputmode="decimal" data-field="tendered" maxlength="@CashDeskRules.AmountMaxLength"
+                                   @bind="_tendered" @bind:event="oninput" />
+                            <FieldMessage Refusal="_refusal" Field="tendered" />
+                        </label>
+                    }
+                    @if (Fields.Reference)
+                    {
+                        <label class="field">
+                            <span class="field-label">@Texts["Payment.Reference"]</span>
+                            <input class="input mono" dir="ltr" data-field="reference" maxlength="@BillingScreenRules.ReferenceMaxLength"
+                                   @bind="_reference" @bind:event="oninput" />
+                            <FieldMessage Refusal="_refusal" Field="reference" />
+                        </label>
+                    }
+                    @if (Fields.Bank)
+                    {
+                        <label class="field">
+                            <span class="field-label">@Texts["Payment.Bank"]</span>
+                            <input class="input" data-field="bank" maxlength="@BillingScreenRules.BankMaxLength" @bind="_bank" @bind:event="oninput" />
+                        </label>
+                    }
+                    @if (Fields.Maturity)
+                    {
+                        <label class="field">
+                            <span class="field-label">@Texts["Payment.Maturity"]</span>
+                            <input class="input" type="date" data-field="maturity" @bind="_maturity" />
+                        </label>
+                    }
+                </div>
+
+                @if (_method == PaymentMethod.Cash)
+                {
+                    <p class="strong collect-change" data-state="change">@ChangeText(balance)</p>
+                }
+                @if (BillingScreenRules.WarnsCash(_method, AmountText(balance)))
+                {
+                    <p class="message is-warning" role="alert" data-state="cash-warning">@Texts.T("Payment_CashThresholdWarning", Payment.CashPaymentWarningThresholdMad)</p>
+                }
+                <p class="muted small" data-state="shortcuts">@Texts["Collect.Shortcuts"]</p>
+            }
+        }
+        @if (_error is { } error)
+        {
+            <p class="message is-critical" role="alert" data-state="error">@error</p>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_done is not null || _balance is not { Due: > 0m })
+        {
+            @if (Labels is { Count: > 0 } labels)
+            {
+                <LabelsPdfButton Source="MarocLIS.Web.Printing.NewLabels.Registration" Labels="labels" />
+            }
+            @if (_done is not null)
+            {
+                <ActionButton Key="Collect.ReceiptPdf" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Receipt" Disabled="@_busy" OnClick="DownloadReceiptAsync" />
+            }
+            @if (Extra is not null)
+            {
+                @Extra
+            }
+            <ActionButton Key="Action.Ok" Primary="true" OnClick="CloseAsync" />
+        }
+        else
+        {
+            @if (Labels is { Count: > 0 } labels)
+            {
+                <LabelsPdfButton Source="MarocLIS.Web.Printing.NewLabels.Registration" Labels="labels" />
+            }
+            @if (Extra is not null)
+            {
+                @Extra
+            }
+            <ActionButton Key="Collect.Later" Disabled="@_busy" OnClick="CloseAsync" />
+            <ActionButton Key="Collect.Deposit" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.HandCoins" Shortcut="@CounterCollectionRules.DepositShortcut"
+                          Disabled="@_busy" OnClick="() => CollectAsync(CollectionKind.Deposit)" />
+            <ActionButton Key="Collect.PayAll" Glyph="MarocLIS.Desktop.Infrastructure.Glyph.Banknote" Primary="true" Shortcut="@CounterCollectionRules.FullShortcut"
+                          Disabled="@_busy" OnClick="() => CollectAsync(CollectionKind.Full)" />
+        }
+    </Footer>
+</Modal>
+
+@code {
+    /// <summary>The file collected on.</summary>
+    [Parameter, EditorRequired] public Guid OrderId { get; set; }
+
+    /// <summary>What is said above the figures: after a registration, its price breakdown.</summary>
+    [Parameter] public IReadOnlyList<string> IntroLines { get; set; } = [];
+
+    /// <summary>The labels of the registration, offered beside the receipt; none elsewhere.</summary>
+    [Parameter] public IReadOnlyList<SampleLabel>? Labels { get; set; }
+
+    /// <summary>A further button of the caller's in the footer (« Voir le dossier » after a registration).</summary>
+    [Parameter] public RenderFragment? Extra { get; set; }
+
+    /// <summary>The panel closed: what was taken, or null for « Plus tard ».</summary>
+    [Parameter] public EventCallback<CollectionDone?> OnClosed { get; set; }
+
+    private CounterBalance? _balance;
+    private CollectionDone? _done;
+    private decimal? _changeGiven;
+    private PaymentMethod _method = PaymentMethod.Cash;
+    private string _amount = string.Empty, _tendered = string.Empty, _reference = string.Empty, _bank = string.Empty;
+    private DateOnly? _maturity;
+    private FieldRefusal? _refusal;
+    private string? _error, _failure;
+    private bool _busy;
+
+    private PaymentFields Fields => BillingScreenRules.FieldsFor(_method);
+
+    private string Title => _balance is { } balance
+        ? Texts.T("Collect.TitleOf", $"{balance.AccessionNumber} · {balance.PatientName}")
+        : Texts["Collect.Title"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _maturity = Clock.Today;
+        try
+        {
+            var (balance, method) = await Scopes.RunAsync<CounterCollectionService, (Result<CounterBalance>, PaymentMethod)>(
+                async s => (await s.GetBalanceAsync(OrderId), await s.GetPreferredMethodAsync()));
+
+            if (balance.IsFailure)
+            {
+                _failure = Texts.Describe(balance.Errors);
+                return;
+            }
+
+            _balance = balance.Value;
+            _method = method;
+            _amount = TypedNumber.ForEditing(_balance.Due, 2, Texts.Culture);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Reading the file's balance failed.");
+            _failure = Texts[WebFailures.KeyFor(ex)];
+        }
+    }
+
+    private string Amount(decimal amount) => Money.Of(amount).Format(Texts.Language, Texts.Culture);
+
+    private string InvoiceNote(CounterBalance balance) => balance switch
+    {
+        { InvoiceNumber: { } number, Payment.CoveredOrders: > 1 } => Texts.T("Collect.SharedInvoice", number, balance.Payment.CoveredOrders),
+        { InvoiceNumber: { } number } => Texts.T("Collect.OnInvoice", number),
+        _ => Texts[Context.User.Has(MarocLIS.Domain.Identity.Permissions.Billing.CreateInvoice) ? "Collect.NotInvoiced" : "Collect.NotInvoicedNoIssue"]
+    };
+
+    /// <summary>The amount the cash warning and the change are read against: the deposit typed, else the whole due.</summary>
+    private string AmountText(CounterBalance balance) => string.IsNullOrWhiteSpace(_amount) ? TypedNumber.ForEditing(balance.Due, 2, Texts.Culture) : _amount;
+
+    private string ChangeText(CounterBalance balance)
+    {
+        var amount = CounterCollectionRules.Amount(CollectionKind.Deposit, AmountText(balance), balance.Due) ?? balance.Due;
+        return CounterCollectionRules.Change(_method, _tendered, amount) is { } change
+            ? Texts.T("Collect.Change", Amount(change))
+            : string.Empty;
+    }
+
+    private string DoneText(CollectionDone done) => Say(Texts, done);
+
+    /// <summary>What was done, as the panel and the screen's status line say it.</summary>
+    public static string Say(WebTexts texts, CollectionDone done)
+    {
+        string Mad(decimal amount) => Money.Of(amount).Format(texts.Language, texts.Culture);
+        return texts.T(CounterCollectionRules.DoneKey(done), Mad(done.Amount),
+                       done.InvoiceNumber ?? done.DepositNumber ?? string.Empty, Mad(done.RemainingDue));
+    }
+
+    private void MethodChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PaymentMethod>(e.Value?.ToString(), out var method)) _method = method;
+        _refusal = null;
+        _error = null;
+    }
+
+    private async Task CollectAsync(CollectionKind kind)
+    {
+        if (_busy || _balance is not { Due: > 0m } balance || _done is not null) return;
+
+        _error = null;
+        _refusal = CounterCollectionRules.Check(kind, _amount, balance.Due, balance.IsInvoiced, _method, _reference, _tendered);
+        if (_refusal is not null) return;
+
+        var amount = CounterCollectionRules.Amount(kind, _amount, balance.Due)!.Value;
+        var fields = Fields;
+        var request = new CollectRequest(balance.LabOrderId, kind, amount, _method,
+                                         fields.Reference && !string.IsNullOrWhiteSpace(_reference) ? _reference.Trim() : null,
+                                         fields.Bank && !string.IsNullOrWhiteSpace(_bank) ? _bank.Trim() : null,
+                                         fields.Maturity ? _maturity : null);
+
+        _busy = true;
+        try
+        {
+            var result = await Scopes.RunAsync<CounterCollectionService, Result<CollectionDone>>(s => s.CollectAsync(request));
+            if (result.IsFailure)
+            {
+                _error = Texts.Describe(result.Errors);
+                return;
+            }
+
+            _done = result.Value;
+            _changeGiven = CounterCollectionRules.Change(_method, _tendered, _done.Amount);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Taking the payment at the counter failed.");
+            _error = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The receipt, downloaded as the PDF the workstation opens in its viewer.</summary>
+    private async Task DownloadReceiptAsync()
+    {
+        if (_done is not { } done || _busy) return;
+
+        _busy = true;
+        try
+        {
+            var document = await Scopes.RunAsync<CounterCollectionService, Result<InvoiceDocument>>(s => s.GetReceiptAsync(done));
+            if (document.IsFailure)
+            {
+                _error = Texts.Describe(document.Errors);
+                return;
+            }
+
+            var language = Texts.Language;
+            var bytes = await Task.Run(() => InvoiceRenderer.RenderReceipt(document.Value, language));
+            await JS.InvokeVoidAsync("marocLis.download", $"{document.Value.Number.Replace('/', '-')}-recu.pdf", "application/pdf", bytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Rendering the receipt failed.");
+            _error = Texts[WebFailures.KeyFor(ex)];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClosed.InvokeAsync(_done);
+}

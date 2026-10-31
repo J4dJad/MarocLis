@@ -31,6 +31,7 @@
 <div class="screen order-entry" data-screen="orders">
     <div class="screen-body">
         <p class="page-lead">@Texts["OrderEntry.Subtitle"]</p>
+        <MarocLIS.Web.Components.Screens.Billing.TillBanner />
 
         <section class="card patient-card" data-card="patient">
             @if (_patient is { } patient)
@@ -361,6 +362,20 @@
     <ConfirmPrompt Title="@confirm.Title" Message="@confirm.Message" OnYes="ConfirmedAsync" OnNo="() => _confirm = null" />
 }
 
+@if (_collect is { } collecting)
+{
+    @* « Encaissement » at once, for whoever takes payments: « Tout payer », « Acompte » or « Plus tard ». *@
+    <MarocLIS.Web.Components.Screens.Billing.CollectPanel OrderId="collecting.OrderId" IntroLines="collecting.Lines"
+                                                          Labels="collecting.Labels" OnClosed="CollectClosed">
+        <Extra>
+            @if (User.Has(Permissions.Orders.View))
+            {
+                <ActionButton Key="OrderEntry.View" OnClick="() => OpenOrder(collecting.OrderId)" />
+            }
+        </Extra>
+    </MarocLIS.Web.Components.Screens.Billing.CollectPanel>
+}
+
 @if (_info is { } info)
 {
     <Modal Name="@info.Name" Title="@info.Title" OnCancel="() => _info = null">
@@ -406,6 +421,9 @@
 
     private sealed record Confirmation(string Title, string Message, Func<Task> OnYes);
 
+    /// <summary>The file just registered, its price breakdown and its labels, in « Encaissement ».</summary>
+    private sealed record Collecting(Guid OrderId, IReadOnlyList<string> Lines, IReadOnlyList<SampleLabel>? Labels);
+
     private static readonly (bool? Value, string Key)[] FastingChoices =
         [(true, "Action.Yes"), (false, "Action.No"), (null, "OrderEntry.FastingUnknown")];
 
@@ -443,6 +461,7 @@
     private bool _newPrescriber;
     private Confirmation? _confirm;
     private Info? _info;
+    private Collecting? _collect;
 
     private CancellationTokenSource? _patientDebounce;
     private CancellationTokenSource? _catalogDebounce;
@@ -1138,8 +1157,14 @@
             Notice(OrderRegistrationRules.RegisteredStatus(Texts.T, registered.AccessionNumber, registered.Labels.Count,
                                                            printLabels, labelsAsPdf: true), "normal");
 
-            _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId,
-                             printLabels ? registered.Labels : null);
+            // Whoever takes payments collects at once, in the same screen: the panel carries the
+            // breakdown and the labels. Without the right, or with nothing for the patient to pay,
+            // the registration ends as it always has (« Plus tard »: the billing desk collects).
+            if (Application.Billing.CounterCollectionRules.OpensAfterRegistration(User.Has, registered.Pricing.DueAtCounter))
+                _collect = new Collecting(registered.OrderId, PricingLines(registered, printLabels), printLabels ? registered.Labels : null);
+            else
+                _info = new Info("registered", Texts["OrderEntry.RegisteredTitle"], PricingLines(registered, printLabels), registered.OrderId,
+                                 printLabels ? registered.Labels : null);
         }
         catch (Exception ex)
         {
@@ -1177,6 +1202,15 @@
         }
 
         return lines;
+    }
+
+    private void CollectClosed(CollectionDone? done)
+    {
+        _collect = null;
+        if (done is not null)
+            Notice(_notice is { } registered
+                       ? $"{registered.Text} {MarocLIS.Web.Components.Screens.Billing.CollectPanel.Say(Texts, done)}"
+                       : MarocLIS.Web.Components.Screens.Billing.CollectPanel.Say(Texts, done), "normal");
     }
 
     // ---- Abandoning the entry ----------------------------------------------------------------------
