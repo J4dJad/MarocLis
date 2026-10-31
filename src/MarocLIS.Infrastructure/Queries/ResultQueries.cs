@@ -654,54 +654,8 @@ public sealed class ReportQueries(LisDbContext db) : IReportQueries
     /// one per row.
     /// </summary>
     private async Task<Dictionary<Guid, OrderPayment>> GetPaymentsAsync(
-        IReadOnlyCollection<Guid> orderIds, CancellationToken ct)
-    {
-        if (orderIds.Count == 0) return [];
-
-        var orders = await db.LabOrders.AsNoTracking()
-            .Where(o => orderIds.Contains(o.Id))
-            .Select(o => new
-            {
-                o.Id,
-                o.InvoiceId,
-                // As the billing desk lists an order awaiting invoicing: its live acts only.
-                Total = o.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled).Sum(i => i.ChargedPrice),
-                PatientShare = o.Items.Where(i => i.Status != LabOrderItemStatus.Cancelled).Sum(i => i.PatientShare),
-                PayerBilledDirectly = o.PayerId != null && o.DirectBillingAtRegistration,
-                DepositHeld = db.Deposits.Where(d => d.LabOrderId == o.Id && d.Status == DepositStatus.Held)
-                                         .Sum(d => d.Amount - d.AppliedAmount - d.RefundedAmount)
-            })
-            .ToListAsync(ct);
-
-        var invoiceIds = orders.Where(o => o.InvoiceId != null).Select(o => o.InvoiceId!.Value).Distinct().ToList();
-
-        var invoices = invoiceIds.Count == 0
-            ? []
-            : await db.Invoices.AsNoTracking()
-                .Where(i => invoiceIds.Contains(i.Id)
-                            && i.Status != InvoiceStatus.Draft && i.Status != InvoiceStatus.Cancelled)
-                .Select(i => new
-                {
-                    i.Id,
-                    i.Number,
-                    i.Kind,
-                    i.TotalAmount,
-                    i.PaidAmount,
-                    i.CreditedAmount,
-                    i.ClaimStatus,
-                    i.PayerShareAmount,
-                    i.PayerAcceptedAmount,
-                    CoveredOrders = db.LabOrders.Count(o => o.InvoiceId == i.Id)
-                })
-                .ToDictionaryAsync(i => i.Id, ct);
-
-        return orders.ToDictionary(
-            o => o.Id,
-            o => o.InvoiceId is { } id && invoices.TryGetValue(id, out var i)
-                ? OrderPayment.ForInvoice(i.Number, i.Kind, i.TotalAmount, i.PaidAmount, i.CreditedAmount,
-                                          i.ClaimStatus, i.PayerShareAmount, i.PayerAcceptedAmount, i.CoveredOrders)
-                : OrderPayment.ForUninvoiced(o.Total, o.PatientShare, o.PayerBilledDirectly, o.DepositHeld));
-    }
+        IReadOnlyCollection<Guid> orderIds, CancellationToken ct) =>
+        (await OrderPaymentReader.ReadAsync(db, orderIds, ct)).ToDictionary(f => f.Key, f => f.Value.Payment);
 
     /// <summary>
     /// The register of released versions.

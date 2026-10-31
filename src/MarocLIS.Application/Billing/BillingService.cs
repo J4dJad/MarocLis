@@ -1468,6 +1468,22 @@ public sealed class BillingService(
 
     private static Error TillOpenElsewhere() => Error.Conflict("CashSession_OpenOnAnotherSite");
 
+    /// <summary>
+    /// The operator's till as the counter needs to know it before the first patient pays: open
+    /// here, not open, or left open at another site. Asked by whoever takes payments, so the
+    /// counter offers to open it at the start instead of refusing cash at the first payment.
+    /// </summary>
+    public async Task<Result<TillState>> GetTillStateAsync(CancellationToken ct = default)
+    {
+        var permitted = guard.Require(Permissions.Billing.RecordPayment);
+        if (permitted.IsFailure) return Result.Failure<TillState>(permitted.FirstError);
+
+        var (here, elsewhere) = await TillAsync(ct);
+        return Result.Success(here is not null ? TillState.Open
+                              : elsewhere is not null ? TillState.OpenElsewhere
+                              : TillState.NotOpen);
+    }
+
     public async Task<Result<Guid>> OpenCashSessionAsync(decimal openingFloat,
                                                           CancellationToken ct = default)
     {

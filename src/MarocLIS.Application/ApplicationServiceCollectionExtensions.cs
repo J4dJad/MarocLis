@@ -55,6 +55,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ResultEntryContextService>();
         services.AddScoped<ReportReleaseService>();
         services.AddScoped<Billing.BillingService>();
+        services.AddScoped<Billing.CounterCollectionService>();
         services.AddScoped<Quality.QualityControlService>();
         services.AddScoped<Quality.NonConformityService>();
         services.AddScoped<Quality.DocumentControlService>();

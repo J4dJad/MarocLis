@@ -92,6 +92,7 @@ public static class DesktopServiceCollectionExtensions
         services.AddIsolatedQueries<Application.Billing.IBillingQueries, BillingQueries>();
         services.AddIsolatedQueries<Application.Billing.IInvoicePrintSettingsQueries, InvoicePrintSettingsQueries>();
         services.AddIsolatedQueries<Application.Billing.IDiscountQueries, DiscountQueries>();
+        services.AddIsolatedQueries<Application.Billing.ICounterCollectionQueries, CounterCollectionQueries>();
         services.AddIsolatedQueries<Application.Administration.ILanguageSettingsQueries, LanguageSettingsQueries>();
         services.AddIsolatedQueries<Application.Quality.IQualityQueries, QualityQueries>();
         services.AddIsolatedQueries<Application.Inventory.IInventoryQueries, InventoryQueries>();
