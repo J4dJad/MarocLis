@@ -431,6 +431,7 @@ public sealed partial class MainShellForm : LocalizedForm
         ["validation"] = n => n.NavigateToAsync<ValidationView>(),
         ["reports"] = n => n.NavigateToAsync<ReportRegisterView>(),
         ["billing"] = n => n.NavigateToAsync<BillingView>(),
+        ["tocollect"] = n => n.NavigateToAsync<CollectionQueueView>(),
         ["cash"] = n => n.NavigateToAsync<CashSessionView>(),
         ["claims"] = n => n.NavigateToAsync<ClaimBatchView>(),
         ["qc"] = n => n.NavigateToAsync<QualityControlView>(),

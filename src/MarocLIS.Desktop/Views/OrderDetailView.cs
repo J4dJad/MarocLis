@@ -112,6 +112,8 @@ public sealed class OrderDetailView : LocalizedView
     private readonly Label _paymentsNote = new();
     private readonly DataGridView _payments = UiTheme.Grid();
     private readonly Button _openBilling = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _collect = UiTheme.SecondaryButton(string.Empty);
+    private readonly CounterCollectionFlow _collection;
     private readonly DataGridView _history = UiTheme.Grid();
     private readonly Label _historyNote = new();
     private readonly ContextMenuStrip _itemMenu = new();
@@ -172,6 +174,7 @@ public sealed class OrderDetailView : LocalizedView
                            IDocumentOutput documents, IUserDialogs dialogs,
                            ICurrentUser currentUser, IClock clock,
                            PrescriptionScanService prescriptions, IDocumentScanner scanner,
+                           CounterCollectionFlow collection,
                            ILocalizer localizer, ICultureManager cultureManager,
                            ILogger<OrderDetailView>? logger = null)
         : base(localizer, cultureManager)
@@ -191,6 +194,7 @@ public sealed class OrderDetailView : LocalizedView
         _clock = clock;
         _logger = logger;
         _prescriptions = prescriptions;
+        _collection = collection;
         _prescriptionActions = new PrescriptionScreenActions(scanner, dialogs, localizer, documents);
 
         BuildLayout();
@@ -793,12 +797,13 @@ public sealed class OrderDetailView : LocalizedView
         var paymentsHead = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 3,
             RowCount = 1,
             Margin = new Padding(0, 4, 0, 4),
             BackColor = UiTheme.SurfaceRaised
         };
         paymentsHead.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        paymentsHead.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         paymentsHead.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         paymentsHead.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -815,8 +820,18 @@ public sealed class OrderDetailView : LocalizedView
         _openBilling.Margin = new Padding(0);
         ButtonIcons.Set(_openBilling, Glyph.Receipt);
 
+        // « Encaisser »: the patient pays what the file still leaves them, here (« Encaissement »).
+        // Absent for whoever takes no payment.
+        _collect.AutoSize = true;
+        _collect.MinimumSize = new Size(0, 30);
+        _collect.Anchor = AnchorStyles.Right;
+        _collect.Margin = new Padding(0, 0, 8, 0);
+        _collect.Visible = _collection.CanCollect;
+        ButtonIcons.Set(_collect, Glyph.Coins);
+
         paymentsHead.Controls.Add(_paymentsTitle, 0, 0);
-        paymentsHead.Controls.Add(_openBilling, 1, 0);
+        paymentsHead.Controls.Add(_collect, 1, 0);
+        paymentsHead.Controls.Add(_openBilling, 2, 0);
 
         _paymentsNote.AutoSize = true;
         _paymentsNote.Font = UiTheme.Body;
@@ -1045,6 +1060,7 @@ public sealed class OrderDetailView : LocalizedView
         };
 
         _openBilling.Click += async (_, _) => await _navigation.NavigateToAsync<BillingView>();
+        _collect.Click += async (_, _) => await RunBusyAsync(CollectAsync);
 
         _items.SelectionChanged += (_, _) => RefreshActions();
         _items.CellFormatting += OnItemFormatting;
@@ -1090,6 +1106,7 @@ public sealed class OrderDetailView : LocalizedView
         _editHeaderItem.Text = T("Order.EditHeader");
         _printReportItem.Text = T("Order.PrintReport");
         _openBilling.Text = T("OrderFile.OpenBilling");
+        _collect.Text = T("Collect.Action");
         _paymentsTitle.Text = T("Payment.Plural");
 
         _factCaptions[0].Text = T("Order.Prescriber");
@@ -1852,6 +1869,8 @@ public sealed class OrderDetailView : LocalizedView
 
         var mayView = OrderFileRules.Actions(detail, null, _currentUser).ViewBilling;
         _openBilling.Visible = mayView;
+        _collect.Visible = _collection.CanCollect;
+        _collect.Enabled = !detail.IsCancelled;
 
         _payments.Rows.Clear();
         foreach (var payment in _paymentRows)
@@ -2047,6 +2066,16 @@ public sealed class OrderDetailView : LocalizedView
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>« Encaisser »: « Encaissement » on the file, its balance prefilled; the file is read again after.</summary>
+    private async Task CollectAsync()
+    {
+        if (_detail is not { IsCancelled: false } detail || !_collection.CanCollect) return;
+
+        if (await _collection.CollectAsync(FindForm(), detail.OrderId) is null) return;
+
+        await LoadDetailAsync();
     }
 
     private OrderItemDetail? SelectedItem => _items.CurrentRow?.Tag as OrderItemDetail;

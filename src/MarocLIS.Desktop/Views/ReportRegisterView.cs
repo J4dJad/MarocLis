@@ -88,6 +88,8 @@ public sealed class ReportRegisterView : LocalizedView
     private readonly ToolStripMenuItem _refresh = new();
     private readonly Button _reprint = UiTheme.SecondaryButton(string.Empty);
     private readonly Button _recordDelivery = UiTheme.SecondaryButton(string.Empty);
+    private readonly Button _collect = UiTheme.SecondaryButton(string.Empty);
+    private readonly CounterCollectionFlow _collection;
     private readonly Label _hint = new();
     private readonly Button _issue = UiTheme.PrimaryButton(string.Empty);
     private readonly Label _status = new();
@@ -97,7 +99,7 @@ public sealed class ReportRegisterView : LocalizedView
     private IReadOnlyList<PendingReportRow> _pendingRows = [];
 
     public ReportRegisterView(ReportReleaseService reports, IDocumentOutput documents, IUserDialogs dialogs,
-                              ICurrentUser currentUser,
+                              ICurrentUser currentUser, CounterCollectionFlow collection,
                               ILocalizer localizer, ICultureManager cultureManager,
                               ILogger<ReportRegisterView>? logger = null)
         : base(localizer, cultureManager)
@@ -106,6 +108,7 @@ public sealed class ReportRegisterView : LocalizedView
         _documents = documents;
         _dialogs = dialogs;
         _currentUser = currentUser;
+        _collection = collection;
         _logger = logger;
 
         BuildLayout();
@@ -437,20 +440,20 @@ public sealed class ReportRegisterView : LocalizedView
         var bar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 6,
+            ColumnCount = 7,
             RowCount = 1,
             Padding = new Padding(24, 11, 24, 11),
             Margin = new Padding(0),
             BackColor = UiTheme.SurfaceRaised
         };
         bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 3; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        for (var i = 0; i < 4; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         strip.Controls.Add(bar);
 
-        var buttons = new[] { _more, _reprint, _recordDelivery, _issue };
+        var buttons = new[] { _more, _reprint, _recordDelivery, _collect, _issue };
 
         void FitHint()
         {
@@ -489,9 +492,14 @@ public sealed class ReportRegisterView : LocalizedView
         bar.Controls.Add(_more, 0, 0);
         bar.Controls.Add(_reprint, 1, 0);
         bar.Controls.Add(_recordDelivery, 2, 0);
-        bar.Controls.Add(spacer, 3, 0);
-        bar.Controls.Add(_hint, 4, 0);
-        bar.Controls.Add(_issue, 5, 0);
+        bar.Controls.Add(_collect, 3, 0);
+        bar.Controls.Add(spacer, 4, 0);
+        bar.Controls.Add(_hint, 5, 0);
+        bar.Controls.Add(_issue, 6, 0);
+
+        // « Encaisser » when the patient still owes on the file; absent for whoever takes no payment.
+        _collect.Visible = _collection.CanCollect;
+        ButtonIcons.Set(_collect, Glyph.Coins);
 
         _moreMenu.Items.AddRange([_amend, new ToolStripSeparator(), _refresh]);
         _moreMenu.Font = UiTheme.Body;
@@ -592,6 +600,7 @@ public sealed class ReportRegisterView : LocalizedView
         _reprint.Click += async (_, _) => await RunActionAsync(ReprintAsync);
         _openPdf.LinkClicked += async (_, _) => { if (_reprint.Enabled) await RunActionAsync(ReprintAsync); };
         _recordDelivery.Click += async (_, _) => await RunActionAsync(RecordDeliveryAsync);
+        _collect.Click += async (_, _) => await RunActionAsync(CollectAsync);
         _amend.Click += async (_, _) => await RunActionAsync(AmendAsync);
 
         _more.Click += (_, _) =>
@@ -875,6 +884,7 @@ public sealed class ReportRegisterView : LocalizedView
         _issue.Text = T("Report.Issue");
         _reprint.Text = T("Report.Reprint");
         _recordDelivery.Text = T("Report.RecordDelivery");
+        _collect.Text = T("Collect.Action");
         ButtonKey.Show(_issue, KeyboardShortcuts.Format(Keys.Control | Keys.E, Localizer));
 
         _signatoryCaption.Text = T("Report.Signatory");
@@ -1295,12 +1305,31 @@ public sealed class ReportRegisterView : LocalizedView
         _reprint.Enabled = idle && actions.Reprint;
         _openPdf.Enabled = _reprint.Enabled;
         _recordDelivery.Enabled = idle && actions.RecordDelivery;
+        _collect.Enabled = idle && _collection.Offers(SelectedPending?.Payment ?? Selected?.Payment);
         _amend.Enabled = idle && actions.Amend;
 
         _refresh.Enabled = idle;
     }
 
     // ---- Actions ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// « Encaisser » at the report counter: the patient settles what the file still leaves them before
+    /// the report is handed over. The register is read again after, so its payment column is current.
+    /// </summary>
+    private async Task CollectAsync()
+    {
+        var (orderId, payment) = SelectedPending is { } pending
+            ? (pending.LabOrderId, pending.Payment)
+            : Selected is { } row ? (row.LabOrderId, row.Payment) : (Guid.Empty, null);
+        if (orderId == Guid.Empty || !_collection.Offers(payment)) return;
+
+        if (await _collection.CollectAsync(FindForm(), orderId) is not { } done) return;
+
+        await ActivateAsync();
+        _status.ForeColor = UiTheme.Normal;
+        _status.Text = _collection.Say(done);
+    }
 
     /// <summary>
     /// Returns the stored PDF — the document that was issued, byte for byte, with its hash checked

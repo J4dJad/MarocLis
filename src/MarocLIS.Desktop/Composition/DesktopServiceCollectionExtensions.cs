@@ -154,7 +154,10 @@ public static class DesktopServiceCollectionExtensions
         services.AddTransient<ValidationView>();
         services.AddTransient<ReportRegisterView>();
         services.AddTransient<BillingView>();
+        services.AddTransient<CollectionQueueView>();
         services.AddTransient<CashSessionView>();
+        // « Encaissement »: opened from the registration, the file, the report counter and « À encaisser ».
+        services.AddTransient<CounterCollectionFlow>();
         services.AddTransient<ClaimBatchView>();
         services.AddTransient<QualityControlView>();
         services.AddTransient<NonConformityView>();

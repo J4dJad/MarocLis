@@ -406,6 +406,24 @@ Les actions <strong>Transmettre au tiers payant</strong> et <strong>Enregistrer 
 <div class="diagram"><img src="img/diagramme-da7907044aa2248c.png" alt="Diagramme"></div>
 
 <hr />
+<h3 id="tocollect">À encaisser — Encaissement au guichet</h3>
+<p><strong>À quoi sert cet écran</strong> : encaisser le patient <strong>là où il est</strong>, sans passer par <strong>Facturation</strong>. La fenêtre <strong>Encaissement</strong> s'ouvre d'elle-même à la fin de <strong>Nouvelle demande</strong> (après <strong>Enregistrer</strong> et les étiquettes), et par le bouton <strong>Encaisser</strong> sur le dossier et au guichet des comptes rendus. L'écran <strong>À encaisser</strong> liste les dossiers du jour du site sur lesquels le patient doit encore payer, du plus ancien au plus récent ; un double-clic (ou <strong>Entrée</strong>) ouvre l'encaissement.</p>
+<p><strong>Qui y a accès</strong></p>
+<ul>
+<li>Droit « Encaisser un règlement » — Administrateur, Secrétariat / accueil, Comptabilité. Sans ce droit, la fenêtre ne s'ouvre pas après l'enregistrement (le dossier est encaissé plus tard en <strong>Facturation</strong>) et le bouton <strong>Encaisser</strong> n'est pas proposé.</li>
+<li>« Tout payer » sur un dossier non facturé émet la facture : il faut aussi le droit d'émettre les factures ; sans lui, la somme est prise en <strong>acompte</strong>, imputé à la facture à son émission.</li>
+</ul>
+<p><strong>La fenêtre Encaissement</strong></p>
+<ul>
+<li>Le détail : <strong>Total du dossier</strong>, <strong>Remise accordée</strong>, <strong>Part de l'organisme</strong>, <strong>Déjà réglé</strong>, puis en grand le <strong>Reste à payer par le patient</strong>.</li>
+<li><strong>Mode de règlement</strong> : celui de votre dernier encaissement (espèces la première fois), avec les champs que le mode demande (référence, banque, échéance).</li>
+<li>En espèces : <strong>Somme reçue du patient</strong> et la <strong>monnaie à rendre</strong> calculée en direct. Sans caisse ouverte, la caisse s'ouvre ici avec son fond.</li>
+<li><strong>Tout payer</strong> (F9) : règle tout le reste ; sur un dossier non facturé, la facture est émise et réglée. <strong>Acompte</strong> (F10) : prend le montant saisi (au plus le reste). <strong>Plus tard</strong> (Échap) : ferme sans rien encaisser.</li>
+<li>Une fois encaissé : <strong>Reçu (PDF)</strong> ouvre le reçu dans la visionneuse.</li>
+</ul>
+<p>À l'ouverture de <strong>Nouvelle demande</strong> ou d'<strong>À encaisser</strong>, sans caisse ouverte, MarocLIS propose une fois par session de l'ouvrir. Chaque encaissement est un règlement ou un acompte ordinaire de <strong>Facturation</strong>, dans votre caisse et dans le journal d'audit.</p>
+
+<hr />
 <h3 id="cash">Caisse</h3>
 <p><strong>À quoi sert cet écran</strong> : la caisse de <strong>chaque opérateur</strong> : ouverture avec un fond de caisse, suivi des encaissements du poste par mode de paiement, prélèvements déposés en banque, et clôture avec comptage du tiroir.</p>
 <p><strong>Qui y a accès</strong></p>

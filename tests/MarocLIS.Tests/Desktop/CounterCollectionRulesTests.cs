@@ -160,4 +160,31 @@ public sealed class CounterCollectionRulesTests
         CounterCollectionRules.FullShortcut.Should().Be("F9");
         CounterCollectionRules.DepositShortcut.Should().Be("F10");
     }
+
+    [Fact]
+    public void The_workstation_collects_from_every_counter_and_offers_the_till()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "MarocLIS.sln"))) root = root.Parent;
+        var desktop = Path.Combine(root!.FullName, "src", "MarocLIS.Desktop");
+        string Read(params string[] parts) => File.ReadAllText(Path.Combine([desktop, .. parts]));
+
+        Read("Forms", "MainShellForm.cs").Should().Contain("[\"tocollect\"] = n => n.NavigateToAsync<CollectionQueueView>()");
+        Read("Composition", "DesktopServiceCollectionExtensions.cs")
+            .Should().Contain("AddTransient<CollectionQueueView>()").And.Contain("AddTransient<CounterCollectionFlow>()");
+
+        // F9 and F10 in the dialog, the money through CounterCollectionService, the receipt to the viewer.
+        var dialog = Read("Views", "CollectDialog.cs");
+        dialog.Should().Contain("case Keys.F9:").And.Contain("case Keys.F10:")
+              .And.Contain("_collection.CollectAsync(request)").And.Contain("_documents.OpenAsync(bytes, \"pdf\")")
+              .And.Contain("CounterCollectionRules.DefaultMethod(lastMethod)").And.Contain("_billing.OpenCashSessionAsync(opening)")
+              .And.NotContain("ILabelPrinter");
+
+        // After « Enregistrer », by the rule; « Encaisser » on the file and at the report counter, by the right.
+        Read("Views", "OrderRegistrationView.cs").Should().Contain("CounterCollectionRules.OpensAfterRegistration(_currentUser.Has")
+                                                  .And.Contain("_collection.OfferTillAsync()");
+        Read("Views", "OrderDetailView.cs").Should().Contain("_collect.Visible = _collection.CanCollect");
+        Read("Views", "ReportRegisterView.cs").Should().Contain("_collection.Offers(SelectedPending?.Payment ?? Selected?.Payment)");
+        Read("Views", "CollectionQueueView.cs").Should().Contain("PermissionGate.Require(Permissions.Billing.RecordPayment, _collect)");
+    }
 }

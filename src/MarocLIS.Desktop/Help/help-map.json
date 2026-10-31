@@ -12,6 +12,7 @@
   "validation": "03-analytique-comptes-rendus.html",
   "reports": "03-analytique-comptes-rendus.html",
   "billing": "04-facturation.html",
+  "tocollect": "04-facturation.html",
   "cash": "04-facturation.html",
   "claims": "04-facturation.html",
   "cashreview": "04-facturation.html",

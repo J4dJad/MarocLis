@@ -54,6 +54,7 @@ public sealed class OrderRegistrationView : LocalizedView
     private readonly ILogger<OrderRegistrationView>? _logger;
     private readonly PrescriptionScanService _prescriptions;
     private readonly PrescriptionScreenActions _prescriptionActions;
+    private readonly CounterCollectionFlow _collection;
 
     // Frame
     private readonly Panel _content = new() { Dock = DockStyle.Fill, AutoScroll = true, Tag = UiTags.OwnLayout };
@@ -177,6 +178,7 @@ public sealed class OrderRegistrationView : LocalizedView
                                  INavigationService navigation, LabelPrintOptions labelOptions,
                                  PrescriptionScanService prescriptions, IDocumentScanner scanner,
                                  Application.Billing.DiscountService discounts,
+                                 CounterCollectionFlow collection,
                                  ILocalizer localizer, ICultureManager cultureManager,
                                  ILogger<OrderRegistrationView>? logger = null)
         : base(localizer, cultureManager)
@@ -200,6 +202,7 @@ public sealed class OrderRegistrationView : LocalizedView
         _logger = logger;
         _prescriptions = prescriptions;
         _discounts = discounts;
+        _collection = collection;
         _prescriptionActions = new PrescriptionScreenActions(scanner, dialogs, localizer, documents);
 
         BuildLayout();
@@ -1271,6 +1274,10 @@ public sealed class OrderRegistrationView : LocalizedView
             PatientToSelect = null;
             await SelectPatientAsync(patientId);
         }
+
+        // The start of the counter: with no till open, it is offered here (once a session), so
+        // cash is not refused at the first patient.
+        await _collection.OfferTillAsync();
     }
 
     /// <summary>
@@ -2567,13 +2574,21 @@ public sealed class OrderRegistrationView : LocalizedView
             if (registered.Warnings.Count > 0)
                 _dialogs.Warn(Localizer.Describe(registered.Warnings), T("Order.Title"));
 
-            ShowPricing(registered);
+            // Whoever takes payments collects at once, in « Encaissement », once the labels are out:
+            // it carries the breakdown. Without the right, or with nothing for the patient to pay,
+            // the registration ends as it always has (« Plus tard »: the billing desk collects).
+            var collects = Application.Billing.CounterCollectionRules.OpensAfterRegistration(_currentUser.Has, registered.Pricing.DueAtCounter);
+            if (!collects) ShowPricing(registered);
             if (printLabels) await PrintLabelsAsync(registered);
 
             ResetForm();
 
-            Notice(OrderRegistrationRules.RegisteredStatus(T, registered.AccessionNumber, registered.Labels.Count,
-                                                           printLabels, labelsAsPdf: false), UiTheme.Normal);
+            var status = OrderRegistrationRules.RegisteredStatus(T, registered.AccessionNumber, registered.Labels.Count,
+                                                                 printLabels, labelsAsPdf: false);
+            Notice(status, UiTheme.Normal);
+
+            if (collects && await _collection.CollectAsync(FindForm(), registered.OrderId, PricingLines(registered)) is { } done)
+                Notice($"{status} — {_collection.Say(done)}", UiTheme.Normal);
         }
         catch (Exception ex)
         {
@@ -2591,13 +2606,14 @@ public sealed class OrderRegistrationView : LocalizedView
     /// Shows the authoritative price breakdown from the pricing engine: the payer's share, the
     /// patient's share, and any excess over the national reference tariff stated separately.
     /// </summary>
-    private void ShowPricing(RegisteredOrder registered)
+    private void ShowPricing(RegisteredOrder registered) =>
+        _dialogs.Info(string.Join(Environment.NewLine, PricingLines(registered)), T("OrderEntry.RegisteredTitle"));
+
+    private IReadOnlyList<string> PricingLines(RegisteredOrder registered)
     {
         var language = Localizer.CurrentLanguage;
-        var lines = OrderRegistrationRules.PricingLines(T, registered.AccessionNumber, registered.Pricing,
-                                                        amount => amount.Format(language));
-
-        _dialogs.Info(string.Join(Environment.NewLine, lines), T("OrderEntry.RegisteredTitle"));
+        return [.. OrderRegistrationRules.PricingLines(T, registered.AccessionNumber, registered.Pricing,
+                                                       amount => amount.Format(language))];
     }
 
     /// <summary>
